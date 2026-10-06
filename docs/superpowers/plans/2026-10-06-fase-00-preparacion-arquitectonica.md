@@ -39,7 +39,7 @@
 
 Plan aprobado; ejecución nativa elegida por el usuario. Las casillas se actualizarán solo con evidencia. El baseline de código es `efc690f`; `c6fc78b` añade el diseño. La implementación empieza solo tras revisión del plan y elección de ejecución. Crear aislamiento en ese momento siguiendo `using-git-worktrees`, no durante esta planificación.
 
-Orden obligatorio de este plan: tareas 1 → 11. Una tarea no pasa al siguiente gate si sus pruebas fallan. La tarea 2 puede descubrir incompatibilidad de tipos entre `pi-ai` local 1.0.1 y host 1.0.4: detener y resolver mediante decisión explícita, no cast doble, `any` ni actualización silenciosa de pins.
+Orden obligatorio de este plan: tareas 1 → 11. Una tarea no pasa al siguiente gate si sus pruebas fallan. Durante tarea 2 aparecieron 44 errores de declaraciones upstream. El usuario autorizó `skipLibCheck: true`; se mantiene `strict` en código propio y comprobación del uso de declaraciones. Cualquier incompatibilidad restante entre `pi-ai` local 1.0.1 y host 1.0.4 requiere decisión explícita, no cast doble, `any` ni actualización silenciosa de pins.
 
 Cada commit debe incluir solo archivos de su tarea. Ejecutar `npm test` y, desde tarea 2, `npm run check` antes de cada commit. Si la tarea revela una contradicción de diseño, detenerse y revisar la spec, no ampliar el alcance por iniciativa propia.
 
@@ -109,7 +109,7 @@ assert.equal(f.expected.jobs.psa_interrupted.result.status, 'interrupted');
 
 **Interfaces:** `resolveHost({ packageRoot? }): Promise<{ root: string; version: string; declarations: Record<string,string> }>` y `generateHostConfig({ root, outFile }): Promise<void>` en `host-types.mjs`. Override `PI_AGENTS_PI_PACKAGE_ROOT`; si falta, localizar binario `pi` en PATH y resolver su raíz real, sin ruta Homebrew hardcodeada. Resolver exports públicos bajo condiciones `types`/`import`, incluidos subpaths; no asumir `require.resolve` CJS para un paquete ESM.
 
-- [ ] **1. Escribir pruebas de resolución y rechazo de tipos.** Ejecutar el compilador en subprocess con un fixture temporal deliberadamente incorrecto:
+- [x] **1. Escribir pruebas de resolución y rechazo de tipos.** Ejecutar el compilador en subprocess con un fixture temporal deliberadamente incorrecto:
 
 ```js
 assert.notEqual(await typecheckSource('const count: number = "wrong";'), 0);
@@ -120,12 +120,12 @@ await assert.rejects(resolveHost({ packageRoot: missingHost }), /Pi/);
 
 `typecheckSource(source): Promise<number>` es helper de `tests/typecheck.test.mjs`, con cleanup temporal. Probar un subpath público de `pi-ai` y registrar raíz/versiones local y host sin fingir identidad de instancia.
 
-- [ ] **2. RED:** `node --test tests/typecheck.test.mjs tests/host-resolution.test.mjs`; falta tooling o falla detección controlada.
-- [ ] **3. Instalar solo herramientas de desarrollo autorizadas por este plan:** `npm install --save-dev --save-exact --omit=peer typescript@5.9.3 @types/node@26.6.4`. Versiones consultadas en npm durante planificación; no se instalaron al escribirlo. Revisar el diff del lockfile y no aceptar actualización colateral de pins.
-- [ ] **4. Implementar configuración.** `strict: true`, `noEmit: true`, `target: "ES2022"`, `module`/`moduleResolution: "NodeNext"`, `allowImportingTsExtensions: true`, `skipLibCheck: false`; incluir `index.ts` y `src/**/*.ts`. Generar `.cache/pi-agents/tsconfig.host.json` con paths absolutos locales, nunca versionarlos. Dependencias host siguen como peers `*`.
-- [ ] **5. Integrar scripts.** `check:types` genera config y ejecuta `tsc --noEmit -p .cache/pi-agents/tsconfig.host.json`; `check:syntax` recorre `index.ts` y todos los `.ts` de `src`; `check` encadena ambos. Actualizar `engines.node` a `>=26.10.0` y explicar la matriz limitada. Corregir tipos productivos con API pública; si falla una declaración incompatible del grafo externo, detener el gate, no silenciarla.
-- [ ] **6. GREEN:** `npm run check && npm test`. Registrar `pi-ai` local 1.0.1 y host 1.0.4. No concluir compatibilidad runtime hasta tareas 10–11.
-- [ ] **7. Commit:** `build: add strict host-aware TypeScript checks`.
+- [x] **2. RED:** `node --test tests/typecheck.test.mjs tests/host-resolution.test.mjs`; falta tooling o falla detección controlada.
+- [x] **3. Instalar solo herramientas de desarrollo autorizadas por este plan:** `npm install --save-dev --save-exact --omit=peer typescript@5.9.3 @types/node@26.6.4`. Versiones consultadas en npm durante planificación; no se instalaron al escribirlo. Revisar el diff del lockfile y no aceptar actualización colateral de pins.
+- [x] **4. Implementar configuración.** `strict: true`, `noEmit: true`, `target: "ES2022"`, `module`/`moduleResolution: "NodeNext"`, `allowImportingTsExtensions: true`, `skipLibCheck: true` (excepción aprobada por el usuario durante ejecución: validar código propio y uso de tipos, no los cuerpos de `.d.ts` externos); incluir `index.ts` y `src/**/*.ts`. Generar `.cache/pi-agents/tsconfig.host.json` con paths absolutos locales, nunca versionarlos. Dependencias host siguen como peers `*`.
+- [x] **5. Integrar scripts.** `check:types` genera config y ejecuta `tsc --noEmit -p .cache/pi-agents/tsconfig.host.json`; `check:syntax` recorre `index.ts` y todos los `.ts` de `src`; `check` encadena ambos. Actualizar `engines.node` a `>=26.10.0` y explicar la matriz limitada. Corregir tipos productivos con API pública; si falla una declaración incompatible del grafo externo, detener el gate, no silenciarla.
+- [x] **6. GREEN:** `npm run check && npm test`. Registrar `pi-ai` local 1.0.1 y host 1.0.4. No concluir compatibilidad runtime hasta tareas 10–11.
+- [x] **7. Commit:** `build: add strict host-aware TypeScript checks`.
 
 ## Task 3 — Contratos de dominio, errores y canonización
 

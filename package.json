@@ -18,7 +18,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=26.10.0"
   },
   "pi": {
     "extensions": [
@@ -27,7 +27,9 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --experimental-strip-types --check index.ts && node --experimental-strip-types --check src/agents.ts && node --experimental-strip-types --check src/command.ts && node --experimental-strip-types --check src/jobs.ts"
+    "check": "npm run check:types && npm run check:syntax",
+    "check:types": "node scripts/host-types.mjs && tsc --noEmit -p .cache/pi-agents/tsconfig.host.json",
+    "check:syntax": "node scripts/check-syntax.mjs"
   },
   "dependencies": {
     "@earendil-works/chord": "1.0.1",
@@ -38,5 +40,9 @@
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "5.9.3"
   }
 }

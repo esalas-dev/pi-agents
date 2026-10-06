@@ -4,8 +4,9 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 
 ## Requisitos
 
-- Node.js `>=22.19.0`.
-- `@earendil-works/pi-coding-agent` **1.0.1** (versión estable usada durante el desarrollo).
+- Node.js `>=26.10.0`.
+- Pi **1.0.4** es el host objetivo del type-check actual. La implementación original se desarrolló con Pi `1.0.1`; la aceptación runtime del rediseño sigue pendiente.
+- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`. No se afirma compatibilidad probada de todas las versiones superiores.
 - Agentes Markdown en `~/.pi/agent/agents/` o en el `.pi/agents/` más cercano del proyecto.
 - Un modelo configurado en Pi.
 
@@ -146,7 +147,11 @@ npm run check
 npm test
 ```
 
-Los `peerDependencies` son suministrados por Pi y no deben empaquetarse como copias físicas. Las pruebas cubren:
+`npm run check` ejecuta TypeScript estricto sin emisión y comprueba la sintaxis de todos los `.ts` productivos. Descubre el Pi de `PATH`; para otra instalación, define `PI_AGENTS_PI_PACKAGE_ROOT` con la raíz de su paquete. Las rutas locales se generan en `.cache/pi-agents/tsconfig.host.json`, ignorado por Git; no modifican la resolución runtime. El chequeo de sintaxis utiliza `stripTypeScriptTypes`, API pública experimental de Node que emite una advertencia informativa.
+
+Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El proyecto resuelve `pi-ai 1.0.1` localmente y el host inspeccionado incluye `1.0.4`.
+
+Los `peerDependencies` son suministrados por Pi y no deben añadirse como dependencias runtime directas. Las dependencias transitivas de Pi Durable se inventarían por separado; no se asume que coinciden con las del host. Las pruebas cubren:
 
 - descubrimiento personal/proyecto y precedencia;
 - confianza del proyecto;
