@@ -158,7 +158,7 @@ Los últimos datos alimentan además casos de diccionario de tarea 4; no rechaza
 
 `tests/helpers/store.mjs` produce `makeStoreFixture(): Promise<{ session, repository, close, reopen, readKinds, seedJob }>`; `seedJob(job,result?)` es exclusivamente helper de prueba.
 
-- [ ] **1. Escribir pruebas atómicas y de lectura diferida.** Instrumentar el `Storage` público para registrar `document`/`findDocument` y mapear IDs a kinds, sin tocar internals. Vaciar registro antes de cada consulta.
+- [x] **1. Escribir pruebas atómicas y de lectura diferida.** Instrumentar el `Storage` público para registrar `document`/`findDocument` y mapear IDs a kinds, sin tocar internals. Vaciar registro antes de cada consulta.
 
 ```js
 await f.seedJob(doneJob, { ...result, finalResponse: 'x'.repeat(1024 * 1024) });
@@ -172,11 +172,11 @@ assert.equal(await f.repository.get('missing'), undefined);
 
 Afirmar que lecturas ausentes no crean miembros. Probar jobs con ID `__proto__`/`constructor`, cola sin duplicados y fallo de commit sin publicación parcial. Preparar en `seedJob` registros consistentes, no llamar a admisión futura.
 
-- [ ] **2. RED:** `node --test tests/repository.test.mjs`.
-- [ ] **3. Implementar documentos.** Esquema global 2, tokens individuales v1. Familias job/result con seed real al crear y seed `null` al exigir existencia; `initial(null)` lanza `STORAGE_INCONSISTENT`, nunca fabrica un job. `get`/`result` usan `snapshot`, no `tx.doc`. Ledger tendrá celda `{ record: RequestRecord|null }`; `null` solo puede existir durante una admisión aún no confirmada (tarea 5).
-- [ ] **4. Implementar operaciones del repositorio.** Índice compacto sin tareas, prompts, respuestas ni errores grandes; metadatos de resultado en job. `claimNext` comprueba slots dentro del commit y ejecuta el callback de creación/configuración en ese mismo commit; si falla, no consumir cola ni publicar conversación. `finish` es condicional e inmutable después de terminal; `markNotified` repetido no altera timestamps otra vez.
-- [ ] **5. GREEN:** `node --test tests/repository.test.mjs && npm run check && npm test`. Comprobar queue/job/result/index juntos mediante reapertura.
-- [ ] **6. Commit:** `feat: add partitioned durable job repository`.
+- [x] **2. RED:** `node --test tests/repository.test.mjs`.
+- [x] **3. Implementar documentos.** Esquema global 2, tokens individuales v1. Familias job/result con seed real al crear y seed `null` al exigir existencia; `initial(null)` lanza `STORAGE_INCONSISTENT`, nunca fabrica un job. `get`/`result` usan `snapshot`, no `tx.doc`. Ledger tendrá celda `{ record: RequestRecord|null }`; `null` solo puede existir durante una admisión aún no confirmada (tarea 5).
+- [x] **4. Implementar operaciones del repositorio.** Índice compacto sin tareas, prompts, respuestas ni errores grandes; metadatos de resultado en job. `claimNext` comprueba slots dentro del commit y ejecuta el callback de creación/configuración en ese mismo commit; si falla, no consumir cola ni publicar conversación. `finish` es condicional e inmutable después de terminal; `markNotified` repetido no altera timestamps otra vez.
+- [x] **5. GREEN:** `node --test tests/repository.test.mjs && npm run check && npm test`. Comprobar queue/job/result/index juntos mediante reapertura.
+- [x] **6. Commit:** `feat: add partitioned durable job repository`.
 
 ## Task 5 — Admisión idempotente y servicios de consulta actuales
 
