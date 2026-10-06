@@ -209,7 +209,7 @@ Añadir `Promise.all` de dos admisiones iguales, reapertura y replay; cambiar ac
 
 **Interfaces:** `acquireLease(dbPath: string): Promise<Lease>`; `inspectStorage(lease: Lease, context: Context): Promise<StorageInspection>`; `createBackup(lease: Lease, now: Clock): Promise<BackupReceipt>`; `verifyBackup(receipt: BackupReceipt): Promise<void>`. Inspección abre/cierra `Storage`/`createSession` propios, nunca Harness; base vacía se detecta aquí pero se inicializa en tarea 9. `legacy-v1.ts` define `JobsStateV1` y `LegacyJobsDoc` desde el baseline, sin importar tests ni tipos nuevos; se reutiliza en tarea 7.
 
-- [ ] **1. Probar lock y rutas.** Canonicalizar padre real para aliases y rechazar base/lock como symlink. Crear lock exclusivo, token, PID y fecha; no borrar por antigüedad. Una segunda adquisición devuelve `STORAGE_BUSY`; doble release no elimina el lock de otro propietario.
+- [x] **1. Probar lock y rutas.** Canonicalizar padre real para aliases y rechazar base/lock como symlink. Crear lock exclusivo, token, PID y fecha; no borrar por antigüedad. Una segunda adquisición devuelve `STORAGE_BUSY`; doble release no elimina el lock de otro propietario.
 
 ```js
 const lease = await acquireLease(database);
@@ -221,12 +221,12 @@ await assert.rejects(inspectFixture('future'), hasCode('STORAGE_VERSION_UNSUPPOR
 
 `hasCode(code)` y `inspectFixture(name)` son helpers locales del test. Añadir documento ajeno no vacío y SQLite corrupto: no inicializar ni reanudar. `Storage` usa scans/findDocument/document públicos para versión; no depender del nombre interno de tablas.
 
-- [ ] **2. RED:** `node --test tests/storage-maintenance.test.mjs`.
-- [ ] **3. Implementar lock/inspección.** Mantener misma ruta de sesión que baseline; no cambiar IDs sanitizados. Rechazar mezcla de monolito activo y esquema 2, versiones desconocidas e invariantes inválidas. Liberar handles en `finally`, pero no el lease propiedad del caller. Resolver cambios de identidad de archivo durante inspección como inconsistencia. `sourceHash` es SHA-256 del JSON canónico de `{ version: 1, state: JobsStateV1 }`, sin incluir la ruta; la aprobación comprueba además la ruta canónica.
-- [ ] **4. Añadir prueba RED de backup con WAL, permisos y fallo.** Mantener una conexión sintética con WAL pendiente; `createBackup` debe incluir la última fila sintética y permitir restauración. Inyectar en tests rechazo del backup y destino no escribible: fuente igual, sin backup aceptado. Verificar hash de archivo cerrado, `0700`/`0600` y no sobrescritura de un backup anterior.
-- [ ] **5. Implementar backup.** `DatabaseSync` y `backup` públicos; destino `<dbPath>.backups/<timestamp>-<uuid>/backup.sqlite`, con directorio único privado por intento; no seguir symlinks en padre ni destino. `PRAGMA integrity_check` es validación SQLite pública, no modificación de esquema Durable. Verificar lectura v1 sobre copia de verificación cuando abrir backend pueda escribir. Cerrar conexiones antes de devolver recibo; restos incompletos no cuentan como backup.
-- [ ] **6. GREEN:** `node --test tests/storage-maintenance.test.mjs && npm run check && npm test`.
-- [ ] **7. Commit:** `feat: guard storage ownership and create verified backups`.
+- [x] **2. RED:** `node --test tests/storage-maintenance.test.mjs`.
+- [x] **3. Implementar lock/inspección.** Mantener misma ruta de sesión que baseline; no cambiar IDs sanitizados. Rechazar mezcla de monolito activo y esquema 2, versiones desconocidas e invariantes inválidas. Liberar handles en `finally`, pero no el lease propiedad del caller. Resolver cambios de identidad de archivo durante inspección como inconsistencia. `sourceHash` es SHA-256 del JSON canónico de `{ version: 1, state: JobsStateV1 }`, sin incluir la ruta; la aprobación comprueba además la ruta canónica.
+- [x] **4. Añadir prueba RED de backup con WAL, permisos y fallo.** Mantener una conexión sintética con WAL pendiente; `createBackup` debe incluir la última fila sintética y permitir restauración. Inyectar en tests rechazo del backup y destino no escribible: fuente igual, sin backup aceptado. Verificar hash de archivo cerrado, `0700`/`0600` y no sobrescritura de un backup anterior.
+- [x] **5. Implementar backup.** `DatabaseSync` y `backup` públicos; destino `<dbPath>.backups/<timestamp>-<uuid>/backup.sqlite`, con directorio único privado por intento; no seguir symlinks en padre ni destino. `PRAGMA integrity_check` es validación SQLite pública, no modificación de esquema Durable. Verificar lectura v1 sobre copia de verificación cuando abrir backend pueda escribir. Cerrar conexiones antes de devolver recibo; restos incompletos no cuentan como backup.
+- [x] **6. GREEN:** `node --test tests/storage-maintenance.test.mjs && npm run check && npm test`.
+- [x] **7. Commit:** `feat: guard storage ownership and create verified backups`.
 
 ## Task 7 — Conversión v1 autorizada y atómica
 
