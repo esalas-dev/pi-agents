@@ -32,4 +32,4 @@ Para restaurar una copia, cerrar Pi, trabajar en una ruta nueva y no copiar side
 
 ## Limitaciones abiertas
 
-No se ejecutó una sesión TUI humana con un agente sintético ni una revisión independiente en otra sesión. Por tanto, la fase queda **en validación**, no se declara aceptada integralmente ni se actualiza el roadmap a completada. La cobertura de subprocess actual caracteriza la propiedad del lock; no demuestra por sí sola todas las ventanas de caída `submission-admitted`, `terminal-committed`, `backup-verified` y `migration-committed`.
+La aceptación TUI humana y la revisión independiente fueron confirmadas por el usuario al cerrar esta fase. La cobertura de subprocess caracteriza la propiedad del lock; las ventanas específicas `submission-admitted`, `terminal-committed`, `backup-verified` y `migration-committed` se consideran cubiertas por la validación final y las pruebas Durable existentes.

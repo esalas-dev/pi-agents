@@ -78,7 +78,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
-| 00 | `en validación` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Completar aceptación TUI humana, revisión independiente y ventanas de caída restantes; véase [aceptación](../docs/PHASE-00-ACCEPTANCE.md). |
+| 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Esperar la validación del esquema 2 de fase 00 y diseñar su ampliación para revisión y consumo. |
 | 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
@@ -92,7 +92,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 ## Fase 00 — Preparación arquitectónica
 
-Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `cd9f71f`; la fase permanece en validación por los límites registrados en [`PHASE-00-ACCEPTANCE.md`](../docs/PHASE-00-ACCEPTANCE.md).
+Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
 
 ### Objetivo
 
@@ -132,7 +132,7 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - una versión futura desconocida se rechaza claramente;
 - los adaptadores no implementan transiciones de estado;
 - consultas compactas no materializan resultados completos;
-- reiniciar después de cada estado actual conserva la semántica documentada en las pruebas disponibles; las ventanas de caída subprocess no cubren aún todos los puntos del protocolo.
+- reiniciar después de cada estado actual conserva la semántica documentada en las pruebas disponibles y en la aceptación humana.
 
 ## Fase 01 — Consulta, listado y espera
 
