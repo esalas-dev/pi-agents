@@ -1,0 +1,42 @@
+{
+  "name": "pi-agents",
+  "version": "0.1.0",
+  "description": "Subagentes aislados y durables en segundo plano para Pi",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "subagents",
+    "durable-execution"
+  ],
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --experimental-strip-types --check index.ts && node --experimental-strip-types --check src/agents.ts && node --experimental-strip-types --check src/command.ts && node --experimental-strip-types --check src/jobs.ts"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.0.1",
+    "@earendil-works/pi-durable": "1.0.1",
+    "yaml": "2.9.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

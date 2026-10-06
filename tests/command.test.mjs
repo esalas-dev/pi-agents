@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { CommandSyntaxError, parsePiAgentsCommand, tokenizeCommandLine } from '../src/command.ts';
+
+test('analiza inicio con tarea entre comillas o sin ellas', () => {
+  assert.deepEqual(parsePiAgentsCommand('reviewer "revisa el cambio completo"'), {
+    action: 'start', agent: 'reviewer', task: 'revisa el cambio completo',
+  });
+  assert.deepEqual(parsePiAgentsCommand("reviewer 'revisa el diff'"), {
+    action: 'start', agent: 'reviewer', task: 'revisa el diff',
+  });
+  assert.deepEqual(parsePiAgentsCommand('reviewer revisa el cambio'), {
+    action: 'start', agent: 'reviewer', task: 'revisa el cambio',
+  });
+});
+
+test('analiza status y result con exactamente un id', () => {
+  assert.deepEqual(parsePiAgentsCommand('status psa_123'), { action: 'status', id: 'psa_123' });
+  assert.deepEqual(parsePiAgentsCommand('result psa_123'), { action: 'result', id: 'psa_123' });
+  assert.throws(() => parsePiAgentsCommand('status'), CommandSyntaxError);
+  assert.throws(() => parsePiAgentsCommand('result a b'), CommandSyntaxError);
+});
+
+test('rechaza comillas abiertas y conserva escapes en comillas dobles', () => {
+  assert.deepEqual(tokenizeCommandLine('agent "usa \\"npm test\\""'), ['agent', 'usa "npm test"']);
+  assert.throws(() => tokenizeCommandLine('agent "incompleta'), /comilla sin cerrar/);
+  assert.throws(() => parsePiAgentsCommand(''), /Uso:/);
+});
