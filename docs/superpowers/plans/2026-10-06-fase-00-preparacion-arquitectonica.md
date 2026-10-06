@@ -184,7 +184,7 @@ Afirmar que lecturas ausentes no crean miembros. Probar jobs con ID `__proto__`/
 
 **Interfaces:** repositorio añade `receipt(requestId: string): Promise<RequestRecord|undefined>` y `admit(request: StartRequest, input: ResolvedJobInput): Promise<AdmissionReceipt>`. `createStartService(repository: JobRepository, wake: () => void, report: (error: unknown) => void): StartService` produce `start(request: StartRequest, resolve: ResolveInput): Promise<Outcome<AdmissionReceipt>>` y `seal(): void`; tras sellar, nuevas llamadas devuelven `RUNTIME_CLOSING`. `createJobsService(repository,startService): JobsService` expone `start` anterior, `status(id): Promise<Outcome<JobView>>`, `result(id): Promise<Outcome<ResultView>>`, `markNotified(id): Promise<Outcome<void>>` y `unnotified(): Promise<Outcome<JobRecord[]>>`.
 
-- [ ] **1. Escribir pruebas de replay, conflicto y consulta.** Preparar `resolve` faux que cuenta invocaciones y devuelve `legacyInput`; no iniciar scheduler.
+- [x] **1. Escribir pruebas de replay, conflicto y consulta.** Preparar `resolve` faux que cuenta invocaciones y devuelve `legacyInput`; no iniciar scheduler.
 
 ```js
 const one = await service.start(request, resolve);
@@ -197,11 +197,11 @@ assert.equal((await jobs.status('missing')).error.code, 'JOB_NOT_FOUND');
 
 Añadir `Promise.all` de dos admisiones iguales, reapertura y replay; cambiar actor debe confligir. Para operación distinta, sembrar un recibo con `operation: 'foreign-operation'` y comprobar `REQUEST_ID_CONFLICT`; producción solo escribe `operation: 'start'`, sin añadir otro endpoint. Dos requestIds humanos distintos producen dos jobs. Fallo antes de commit no deja recibo; fallo del callback `wake` se reporta sin cambiar una admisión confirmada en error de petición.
 
-- [ ] **2. RED:** `node --test tests/start-service.test.mjs`.
-- [ ] **3. Implementar admisión atómica.** Consultar recibo antes de resolver; dentro del commit volver a comprobar celda ledger. Si existe, comparar ID/actor/hash y devolver respuesta previa; si `record:null`, crear job, índice/cola y recibo juntos. Colisión de job ID nunca sobreescribe otro: abortar con error estable. Un commit fallido no publica celda null.
-- [ ] **4. Implementar servicios.** Validar que tarea/cwd resueltos corresponden a intención normalizada. `status` no carga resultados; `result` conserva vista «todavía no disponible» sin tratar consulta como fallo del job. No exponer listado/wait/revisión. Llamar a `wake` solo después de admisión durable. `seal` comprueba cierre al entrar y después de resolver configuración; admisiones ya dentro del commit se terminan antes de cerrar el Session y nunca se pierden.
-- [ ] **5. GREEN:** `node --test tests/start-service.test.mjs tests/repository.test.mjs && npm run check && npm test`.
-- [ ] **6. Commit:** `feat: add idempotent admission and shared job services`.
+- [x] **2. RED:** `node --test tests/start-service.test.mjs`.
+- [x] **3. Implementar admisión atómica.** Consultar recibo antes de resolver; dentro del commit volver a comprobar celda ledger. Si existe, comparar ID/actor/hash y devolver respuesta previa; si `record:null`, crear job, índice/cola y recibo juntos. Colisión de job ID nunca sobreescribe otro: abortar con error estable. Un commit fallido no publica celda null.
+- [x] **4. Implementar servicios.** Validar que tarea/cwd resueltos corresponden a intención normalizada. `status` no carga resultados; `result` conserva vista «todavía no disponible» sin tratar consulta como fallo del job. No exponer listado/wait/revisión. Llamar a `wake` solo después de admisión durable. `seal` comprueba cierre al entrar y después de resolver configuración; admisiones ya dentro del commit se terminan antes de cerrar el Session y nunca se pierden.
+- [x] **5. GREEN:** `node --test tests/start-service.test.mjs tests/repository.test.mjs && npm run check && npm test`.
+- [x] **6. Commit:** `feat: add idempotent admission and shared job services`.
 
 ## Task 6 — Propiedad, inspección segura y backup SQLite
 

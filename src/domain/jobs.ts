@@ -7,6 +7,9 @@ export type JobStatusPublic = Exclude<JobStatus, "provisioning">;
 export type JobAgentSnapshot = { name: string; description: string; systemPrompt: string; source: "personal" | "project"; filePath: string; tools: string[] };
 export type JobModel = { provider: string; modelId: string };
 export type JobResult = { finalResponse: string; durationMs: number; model: JobModel; status: "completed" | "failed" | "interrupted"; error?: string };
+export type ResolvedJobInput = { task: string; cwd: string; agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel };
+export type JobView = { job: Readonly<JobRecord>; queuePosition?: number };
+export type ResultView = JobView & { result?: Readonly<JobResult> };
 export type JobRecord = {
   id: string; status: JobStatus; task: string; cwd: string; createdAt: number; updatedAt: number; startedAt?: number; finishedAt?: number;
   agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel; conversationId?: number; submissionId?: number;

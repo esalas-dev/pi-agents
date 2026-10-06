@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
 import type { JobRecord, JobResult } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
-import type { Clock, CreateId } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, CreateId, RequestRecord, StartRequest } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
-import { JobDocFamily, JobResultDocFamily, JobsIndexDoc, StorageMetaDoc } from "./documents.ts";
+import { JobDocFamily, JobResultDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from "./documents.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
@@ -18,6 +19,8 @@ export type JobRepository = {
   markRunning(id: string, submissionId: number, at: number): Promise<void>;
   create(job: JobRecord, result?: JobResult): Promise<void>;
   claimNext(maxConcurrency: number, createConversation: CreateConversation): Promise<JobRecord | undefined>;
+  receipt(requestId: string): Promise<RequestRecord | undefined>;
+  admit(request: StartRequest & { payloadHash: string }, input: Omit<JobRecord, "id" | "status" | "createdAt" | "updatedAt" | "notified">): Promise<AdmissionReceipt>;
 };
 
 const activeStatuses = new Set(["provisioning", "running"]);
@@ -35,7 +38,7 @@ function storedJob(job: JobRecord): JobRecord {
 
 function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
-export function createJobRepository(session: Session, context: Context, clock: Clock, _createId: CreateId): JobRepository {
+export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId): JobRepository {
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
   const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult = Boolean(job.result)) => {
@@ -59,6 +62,34 @@ export function createJobRepository(session: Session, context: Context, clock: C
     await writeIndexFor(tx, job, false, Boolean(result));
   };
   return {
+    async receipt(requestId) {
+      const key = createHash("sha256").update(requestId).digest("hex");
+      const cell = await session.snapshot(RequestLedgerDocFamily, key, context) as { record: RequestRecord | null } | undefined;
+      return cell?.record ? structuredClone(cell.record) : undefined;
+    },
+    async admit(request, input) {
+      const key = createHash("sha256").update(request.requestId).digest("hex");
+      let receipt: AdmissionReceipt | undefined;
+      await session.commit(async tx => {
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "start" || existing.actor.kind !== request.actor.kind || existing.actor.id !== request.actor.id || existing.payloadHash !== request.payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+          receipt = plain(existing.response);
+          return;
+        }
+        const id = createId();
+        const now = clock();
+        const job: JobRecord = { ...structuredClone(input), id, status: "queued", createdAt: now, updatedAt: now, notified: false };
+        assertJob(job);
+        const admitted: RequestRecord = { requestId: request.requestId, operation: "start", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash: request.payloadHash, admittedAt: now, response: { jobId: id, status: "queued", agent: job.agent.name } };
+        cell.record = admitted;
+        await commitJob(tx, job);
+        receipt = structuredClone(admitted.response);
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
+    },
     async get(id) { return structuredClone(await readJob(id)); },
     async result(id) {
       const job = await readJob(id);

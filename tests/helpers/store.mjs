@@ -5,9 +5,9 @@ import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 import { createSession } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { createJobRepository } from '../../src/infrastructure/durable/repository.ts';
-import { JobsIndexDoc, JobDocFamily, JobResultDocFamily, StorageMetaDoc } from '../../src/infrastructure/durable/documents.ts';
+import { JobsIndexDoc, JobDocFamily, JobResultDocFamily, RequestLedgerDocFamily, StorageMetaDoc } from '../../src/infrastructure/durable/documents.ts';
 
-export async function makeStoreFixture() {
+export async function makeStoreFixture({ createId = (() => `psa_${Math.random().toString(16).slice(2)}`) } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-store-'));
   const database = join(directory, 'jobs.sqlite');
   const readKinds = [];
@@ -28,7 +28,7 @@ export async function makeStoreFixture() {
       },
     });
     session = createSession(observed);
-    repository = createJobRepository(session, context, () => 2000, () => 'unused');
+    repository = createJobRepository(session, context, () => 2000, createId);
   };
   await open();
   const close = async () => { await session?.close(context); await rm(directory, { recursive: true, force: true }); };
@@ -50,5 +50,6 @@ export async function makeStoreFixture() {
       if (job.status === 'queued') index.order.push(job.id);
     }, context);
   };
-  return { database, session, get repository() { return repository; }, close, reopen, readKinds, seedJob };
+  const seedRequest = async (key, record) => session.commit(async tx => { const cell = await tx.doc(RequestLedgerDocFamily, key, record); cell.record = structuredClone(record); }, context);
+  return { database, session, get repository() { return repository; }, close, reopen, readKinds, seedJob, seedRequest };
 }

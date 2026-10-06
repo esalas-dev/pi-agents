@@ -5,6 +5,11 @@ import { DomainError } from "./errors.ts";
 export type Actor = { kind: "human" | "model" | "extension" | "system"; id?: string };
 export type StartIntent = { agent: string; task: string; cwd: string };
 export type StartRequest = { requestId: string; actor: Actor; intent: StartIntent };
+export type Clock = () => number;
+export type CreateId = () => string;
+export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
+export type RequestRecord = { requestId: string; operation: string; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt };
+export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
 
 function jsonValue(value: unknown): unknown {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
