@@ -2,7 +2,9 @@
 
 ## Estado y autoridad
 
-Diseño propuesto, pendiente de revisión del documento escrito. Las cinco secciones del diseño conversacional fueron aprobadas; esa aprobación permite escribir esta spec, no implementarla. Fecha de inspección: 2026-10-06.
+Diseño aprobado por el usuario el 2026-10-06, tras revisar el documento registrado en `c6fc78b`. Aún no implementado. Fecha de inspección: 2026-10-06.
+
+Plan propuesto: [`fase 00 — Preparación arquitectónica`](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md), pendiente de revisión y elección del método de ejecución.
 
 Depende del baseline `efc690ffdf15c3157eb7167a02dac12f6668843a`. Precede a la [fase 01](01-consulta-listado-espera.md) y desarrolla la [fase 00 del roadmap](ROADMAP.md#fase-00--preparación-arquitectónica).
 

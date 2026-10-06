@@ -78,7 +78,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
-| 00 | `propuesta` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Revisar y aprobar la [spec escrita](00-preparacion-arquitectonica.md) antes de crear su plan. |
+| 00 | `lista para planificar` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Revisar el [plan propuesto](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) y elegir ejecución; spec aprobada, implementación no iniciada. |
 | 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Esperar la validación del esquema 2 de fase 00 y diseñar su ampliación para revisión y consumo. |
 | 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
@@ -92,7 +92,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 ## Fase 00 — Preparación arquitectónica
 
-Spec propuesta: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), pendiente de aprobación del documento escrito. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El baseline está satisfecho; esto no completa la fase.
+Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El [plan](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) está pendiente de revisión y elección de ejecución. El baseline está satisfecho; esto no completa la fase.
 
 ### Objetivo
 
@@ -123,7 +123,7 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - conversión atómica v1 → esquema 2 mediante mantenimiento humano y backup obligatorio;
 - entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4` y Pi Durable `1.0.1`, sin promesa sobre mínimos históricos;
 - TypeScript estricto con declaraciones públicas del host, sin añadir copias directas de sus peers;
-- resta aprobar la spec escrita y demostrar estos contratos durante la implementación, incluida la compatibilidad entre `pi-ai` local y el host.
+- spec escrita aprobada; resta revisar el plan, elegir ejecución y demostrar estos contratos durante la implementación, incluida la compatibilidad entre `pi-ai` local y el host.
 
 ### Gate de salida
 
@@ -478,8 +478,8 @@ Componentes, navegación, contenido hostil, resultados grandes, eventos duplicad
 
 | ID | Decisión | Afecta a | Criterio de cierre |
 | --- | --- | --- | --- |
-| RD-001 | Partición elegida en el [diseño 00](00-preparacion-arquitectonica.md#modelo-persistente): índice y familias separadas | 00–10 | Pendiente de aprobación de spec y evidencia de consultas compactas/migración con payload grande. |
-| RD-002 | Entorno actual elegido; no preservar mínimos históricos como promesa | 00–10 | Pendiente de aprobación de spec y type-check/smoke con Node `26.10.0`, Pi `1.0.4` y Durable `1.0.1`. |
+| RD-001 | Partición elegida en el [diseño 00](00-preparacion-arquitectonica.md#modelo-persistente): índice y familias separadas | 00–10 | Spec aprobada; pendiente de evidencia de consultas compactas/migración con payload grande. |
+| RD-002 | Entorno actual elegido; no preservar mínimos históricos como promesa | 00–10 | Spec aprobada; pendiente de type-check/smoke con Node `26.10.0`, Pi `1.0.4` y Durable `1.0.1`. |
 | RD-003 | Semántica de pausa activa | 02, 07, 09, 10 | API pública confirmada o degradación estable documentada. |
 | RD-004 | Estrategia de structured output | 04, 05, 09 | Spike público y corpus de validación aprobados. |
 | RD-005 | Hooks y firma en commits automáticos | 06, 09 | Política reproducible y segura aprobada. |

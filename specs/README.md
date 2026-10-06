@@ -20,7 +20,7 @@ La base existente permanece como punto de partida:
 
 ## Secuencia obligatoria
 
-Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de fase 00](00-preparacion-arquitectonica.md), pendiente de aprobación escrita, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
+Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de fase 00](00-preparacion-arquitectonica.md), aprobada y aún no implementada, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Su [plan de implementación](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) requiere revisión y elección del método de ejecución. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
 
 | Orden | Especificación | Resultado principal | Depende de |
 |---:|---|---|---|
