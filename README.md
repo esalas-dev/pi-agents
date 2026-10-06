@@ -5,7 +5,7 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 ## Requisitos
 
 - Node.js `>=26.10.0`.
-- Pi **1.0.4** es el host objetivo del type-check actual. La implementación original se desarrolló con Pi `1.0.1`; la aceptación runtime del rediseño sigue pendiente.
+- Pi **1.0.4** es el host objetivo del type-check y del smoke de carga actual. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
 - Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`. No se afirma compatibilidad probada de todas las versiones superiores.
 - Agentes Markdown en `~/.pi/agent/agents/` o en el `.pi/agents/` más cercano del proyecto.
 - Un modelo configurado en Pi.
@@ -111,7 +111,7 @@ La separación por sesión evita mezclar resultados y reduce conflictos entre pr
 - herramientas no seguras producen el tratamiento `interrupted` de Pi Durable en vez de repetir ciegamente efectos;
 - resultados ya confirmados no vuelven a ejecutarse.
 
-La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo.
+La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica; una base legacy no se abre directamente.
 
 ## Concurrencia y configuración
 
@@ -158,6 +158,8 @@ Los `peerDependencies` son suministrados por Pi y no deben añadirse como depend
 - validación de herramientas;
 - sintaxis del comando;
 - ejecución y persistencia SQLite;
+- locks, inspección de versiones, backup, migración v1 y recuperación del runtime;
+- adaptadores Pi, autoridad TUI-only y smoke de carga.
 - límite de concurrencia;
 - cierre y reapertura durante una generación.
 

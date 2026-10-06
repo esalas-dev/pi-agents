@@ -15,11 +15,13 @@ Cada trabajo ejecuta una tarea independiente. No existen cadenas ni lotes. La co
 
 ## Componentes
 
-### Extensión Pi (`index.ts`)
+### Extensión Pi (`index.ts` y adaptadores)
+
+`index.ts` solo conecta bindings públicos del host. `src/adapters/pi/resolve.ts` resuelve agente, confianza, proveedor y snapshot; `display.ts` presenta vistas compactas; `register.ts` registra comandos, tool, renderers y lifecycle sin poseer transiciones Durable.
 
 - Registra el comando, la herramienta y renderers de entradas.
 - Abre recursos solo desde `session_start`, no durante la carga de la fábrica.
-- Cierra el Harness desde `session_shutdown`.
+- Cierra el runtime desde `session_shutdown`; su propietario libera coordinador, Harness y lease.
 - Consulta la confianza mediante la API nativa.
 - Construye un `ModelRuntime` público y sincroniza proveedores físicos visibles en `ctx.modelRegistry`.
 - Añade notificaciones fuera del contexto del modelo mediante `pi.appendEntry()`.
@@ -33,22 +35,17 @@ Busca:
 
 Los archivos se ordenan por nombre para que la resolución sea determinista. Primero se insertan los personales y después los de proyecto, produciendo reemplazo por `name`.
 
-### Registro y cola (`JobsDoc`)
+### Registro y cola (esquema 2)
 
-`JobsDoc` es un documento Durable de sesión con:
-
-```text
-jobs:  id → JobRecord
-queue: ids queued en orden de admisión
-```
+La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de admisión.
 
 El documento conserva la definición resuelta del agente, no solo su nombre. Un trabajo que espera en cola no cambia si el archivo Markdown se modifica antes de comenzar.
 
-La cola cuenta `provisioning` y `running` contra el límite. El `pump` serializa decisiones dentro del proceso y los commits Durable serializan las mutaciones persistentes.
+La cola cuenta `provisioning` y `running` contra el límite. El `Coordinator` serializa decisiones dentro del proceso y los commits Durable serializan las mutaciones persistentes.
 
 ### Conversación por trabajo
 
-Cada trabajo crea una conversación `ownerless` con los documentos internos de Pi Durable. Se configura en el mismo commit con:
+Cada trabajo crea una conversación `ownerless` mediante `DurableExecution` con los documentos internos de Pi Durable. Se configura en el mismo commit con:
 
 - modelo;
 - nivel de razonamiento;
