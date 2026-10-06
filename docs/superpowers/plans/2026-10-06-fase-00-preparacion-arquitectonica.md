@@ -87,7 +87,7 @@ Los tipos se definen en la tarea indicada; las demás tareas los importan, no lo
 
 **Interfaces:** consume `JobManager`/`JobsDoc` del baseline. Produce `createLegacyFixture({ directory, scenario }): Promise<{ database: string; expected: object }>` en `tests/helpers/legacy.mjs`; escenarios `queued`, `provisioning`, `running`, `terminal-mix`, `large-result`. Produce `legacyInput(task): ResolvedJobInput` por forma estructural, sin importar tipos nuevos.
 
-- [ ] **1. Escribir caracterización y prueba de fixture.** Congelar el contenido exacto de `src/jobs.ts` del commit `efc690f` en `jobs-v1.ts`, con procedencia/hash en README; la prueba no depende del migrador nuevo. Crear bases con APIs públicas y faux; para estados activos usar conversaciones/submissions reales y scheduler detenido o barreras.
+- [x] **1. Escribir caracterización y prueba de fixture.** Congelar el contenido exacto de `src/jobs.ts` del commit `efc690f` en `jobs-v1.ts`, con procedencia/hash en README; la prueba no depende del migrador nuevo. Crear bases con APIs públicas y faux; para estados activos usar conversaciones/submissions reales y scheduler detenido o barreras.
 
 ```js
 const f = await createLegacyFixture({ directory, scenario: 'terminal-mix' });
@@ -98,10 +98,10 @@ assert.equal(f.expected.jobs.psa_interrupted.result.status, 'interrupted');
 
 `readLegacy(database): Promise<JobsStateV1>` pertenece al helper; cierra todos los handles. `psa_interrupted` es un caso sintético válido, no una ruta de ejecución inventada. `large-result` usa `'x'.repeat(1024 * 1024)`.
 
-- [ ] **2. Ejecutar RED:** `node --test tests/legacy-fixtures.test.mjs`; debe fallar por helper/fixture ausente, no por credenciales o red.
-- [ ] **3. Implementar helper y fixtures reproducibles.** Cubrir orden de cola, flags de notificación, IDs de conversación/submission, timestamps y cadena de resultado. No guardar bases de usuario ni regenerar definiciones v1 desde esquema 2.
-- [ ] **4. Ejecutar GREEN:** `node --test tests/legacy-fixtures.test.mjs tests/jobs.test.mjs tests/recovery.test.mjs`; luego `npm test`. Pasan casos nuevos y las nueve pruebas originales.
-- [ ] **5. Commit:** archivos listados, mensaje `test: freeze v1 storage fixtures and baseline behavior`.
+- [x] **2. Ejecutar RED:** `node --test tests/legacy-fixtures.test.mjs`; debe fallar por helper/fixture ausente, no por credenciales o red.
+- [x] **3. Implementar helper y fixtures reproducibles.** Cubrir orden de cola, flags de notificación, IDs de conversación/submission, timestamps y cadena de resultado. No guardar bases de usuario ni regenerar definiciones v1 desde esquema 2.
+- [x] **4. Ejecutar GREEN:** `node --test tests/legacy-fixtures.test.mjs tests/jobs.test.mjs tests/recovery.test.mjs`; luego `npm test`. Pasan casos nuevos y las nueve pruebas originales.
+- [x] **5. Commit:** archivos listados, mensaje `test: freeze v1 storage fixtures and baseline behavior`.
 
 ## Task 2 — Type-check real y grafo de módulos comprobable
 
