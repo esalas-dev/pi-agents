@@ -133,7 +133,7 @@ await assert.rejects(resolveHost({ packageRoot: missingHost }), /Pi/);
 
 **Interfaces:** produce tipos de la sección común; `publicStatus(job: Pick<JobRecord,"status">): JobStatusPublic`; `transition(job: JobRecord, next: JobStatus, at: number): JobRecord` (nuevo objeto, transición inválida falla); `canonicalStart(request: StartRequest): { normalized: StartRequest; payloadHash: string; key: string }`; `DomainError extends Error` con `error: AppError`; `failure(error: unknown): Outcome<never>`.
 
-- [ ] **1. Escribir tabla de transiciones y canonización.** Permitir queued→provisioning, provisioning→running y fallo desde cualquier no terminal; running→completed; terminales inmutables. No introducir producción de `interrupted` nueva. Validar números finitos, estados y herramientas sin depender de Durable.
+- [x] **1. Escribir tabla de transiciones y canonización.** Permitir queued→provisioning, provisioning→running y fallo desde cualquier no terminal; running→completed; terminales inmutables. No introducir producción de `interrupted` nueva. Validar números finitos, estados y herramientas sin depender de Durable.
 
 ```js
 assert.equal(publicStatus({ status: 'provisioning' }), 'running');
@@ -145,10 +145,10 @@ assert.equal(Object.hasOwn(JSON.parse('{"__proto__":1}'), '__proto__'), true);
 
 Los últimos datos alimentan además casos de diccionario de tarea 4; no rechazar un ID solo por coincidir con propiedad del prototipo. Fijar tarea con trim exterior, espacios interiores conservados, agente sensible a mayúsculas, cwd absoluto normalizado y actor id ausente omitido, nunca `undefined` serializado.
 
-- [ ] **2. RED:** `node --test tests/domain.test.mjs`.
-- [ ] **3. Implementar contratos puros.** Thinking: `off|minimal|low|medium|high|xhigh|max`. Códigos de error exactamente los de la spec; detalles de error público JSON seguros. Hash SHA-256 de JSON canónico UTF-8 con claves ordenadas; la clave de ledger es SHA-256 de requestId completo. Ningún import de Pi/TUI/SQLite en dominio.
-- [ ] **4. GREEN:** `node --test tests/domain.test.mjs && npm run check && npm test`.
-- [ ] **5. Commit:** `refactor: define job domain and request contracts`.
+- [x] **2. RED:** `node --test tests/domain.test.mjs`.
+- [x] **3. Implementar contratos puros.** Thinking: `off|minimal|low|medium|high|xhigh|max`. Códigos de error exactamente los de la spec; detalles de error público JSON seguros. Hash SHA-256 de JSON canónico UTF-8 con claves ordenadas; la clave de ledger es SHA-256 de requestId completo. Ningún import de Pi/TUI/SQLite en dominio.
+- [x] **4. GREEN:** `node --test tests/domain.test.mjs && npm run check && npm test`.
+- [x] **5. Commit:** `refactor: define job domain and request contracts`.
 
 ## Task 4 — Documentos separados y repositorio transaccional
 
