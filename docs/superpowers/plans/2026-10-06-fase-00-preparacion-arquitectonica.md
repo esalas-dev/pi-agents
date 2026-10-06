@@ -258,7 +258,7 @@ assert.equal((await maintenance.migrate(declinedOptions)).error.code, 'MIGRATION
 
 **Interfaces:** `createExecution(harness: Harness, context: Context, tools: ReadonlyMap<string,ToolRegistration>, clock: Clock): DurableExecution`; este expone `create(tx: Tx,job: JobRecord): Promise<number>`, `submit(job: JobRecord): Promise<number>` y `wait(job: JobRecord): Promise<JobResult>`. `createCoordinator({ repository, execution, maxConcurrency, clock, onSettled, report }): Coordinator`, con `recover(): Promise<void>`, `wake(): void`, `drain(): Promise<void>` y `stop(): void`. `onSettled(job: JobRecord,result: JobResult): Promise<void>`; `report(error: unknown): void` no debe lanzar.
 
-- [ ] **1. Escribir pruebas de slots y reentrada.** `execution.create` real crea/configura conversación dentro del commit de `claimNext`; dobles `wake` no sobrepasan slots. Fake controlable para barreras y faux para integración real.
+- [x] **1. Escribir pruebas de slots y reentrada.** `execution.create` real crea/configura conversación dentro del commit de `claimNext`; dobles `wake` no sobrepasan slots. Fake controlable para barreras y faux para integración real.
 
 ```js
 coordinator.wake(); coordinator.wake();
@@ -270,11 +270,11 @@ assert.equal(await countConversationsFor(firstId), 1);
 
 Las barreras/contadores se implementan en helpers del test. Probar recovery `provisioning` después de submit y antes de `markRunning`: mismo `requestId` devuelve mismo submissionId. Probar fallo de creación/configuración: no hay conversación parcial ni pérdida de job.
 
-- [ ] **2. RED:** `node --test tests/coordinator.test.mjs`.
-- [ ] **3. Implementar driver.** `configure`, conversación ownerless, IDs y `Conversation.submit({ type:'input', content:job.task, requestId:'pi-agents:'+job.id })` públicos. `wait` extrae `AssistantEntry` y resultado como baseline; no se puentean herramientas de la sesión principal ni cambia replay de CodingTools.
-- [ ] **4. Implementar coordinador.** Cola de decisiones serializada; slots se comprueban atómicamente en repositorio. Monitores únicos por ID; ignorar finalización durante cierre hasta reapertura. `stop` impide nuevas admisiones del coordinador; runtime cierra Harness y después `drain` espera monitores. Un error de notificación se reporta, no llama a `finish` con failed.
-- [ ] **5. GREEN:** `node --test tests/coordinator.test.mjs && npm run check && npm test`.
-- [ ] **6. Commit:** `refactor: isolate durable execution and queue coordination`.
+- [x] **2. RED:** `node --test tests/coordinator.test.mjs`.
+- [x] **3. Implementar driver.** `configure`, conversación ownerless, IDs y `Conversation.submit({ type:'input', content:job.task, requestId:'pi-agents:'+job.id })` públicos. `wait` extrae `AssistantEntry` y resultado como baseline; no se puentean herramientas de la sesión principal ni cambia replay de CodingTools.
+- [x] **4. Implementar coordinador.** Cola de decisiones serializada; slots se comprueban atómicamente en repositorio. Monitores únicos por ID; ignorar finalización durante cierre hasta reapertura. `stop` impide nuevas admisiones del coordinador; runtime cierra Harness y después `drain` espera monitores. Un error de notificación se reporta, no llama a `finish` con failed.
+- [x] **5. GREEN:** `node --test tests/coordinator.test.mjs && npm run check && npm test`.
+- [x] **6. Commit:** `refactor: isolate durable execution and queue coordination`.
 
 ## Task 9 — Runtime por sesión y ownership de recursos
 
