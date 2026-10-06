@@ -234,7 +234,7 @@ await assert.rejects(inspectFixture('future'), hasCode('STORAGE_VERSION_UNSUPPOR
 
 **Interfaces:** `migrateV1(lease: Lease, approval: MigrationApproval, backup: BackupReceipt, context: Context): Promise<{ schemaVersion: 2; migratedJobs: number }>`; `createMaintenanceService(context: Context)` produce `migrate({ dbPath, confirm, clock }): Promise<Outcome<{ schemaVersion: 2; migratedJobs: number }>>`, donde `confirm(info: { dbPath: string; jobs: number; sourceHash: string; backupDirectory: string }): Promise<MigrationApproval|undefined>`. Solo adaptador humano llama ese servicio.
 
-- [ ] **1. Escribir pruebas de la ruta completa.** Usar todas las fixtures de tarea 1; leer y reconstruir un `JobsStateV1` desde los nuevos documentos para comparar sin campos nuevos.
+- [x] **1. Escribir pruebas de la ruta completa.** Usar todas las fixtures de tarea 1; leer y reconstruir un `JobsStateV1` desde los nuevos documentos para comparar sin campos nuevos.
 
 ```js
 assert.deepEqual(await reconstructedLegacy(database), fixture.expected);
@@ -245,12 +245,12 @@ assert.equal((await maintenance.migrate(declinedOptions)).error.code, 'MIGRATION
 
 `reconstructedLegacy` y `activeLegacyDocument` son helpers del test mediante APIs públicas; no leen SQL interno. Probar rechazo de `actor.kind !== human`, path/sourceHash alterados, backup hash inválido y confirmación cancelada sin modificación de jobs. Repetir sobre esquema 2 devuelve cero migrados.
 
-- [ ] **2. RED:** `node --test tests/migration.test.mjs`.
-- [ ] **3. Implementar orquestación.** Mantener lease durante revalidación, confirmación, backup y conversión; comprobar aprobación contra ruta/origen actuales. Backend v1 congelado en `legacy-v1.ts`, separado de fixtures y sin importar tipo nuevo para interpretar legado. Recibo administrativo contiene requestId, actor, tiempo, versiones y backup/hash.
-- [ ] **4. Implementar conversión en un commit.** Construir/validar equivalencia de destinos antes de publicar; `tx.doc` para todos los destinos y `tx.retireDoc(LegacyJobsDoc)` junto con meta esquema 2. No recrear conversaciones/submissions ni añadir autor a jobs heredados. Validar de nuevo antes de activar runtime; inconsistencia posterior bloquea, no hace rollback automático.
-- [ ] **5. Añadir y ejecutar fallos de commit y restauración.** Interponer `Storage.commit` en fixture para rechazo antes de escribir y comprobar v1 intacto; restaurar copia en ruta nueva sin sidecars, abrir con lector v1 y comparar. Falta de recursos deja origen o destino completo, nunca metadatos de migración «exitosa» parcial.
-- [ ] **6. GREEN:** `node --test tests/migration.test.mjs tests/storage-maintenance.test.mjs && npm run check && npm test`.
-- [ ] **7. Commit:** `feat: migrate v1 jobs with human approval and backup`.
+- [x] **2. RED:** `node --test tests/migration.test.mjs`.
+- [x] **3. Implementar orquestación.** Mantener lease durante revalidación, confirmación, backup y conversión; comprobar aprobación contra ruta/origen actuales. Backend v1 congelado en `legacy-v1.ts`, separado de fixtures y sin importar tipo nuevo para interpretar legado. Recibo administrativo contiene requestId, actor, tiempo, versiones y backup/hash.
+- [x] **4. Implementar conversión en un commit.** Construir/validar equivalencia de destinos antes de publicar; `tx.doc` para todos los destinos y `tx.retireDoc(LegacyJobsDoc)` junto con meta esquema 2. No recrear conversaciones/submissions ni añadir autor a jobs heredados. Validar de nuevo antes de activar runtime; inconsistencia posterior bloquea, no hace rollback automático.
+- [x] **5. Añadir y ejecutar fallos de commit y restauración.** Interponer `Storage.commit` en fixture para rechazo antes de escribir y comprobar v1 intacto; restaurar copia en ruta nueva sin sidecars, abrir con lector v1 y comparar. Falta de recursos deja origen o destino completo, nunca metadatos de migración «exitosa» parcial.
+- [x] **6. GREEN:** `node --test tests/migration.test.mjs tests/storage-maintenance.test.mjs && npm run check && npm test`.
+- [x] **7. Commit:** `feat: migrate v1 jobs with human approval and backup`.
 
 ## Task 8 — Ejecución Durable y coordinador recuperable
 

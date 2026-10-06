@@ -7,6 +7,10 @@ export type StorageMeta = {
   source: "new" | "migrated";
   migrationRequestId?: string;
   migratedAt?: number;
+  migrationActor?: { kind: "human"; id?: string };
+  sourceHash?: string;
+  backupPath?: string;
+  backupHash?: string;
 };
 export type JobsIndex = {
   storageSchemaVersion: 2;

@@ -9,6 +9,7 @@ export type Clock = () => number;
 export type CreateId = () => string;
 export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
 export type RequestRecord = { requestId: string; operation: string; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt };
+export type MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number };
 export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
 
 function jsonValue(value: unknown): unknown {
