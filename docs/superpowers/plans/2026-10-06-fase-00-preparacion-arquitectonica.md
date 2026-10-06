@@ -282,7 +282,7 @@ Las barreras/contadores se implementan en helpers del test. Probar recovery `pro
 
 **Interfaces:** `openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime>`; `RuntimeOptions = { storagePath:string; models:Models; context:Context; defaultCwd:string; maxConcurrency:number; now?:Clock; createId?:CreateId; onSettled?:(job:JobRecord,result:JobResult)=>Promise<void>; onReport?:(error:unknown)=>void }`; `SessionRuntime = { jobs: JobsService; close(): Promise<void> }`. La apertura arroja `DomainError` si requiere mantenimiento; no activa scheduler.
 
-- [ ] **1. Escribir pruebas de apertura, fallo y cierre.** Fixtures antiguas deben producir `MIGRATION_REQUIRED`, no llamadas al proveedor. Base vacía crea meta/índice juntos. Error en Harness o inspección libera handles/lease propios. La creación de ModelRuntime se prueba en el adaptador de tarea 10, no en este runtime que recibe `Models`.
+- [x] **1. Escribir pruebas de apertura, fallo y cierre.** Fixtures antiguas deben producir `MIGRATION_REQUIRED`, no llamadas al proveedor. Base vacía crea meta/índice juntos. Error en Harness o inspección libera handles/lease propios. La creación de ModelRuntime se prueba en el adaptador de tarea 10, no en este runtime que recibe `Models`.
 
 ```js
 await assert.rejects(openSessionRuntime(legacyOptions), hasCode('MIGRATION_REQUIRED'));
@@ -294,11 +294,11 @@ assert.equal((await acquireLease(emptyOptions.storagePath)).dbPath, canonicalPat
 
 Cerrar también el lease adquirido en la aserción mediante `finally`. Añadir fallo de `onSettled` y confirmar que job queda completed; cierre concurrente con `start` no deja un recibo sin job ni un job admitido que se pierda.
 
-- [ ] **2. RED:** `node --test tests/session-runtime.test.mjs`.
-- [ ] **3. Implementar lifecycle.** Acquire→inspect→initialize/validate→Harness.open sin progreso→componer repositorio/servicios/coordinador→recover. Ningún `submit`, `wait`, `resume` antes de validar. Definir un propietario por recurso y cleanup inverso; no tener dos Sessions simultáneas escribiendo la misma base.
-- [ ] **4. Implementar shutdown.** Sellar admisión en aplicación, detener coordinador, cerrar Harness, drenar monitores y liberar lease; los fallos no dejan una cola de lifecycle permanentemente rechazada. No abortar trabajos por cierre ni duplicar resultado/notificación al reabrir.
-- [ ] **5. GREEN:** `node --test tests/session-runtime.test.mjs tests/coordinator.test.mjs && npm run check && npm test`.
-- [ ] **6. Commit:** `refactor: compose guarded session runtimes`.
+- [x] **2. RED:** `node --test tests/session-runtime.test.mjs`.
+- [x] **3. Implementar lifecycle.** Acquire→inspect→initialize/validate→Harness.open sin progreso→componer repositorio/servicios/coordinador→recover. Ningún `submit`, `wait`, `resume` antes de validar. Definir un propietario por recurso y cleanup inverso; no tener dos Sessions simultáneas escribiendo la misma base.
+- [x] **4. Implementar shutdown.** Sellar admisión en aplicación, detener coordinador, cerrar Harness, drenar monitores y liberar lease; los fallos no dejan una cola de lifecycle permanentemente rechazada. No abortar trabajos por cierre ni duplicar resultado/notificación al reabrir.
+- [x] **5. GREEN:** `node --test tests/session-runtime.test.mjs tests/coordinator.test.mjs && npm run check && npm test`.
+- [x] **6. Commit:** `refactor: compose guarded session runtimes`.
 
 ## Task 10 — Adaptadores Pi, mantenimiento TUI y sustitución del monolito
 
