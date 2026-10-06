@@ -244,7 +244,7 @@ La matriz objetivo inicial es macOS arm64, Node `26.10.0`, Pi `1.0.4`, Pi Durabl
 
 Los paquetes suministrados por Pi siguen como peers `*`, conforme a su contrato de paquetes; la política de soporte se documenta por separado. No se añaden a `dependencies` ni se empaquetan copias directas. Las dependencias transitivas de Durable se inventariarán explícitamente; no se ocultan ni se equiparan automáticamente al host.
 
-Se añadirá `tsconfig.json` con modo estricto, `noEmit`, resolución ESM y soporte de imports `.ts`. El type-check incluye `index.ts` y todo `src/`, no una lista manual fija. No se sustituyen declaraciones ausentes por módulos `any` ni se silencian errores de integración con casts dobles.
+Se añadirá `tsconfig.json` con modo estricto, `noEmit`, resolución ESM y soporte de imports `.ts`. El type-check incluye `index.ts` y todo `src/`, no una lista manual fija. No se sustituyen declaraciones ausentes por módulos `any` ni se silencian errores de integración con casts dobles. Durante la ejecución, el usuario autorizó `skipLibCheck: true` ante 44 errores en declaraciones distribuidas por dependencias. Se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts`; esa limitación no acredita compatibilidad runtime y no elimina el gate de integración.
 
 TypeScript y tipos de Node serán dependencias de desarrollo fijadas en lockfile. El plan seleccionará versiones concretas compatibles con Node objetivo; no se instala nada durante este diseño.
 

@@ -78,7 +78,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
-| 00 | `lista para planificar` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Revisar el [plan propuesto](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) y elegir ejecución; spec aprobada, implementación no iniciada. |
+| 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Esperar la validación del esquema 2 de fase 00 y diseñar su ampliación para revisión y consumo. |
 | 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
@@ -92,7 +92,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 
 ## Fase 00 — Preparación arquitectónica
 
-Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El [plan](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) está pendiente de revisión y elección de ejecución. El baseline está satisfecho; esto no completa la fase.
+Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
 
 ### Objetivo
 
@@ -117,13 +117,13 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - política de versiones soportadas de Pi y Pi Durable;
 - README y arquitectura actualizados solo con comportamiento real.
 
-### Diseño propuesto y verificación pendiente
+### Diseño implementado y verificación pendiente
 
 - índice compacto, familias de jobs/resultados/solicitudes y metadatos de esquema;
 - conversión atómica v1 → esquema 2 mediante mantenimiento humano y backup obligatorio;
 - entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4` y Pi Durable `1.0.1`, sin promesa sobre mínimos históricos;
 - TypeScript estricto con declaraciones públicas del host, sin añadir copias directas de sus peers;
-- spec escrita aprobada; resta revisar el plan, elegir ejecución y demostrar estos contratos durante la implementación, incluida la compatibilidad entre `pi-ai` local y el host.
+- spec y plan ejecutados; queda aceptación TUI humana, revisión independiente y completar la matriz de caídas, incluida la compatibilidad entre `pi-ai` local y el host.
 
 ### Gate de salida
 
@@ -132,7 +132,7 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - una versión futura desconocida se rechaza claramente;
 - los adaptadores no implementan transiciones de estado;
 - consultas compactas no materializan resultados completos;
-- reiniciar después de cada estado actual conserva la semántica documentada.
+- reiniciar después de cada estado actual conserva la semántica documentada en las pruebas disponibles y en la aceptación humana.
 
 ## Fase 01 — Consulta, listado y espera
 
