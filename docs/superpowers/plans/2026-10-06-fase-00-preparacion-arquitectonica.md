@@ -37,7 +37,7 @@
 
 ## Estado, orden y gates
 
-Plan propuesto; ninguna casilla está ejecutada. El baseline de código es `efc690f`; `c6fc78b` añade el diseño. La implementación empieza solo tras revisión del plan y elección de ejecución. Crear aislamiento en ese momento siguiendo `using-git-worktrees`, no durante esta planificación.
+Plan aprobado; ejecución nativa elegida por el usuario. Las casillas se actualizarán solo con evidencia. El baseline de código es `efc690f`; `c6fc78b` añade el diseño. La implementación empieza solo tras revisión del plan y elección de ejecución. Crear aislamiento en ese momento siguiendo `using-git-worktrees`, no durante esta planificación.
 
 Orden obligatorio de este plan: tareas 1 → 11. Una tarea no pasa al siguiente gate si sus pruebas fallan. La tarea 2 puede descubrir incompatibilidad de tipos entre `pi-ai` local 1.0.1 y host 1.0.4: detener y resolver mediante decisión explícita, no cast doble, `any` ni actualización silenciosa de pins.
 
@@ -81,7 +81,7 @@ Los tipos se definen en la tarea indicada; las demás tareas los importan, no lo
 - `BackupReceipt = { path: string; sha256: string; createdAt: number }` (6).
 - `MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number }` (7). La procedencia humana se verifica en el adaptador, no por aceptar este objeto desde un modelo.
 
-## Tarea 1 — Congelar v1 y caracterizar el contrato existente
+## Task 1 — Congelar v1 y caracterizar el contrato existente
 
 **Files:** crear `tests/fixtures/v1/jobs-v1.ts`, `tests/fixtures/v1/README.md`, `tests/helpers/legacy.mjs`, `tests/legacy-fixtures.test.mjs`; modificar `tests/jobs.test.mjs` y `tests/recovery.test.mjs` solo para reutilizar helpers sin debilitar aserciones.
 
@@ -103,7 +103,7 @@ assert.equal(f.expected.jobs.psa_interrupted.result.status, 'interrupted');
 - [ ] **4. Ejecutar GREEN:** `node --test tests/legacy-fixtures.test.mjs tests/jobs.test.mjs tests/recovery.test.mjs`; luego `npm test`. Pasan casos nuevos y las nueve pruebas originales.
 - [ ] **5. Commit:** archivos listados, mensaje `test: freeze v1 storage fixtures and baseline behavior`.
 
-## Tarea 2 — Type-check real y grafo de módulos comprobable
+## Task 2 — Type-check real y grafo de módulos comprobable
 
 **Files:** crear `tsconfig.json`, `scripts/host-types.mjs`, `scripts/check-syntax.mjs`, `tests/typecheck.test.mjs`, `tests/host-resolution.test.mjs`; modificar `.gitignore`, `package.json`, `package-lock.json`, `README.md` y anotaciones productivas que `tsc` demuestre incorrectas.
 
@@ -127,7 +127,7 @@ await assert.rejects(resolveHost({ packageRoot: missingHost }), /Pi/);
 - [ ] **6. GREEN:** `npm run check && npm test`. Registrar `pi-ai` local 1.0.1 y host 1.0.4. No concluir compatibilidad runtime hasta tareas 10–11.
 - [ ] **7. Commit:** `build: add strict host-aware TypeScript checks`.
 
-## Tarea 3 — Contratos de dominio, errores y canonización
+## Task 3 — Contratos de dominio, errores y canonización
 
 **Files:** crear `src/domain/jobs.ts`, `src/domain/errors.ts`, `src/domain/requests.ts`, `tests/domain.test.mjs`.
 
@@ -150,7 +150,7 @@ Los últimos datos alimentan además casos de diccionario de tarea 4; no rechaza
 - [ ] **4. GREEN:** `node --test tests/domain.test.mjs && npm run check && npm test`.
 - [ ] **5. Commit:** `refactor: define job domain and request contracts`.
 
-## Tarea 4 — Documentos separados y repositorio transaccional
+## Task 4 — Documentos separados y repositorio transaccional
 
 **Files:** crear `src/infrastructure/durable/documents.ts`, `src/infrastructure/durable/repository.ts`, `tests/helpers/store.mjs`, `tests/repository.test.mjs`.
 
@@ -178,7 +178,7 @@ Afirmar que lecturas ausentes no crean miembros. Probar jobs con ID `__proto__`/
 - [ ] **5. GREEN:** `node --test tests/repository.test.mjs && npm run check && npm test`. Comprobar queue/job/result/index juntos mediante reapertura.
 - [ ] **6. Commit:** `feat: add partitioned durable job repository`.
 
-## Tarea 5 — Admisión idempotente y servicios de consulta actuales
+## Task 5 — Admisión idempotente y servicios de consulta actuales
 
 **Files:** crear `src/application/start.ts`, `src/application/jobs.ts`, `tests/start-service.test.mjs`; ampliar `repository.ts` y `tests/helpers/store.mjs`.
 
@@ -203,7 +203,7 @@ Añadir `Promise.all` de dos admisiones iguales, reapertura y replay; cambiar ac
 - [ ] **5. GREEN:** `node --test tests/start-service.test.mjs tests/repository.test.mjs && npm run check && npm test`.
 - [ ] **6. Commit:** `feat: add idempotent admission and shared job services`.
 
-## Tarea 6 — Propiedad, inspección segura y backup SQLite
+## Task 6 — Propiedad, inspección segura y backup SQLite
 
 **Files:** crear `src/infrastructure/storage/lease.ts`, `inspect.ts`, `backup.ts`, `src/infrastructure/durable/legacy-v1.ts`, `tests/storage-maintenance.test.mjs`.
 
@@ -228,7 +228,7 @@ await assert.rejects(inspectFixture('future'), hasCode('STORAGE_VERSION_UNSUPPOR
 - [ ] **6. GREEN:** `node --test tests/storage-maintenance.test.mjs && npm run check && npm test`.
 - [ ] **7. Commit:** `feat: guard storage ownership and create verified backups`.
 
-## Tarea 7 — Conversión v1 autorizada y atómica
+## Task 7 — Conversión v1 autorizada y atómica
 
 **Files:** crear `src/infrastructure/storage/migrate.ts`, `src/application/maintenance.ts`, `tests/migration.test.mjs`; consumir `src/infrastructure/durable/legacy-v1.ts` de tarea 6.
 
@@ -252,7 +252,7 @@ assert.equal((await maintenance.migrate(declinedOptions)).error.code, 'MIGRATION
 - [ ] **6. GREEN:** `node --test tests/migration.test.mjs tests/storage-maintenance.test.mjs && npm run check && npm test`.
 - [ ] **7. Commit:** `feat: migrate v1 jobs with human approval and backup`.
 
-## Tarea 8 — Ejecución Durable y coordinador recuperable
+## Task 8 — Ejecución Durable y coordinador recuperable
 
 **Files:** crear `src/infrastructure/durable/execution.ts`, `src/runtime/coordinator.ts`, `tests/coordinator.test.mjs`.
 
@@ -276,7 +276,7 @@ Las barreras/contadores se implementan en helpers del test. Probar recovery `pro
 - [ ] **5. GREEN:** `node --test tests/coordinator.test.mjs && npm run check && npm test`.
 - [ ] **6. Commit:** `refactor: isolate durable execution and queue coordination`.
 
-## Tarea 9 — Runtime por sesión y ownership de recursos
+## Task 9 — Runtime por sesión y ownership de recursos
 
 **Files:** crear `src/runtime/session.ts`, `tests/session-runtime.test.mjs`.
 
@@ -300,7 +300,7 @@ Cerrar también el lease adquirido en la aserción mediante `finally`. Añadir f
 - [ ] **5. GREEN:** `node --test tests/session-runtime.test.mjs tests/coordinator.test.mjs && npm run check && npm test`.
 - [ ] **6. Commit:** `refactor: compose guarded session runtimes`.
 
-## Tarea 10 — Adaptadores Pi, mantenimiento TUI y sustitución del monolito
+## Task 10 — Adaptadores Pi, mantenimiento TUI y sustitución del monolito
 
 **Files:** crear `src/adapters/pi/resolve.ts`, `display.ts`, `register.ts`, `tests/pi-adapters.test.mjs`, `tests/helpers/pi-host.mjs`; modificar `index.ts`, `tests/jobs.test.mjs`, `tests/recovery.test.mjs`; eliminar `src/jobs.ts` después de portar todas las aserciones.
 
@@ -326,7 +326,7 @@ Helpers `callTool`/capturas pertenecen a `tests/helpers/pi-host.mjs`; este expon
 - [ ] **7. GREEN:** `npm run check && npm test`. Ejecutar smoke sin sesión: `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models __pi_agents_smoke_no_match__`; salida 0 y sin error de carga ni acceso al almacenamiento. Guardar versiones/resoluciones; este smoke no prueba una generación real.
 - [ ] **8. Commit:** `refactor: connect Pi adapters to phase 00 services`.
 
-## Tarea 11 — Caídas reales, aceptación y documentación de operación
+## Task 11 — Caídas reales, aceptación y documentación de operación
 
 **Files:** crear `tests/crash-recovery.test.mjs`, `tests/helpers/crash-worker.mjs`, `docs/PHASE-00-ACCEPTANCE.md`; modificar `tests/recovery.test.mjs`, `README.md`, `docs/ARCHITECTURE.md`, `specs/ROADMAP.md`, `specs/00-preparacion-arquitectonica.md` según evidencia.
 
