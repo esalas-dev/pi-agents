@@ -72,25 +72,27 @@ Evidencia del análisis inicial:
 - Pi Durable está fijado en `1.0.1` y su API es experimental;
 - el código fue documentado como validado con Pi `1.0.1`, mientras el entorno inspeccionado usa Pi `1.0.4`.
 
-Estas observaciones no autorizan cambios de código y deben volver a verificarse al iniciar la fase 00.
+Estas observaciones son históricas y no autorizan cambios de código. El baseline se creó después, con autorización humana, en `efc690ffdf15c3157eb7167a02dac12f6668843a`. Al iniciar el diseño de fase 00 se verificaron árbol limpio, `npm run check` y 9/9 pruebas. El resto de la preparación continúa sin implementar; véase la [spec de fase 00](00-preparacion-arquitectonica.md).
 
 ## Mapa global
 
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
-| 00 | `propuesta` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Escribir y aprobar la spec de preparación arquitectónica. |
-| 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Resolver la partición de `JobsDoc` y la migración desde v1. |
+| 00 | `propuesta` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Revisar y aprobar la [spec escrita](00-preparacion-arquitectonica.md) antes de crear su plan. |
+| 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Esperar la validación del esquema 2 de fase 00 y diseñar su ampliación para revisión y consumo. |
 | 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
-| 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Crear baseline Git y decidir política de hooks, firma y limpieza. |
+| 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
 | 07 | `bloqueada` | Steering durable, ordenado y auditable | 01–06 | Resolver steering sobre jobs pausados sin conversación activa. |
 | 08 | `bloqueada` | Scheduling por sesión con misfire y deduplicación | 01–07 | Elegir parser temporal y retención de ocurrencias. |
 | 09 | `bloqueada` | Workflows declarativos y recuperables | 01–08 | Fijar una única fuente de verdad para runs y steps. |
 | 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | Estabilizar todos los servicios consumidos por la UI. |
 
 ## Fase 00 — Preparación arquitectónica
+
+Spec propuesta: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), pendiente de aprobación del documento escrito. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El baseline está satisfecho; esto no completa la fase.
 
 ### Objetivo
 
@@ -115,12 +117,13 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - política de versiones soportadas de Pi y Pi Durable;
 - README y arquitectura actualizados solo con comportamiento real.
 
-### Decisiones abiertas
+### Diseño propuesto y verificación pendiente
 
-- partición exacta entre índice de jobs, registro por job y resultado;
-- mecanismo para migrar datos monolíticos v1 a documentos separados;
-- versiones mínimas soportadas de Pi y Node para desarrollo y runtime;
-- dependencias de desarrollo necesarias para type-check sin empaquetar peers físicos.
+- índice compacto, familias de jobs/resultados/solicitudes y metadatos de esquema;
+- conversión atómica v1 → esquema 2 mediante mantenimiento humano y backup obligatorio;
+- entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4` y Pi Durable `1.0.1`, sin promesa sobre mínimos históricos;
+- TypeScript estricto con declaraciones públicas del host, sin añadir copias directas de sus peers;
+- resta aprobar la spec escrita y demostrar estos contratos durante la implementación, incluida la compatibilidad entre `pi-ai` local y el host.
 
 ### Gate de salida
 
@@ -140,7 +143,7 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - fase 00 completada;
 - almacenamiento y ledger aprobados;
 - política de actor definida para comando, tool y futuras llamadas RPC;
-- migración v1 preparada y probada en fixture.
+- conversión v1 → esquema 2 validada en fase 00 y ampliación de esquema de fase 01 diseñada.
 
 ### Entregables
 
@@ -154,7 +157,7 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 
 ### Bloqueos conocidos
 
-- decidir si la migración v2 conserva `JobsDoc` como índice o introduce familias de documentos;
+- validar la partición y migración de fase 00 antes de ampliar el esquema con revisión y consumo;
 - definir cancelación de waits de comando cuando no exista señal de operación en el contexto;
 - identificar al consumidor modelo sin permitir suplantación de actor humano.
 
@@ -475,8 +478,8 @@ Componentes, navegación, contenido hostil, resultados grandes, eventos duplicad
 
 | ID | Decisión | Afecta a | Criterio de cierre |
 | --- | --- | --- | --- |
-| RD-001 | Partición de jobs, resultados e índices | 00–10 | Listados compactos y migración v1 demostrados con payload grande. |
-| RD-002 | Versiones mínimas de Pi y Pi Durable | 00–10 | Matriz de compatibilidad y smoke tests aprobados. |
+| RD-001 | Partición elegida en el [diseño 00](00-preparacion-arquitectonica.md#modelo-persistente): índice y familias separadas | 00–10 | Pendiente de aprobación de spec y evidencia de consultas compactas/migración con payload grande. |
+| RD-002 | Entorno actual elegido; no preservar mínimos históricos como promesa | 00–10 | Pendiente de aprobación de spec y type-check/smoke con Node `26.10.0`, Pi `1.0.4` y Durable `1.0.1`. |
 | RD-003 | Semántica de pausa activa | 02, 07, 09, 10 | API pública confirmada o degradación estable documentada. |
 | RD-004 | Estrategia de structured output | 04, 05, 09 | Spike público y corpus de validación aprobados. |
 | RD-005 | Hooks y firma en commits automáticos | 06, 09 | Política reproducible y segura aprobada. |

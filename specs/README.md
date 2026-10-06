@@ -20,11 +20,11 @@ La base existente permanece como punto de partida:
 
 ## Secuencia obligatoria
 
-Las fases deben diseñarse, implementarse y validarse en este orden. La [fase 00 del roadmap](ROADMAP.md#fase-00--preparación-arquitectónica) prepara la base técnica antes de ejecutar las especificaciones funcionales. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
+Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de fase 00](00-preparacion-arquitectonica.md), pendiente de aprobación escrita, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
 
 | Orden | Especificación | Resultado principal | Depende de |
 |---:|---|---|---|
-| 00 | [Preparación arquitectónica](ROADMAP.md#fase-00--preparación-arquitectónica) | Versionar, tipar y modularizar la base; preparar almacenamiento y recuperación | Base actual |
+| 00 | [Preparación arquitectónica](00-preparacion-arquitectonica.md) | Rediseñar y tipar la base; migrar almacenamiento con autorización y verificar recuperación | Baseline `efc690f` |
 | 01 | [Consulta, listado y espera](01-consulta-listado-espera.md) | Consultar trabajos y resultados con contratos comunes | 00 |
 | 02 | [Control del ciclo de vida](02-control-ciclo-de-vida.md) | Cancelar, pausar, reanudar y reintentar | 01 |
 | 03 | [Eventos y RPC](03-eventos-rpc.md) | Integración versionada con otras extensiones | 01–02 |
@@ -61,7 +61,7 @@ Las consultas desde tools respetarán la política de exposición definida en la
 
 ### Compatibilidad y migraciones
 
-`JobsDoc` tiene actualmente versión 1. Cada cambio de forma persistida debe incluir:
+`JobsDoc` tiene actualmente versión 1. La fase 00 propone convertirlo al esquema global 2 con documentos separados; aún no está implementado. La fase 01 ampliará ese esquema, sin duplicar la conversión estructural. Cada cambio de forma persistida debe incluir:
 
 1. nueva versión del documento;
 2. migración determinista desde todas las versiones soportadas;

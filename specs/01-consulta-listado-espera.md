@@ -2,7 +2,7 @@
 
 ## Estado
 
-Propuesta. Primera fase. Depende únicamente de la implementación actual.
+Propuesta. Primera fase funcional; depende de completar y validar la [fase 00 — Preparación arquitectónica](00-preparacion-arquitectonica.md). Usa su almacenamiento separado, actores, ledger y servicios compartidos; no parte directamente del monolito v1.
 
 ## Objetivo
 
@@ -132,6 +132,8 @@ No se añadirá un parámetro de aprobación a ninguna tool.
 
 ## Modelo persistente
 
+Esta fase amplía el esquema global 2 propuesto por fase 00, con una nueva versión y migración propia. El número de versión se fijará al diseñar esta fase sobre la implementación validada. La conversión estructural del monolito v1 pertenece a fase 00.
+
 `JobRecord` incorpora de forma opcional durante la migración:
 
 ```ts
@@ -146,7 +148,7 @@ consumption?: {
   lastConsumedAt?: number;
   count: number;
   lastConsumer?: string;
-  requestIds: string[]; // anillo acotado
+  requestIds: string[]; // historial reciente, no autoridad de deduplicación
 };
 createdBy?: {
   kind: "human" | "model" | "extension" | "system";
@@ -154,7 +156,7 @@ createdBy?: {
 };
 ```
 
-`requestIds` se limita, por ejemplo, a los últimos 32 IDs; la idempotencia de más larga duración puede requerir un documento separado si las pruebas muestran que el límite es insuficiente.
+`requestIds` puede limitarse a los últimos 32 IDs para consulta del historial reciente. La autoridad de deduplicación es el ledger durable de fase 00, ampliado para `consume`; expulsar un ID del historial reciente no permite ejecutar de nuevo la misma solicitud. Recibo y contador se actualizan en un único commit.
 
 ## Consistencia y recuperación
 
@@ -196,7 +198,7 @@ Timeout y aborto de espera no se marcan como error del trabajo.
 7. Un resultado mayor de 64 KiB se trunca en tool y conserva hash y longitud.
 8. Cerrar y reabrir Pi conserva revisión y consumo.
 9. Listados paginados no repiten ni omiten trabajos si no se insertan trabajos entre páginas.
-10. Una base v1 migra sin perder jobs, cola, resultados ni notificaciones.
+10. Una base del esquema de fase 00 migra sin perder jobs, cola, resultados ni notificaciones; una fixture histórica v1 conserva esos datos al recorrer primero la migración de fase 00.
 
 ## Pruebas
 
@@ -211,4 +213,4 @@ Timeout y aborto de espera no se marcan como error del trabajo.
 
 - README con nuevos comandos y tools.
 - Arquitectura con servicio de consultas y política de revisión.
-- Tabla de migración de `JobsDoc` v1 a v2.
+- Tabla de ampliación/migración desde el esquema de fase 00 y prueba de la ruta histórica v1 → fase 00 → fase 01.
