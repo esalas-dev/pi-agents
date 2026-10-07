@@ -65,10 +65,6 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 /subagents wait <id> [--until <estado>] [--timeout <segundos>]
 /subagents approve <id> [--reason <texto>]
 /subagents reject <id> [--reason <texto>]
-/subagents cancel <id> [--reason <texto>] [--yes]
-/subagents pause <id> [--reason <texto>] [--yes]
-/subagents resume <id> [--reason <texto>] [--yes]
-/subagents retry <id> [--reason <texto>] [--yes]
 ```
 
 `list` usa paginación keyset con cursor opaco por `(createdAt,id)` descendente. `wait` acepta timeout de 0 a 300 segundos y abortar la espera no cancela el job. `approve` y `reject` solo son válidos como acciones humanas desde la TUI activa. `cancel`, `pause`, `resume` y `retry` escriben una intención idempotente en el ledger; la cancelación de un job activo exige autoridad TUI y confirmación, salvo `--yes` explícito dentro de la TUI.
