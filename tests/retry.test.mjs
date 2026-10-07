@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createControlService } from '../src/application/control.ts';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { JobControlDocFamily } from '../src/infrastructure/durable/documents.ts';
 import { makeStoreFixture } from './helpers/store.mjs';
 import { legacyInput } from './helpers/legacy.mjs';
 
@@ -36,6 +38,8 @@ test('retry crea un intento nuevo enlazado sin copiar resultado, consumo ni noti
     assert.equal((await fixture.repository.review('retry-1')).status, 'not_required');
     assert.equal((await fixture.repository.get('original')).result, undefined);
     assert.equal((await fixture.repository.result('original')).finalResponse, 'resultado original');
+    const history = await fixture.session.snapshot(JobControlDocFamily, 'original', BACKGROUND_CONTEXT);
+    assert.equal(history.events.at(-1).action, 'retry'); assert.equal(history.events.at(-1).result, 'retry-1');
   } finally { await fixture.close(); }
 });
 

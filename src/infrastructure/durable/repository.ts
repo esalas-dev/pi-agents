@@ -6,7 +6,7 @@ import { assertJob, assertResult } from "../../domain/jobs.ts";
 import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
-import { JobConsumptionDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
+import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
@@ -181,7 +181,9 @@ export function createJobRepository(session: Session, context: Context, clock: C
           }
         }
         job.updatedAt = at;
-        job.controlHistory = [...(job.controlHistory ?? []), { action: request.action, requestId: request.requestId, actor: structuredClone(request.actor), requestedAt: at, appliedAt: at, previousStatus, nextStatus: job.status }].slice(-32);
+        const event = { action: request.action, requestId: request.requestId, actor: structuredClone(request.actor), requestedAt: at, appliedAt: at, previousStatus, nextStatus: job.status };
+        job.controlHistory = [...(job.controlHistory ?? []), event].slice(-32);
+        const history = await tx.doc(JobControlDocFamily, id, { events: [] }); history.events = [...(history.events ?? []), event].slice(-128);
         const stored = await tx.doc(JobDocFamily, id, null as unknown as JsonValue); Object.assign(stored, storedJob(job));
         if (result) { const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result)); }
         index.summaries[id] = summary(job, Boolean(result) || Boolean(index.summaries[id]?.hasResult), index.summaries[id]?.reviewStatus ?? initialReviewStatus(job));
@@ -218,6 +220,8 @@ export function createJobRepository(session: Session, context: Context, clock: C
         };
         const next: RetryReceipt = { jobId: retryJob.id, requestId: request.requestId, action: "retry", previousStatus: original.status, status: "queued", replayed: false, appliedAt: at, retryJobId: retryJob.id, retryOf: original.id, attemptNumber: retryJob.attemptNumber };
         await commitJob(tx, retryJob);
+        const history = await tx.doc(JobControlDocFamily, id, { events: [] });
+        history.events = [...(history.events ?? []), { action: "retry" as const, requestId: request.requestId, actor: plain(request.actor), requestedAt: at, appliedAt: at, previousStatus: original.status, nextStatus: original.status, result: retryJob.id }].slice(-128);
         const review = await tx.doc(JobReviewDocFamily, retryJob.id, { status: initialReviewStatus(retryJob) });
         review.status = initialReviewStatus(retryJob);
         cell.record = { requestId: request.requestId, operation: "retry", actor: plain(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: retryJob.id, status: "queued", agent: retryJob.agent.name }, receipt: next as unknown as JsonValue };

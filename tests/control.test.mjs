@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createControlService } from '../src/application/control.ts';
 import { DomainError } from '../src/domain/errors.ts';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { JobControlDocFamily } from '../src/infrastructure/durable/documents.ts';
 import { makeStoreFixture } from './helpers/store.mjs';
 import { legacyInput } from './helpers/legacy.mjs';
 
@@ -25,6 +27,8 @@ test('pausa y reanuda un job queued con ordinal y reinserción al final', async 
     assert.equal(paused.value.status, 'paused');
     assert.equal((await fixture.repository.get('job-a')).status, 'paused');
     assert.deepEqual((await fixture.repository.index()).order, ['job-b']);
+    const history = await fixture.session.snapshot(JobControlDocFamily, 'job-a', BACKGROUND_CONTEXT);
+    assert.equal(history.events.length, 1); assert.equal(history.events[0].action, 'pause');
     const resumed = await control.control('job-a', request('control:resume', 'resume'));
     assert.equal(resumed.value.status, 'queued');
     assert.deepEqual((await fixture.repository.index()).order, ['job-b', 'job-a']);
