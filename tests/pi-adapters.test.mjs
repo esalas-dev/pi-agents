@@ -25,7 +25,7 @@ test('registro no abre runtime al construir y tool devuelve recibo inmediato con
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-adapter-register-')); const ctx = context(directory); const model = { provider: 'faux', id: 'faux-1' }; const h = host(ctx);
   try {
     registerPiAgents(h.pi, { getAgentDir: () => directory, createModels: async () => modelRuntime(model), resolveModel: () => ({ model }), text: content => content, Type: { Object: x => x, String: () => ({}) }, version: 'test' });
-    assert.deepEqual(h.registered.tools.map(tool => tool.name), ['pi_agents', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result', 'pi_agents_control']); assert.equal(h.registered.command.name, 'subagents'); assert.deepEqual(Object.keys(h.registered.command), ['name', 'description', 'handler']); assert.equal(typeof h.handlers.session_start, 'function');
+    assert.deepEqual(h.registered.tools.map(tool => tool.name), ['pi_agents', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result', 'pi_agents_control', 'pi_agents_review']); assert.equal(h.registered.command.name, 'subagents'); assert.deepEqual(Object.keys(h.registered.command), ['name', 'description', 'handler']); assert.equal(typeof h.handlers.session_start, 'function');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

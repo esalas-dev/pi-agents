@@ -23,11 +23,13 @@ import { createWaitService } from "../application/wait.ts";
 import { createResultService } from "../application/result.ts";
 import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
+import { createParentJobsService, type ParentJobsService } from "../application/parent.ts";
 
-export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; close(): Promise<void> };
+export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId?: string; isParentActive?: () => boolean; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
+export type SessionRuntime = { jobs: JobsService; parent?: ParentJobsService; close(): Promise<void> };
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
+  if (options.sessionId !== undefined && (typeof options.sessionId !== "string" || !options.sessionId)) throw new DomainError("INVALID_REQUEST");
   const report = options.onReport ?? (() => {}); const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
   try {
     await mkdir(path.dirname(options.storagePath), { recursive: true, mode: 0o700 });
@@ -41,7 +43,9 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const registry = createRegistry(); registry.install(CodingTools);
     const tools = new Map((CodingTools.tools ?? []).map(tool => [tool.name, tool as ToolRegistration]));
     harness = await Harness.open(await openNodeSqliteStorage(lease.dbPath), { models: options.models, registry, settings: { extensions: [CodingTools] }, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? options.defaultCwd }), onReport: report }, options.context);
-    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`));
+    let closed = false;
+    const authority = options.sessionId === undefined ? undefined : Object.freeze({ sessionId: options.sessionId, isActive: () => !closed && (options.isParentActive?.() ?? true) });
+    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), authority);
     const execution = createExecution(harness, options.context, tools, clock);
     let coordinator: ReturnType<typeof createCoordinator>;
     const query = createQueryService(repository);
@@ -51,9 +55,9 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const control = createControlService(repository, clock);
     const start = createStartService(repository, () => coordinator.wake(), report);
     const jobs = createJobsService(repository, start, wait, result, review, query, control);
+    const parent = authority ? createParentJobsService(authority, start, control, review) : undefined;
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
     await coordinator.recover();
-    let closed = false;
-    return { jobs, async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await coordinator.drain(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
+    return { jobs, ...(parent ? { parent } : {}), async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await repository.drainParent(); await coordinator.drain(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
   } catch (error) { try { await harness?.close(options.context); } finally { await lease?.release(); } throw error; }
 }

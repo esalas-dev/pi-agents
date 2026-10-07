@@ -42,12 +42,12 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     current.context.ui.notify(`${job.id}: ${summary}`, job.status === "completed" ? "info" : "error"); await current.runtime.jobs.markNotified(job.id);
   };
   const open = async (ctx: ExtensionContext) => {
-    const id = ctx.sessionManager.getSessionId(); if (state?.sessionId === id) return;
-    if (state) { await state.runtime.close(); state = undefined; }
+    const id = ctx.sessionManager.getSessionId(); if (typeof id !== "string" || !id) throw new DomainError("INVALID_REQUEST"); if (state?.sessionId === id) return;
+    const previous = state; state = undefined; if (previous) await previous.runtime.close(); if (ctx.sessionManager.getSessionId() !== id) throw new DomainError("INVALID_REQUEST");
     const models = await bindings.createModels({ authPath: path.join(bindings.getAgentDir(), "auth.json"), modelsPath: path.join(bindings.getAgentDir(), "models.json"), refreshOnCreate: false });
     for (const providerId of new Set(ctx.modelRegistry.getAll().map(model => model.provider))) { const provider = ctx.modelRegistry.getProvider(providerId); if (provider) models.registerNativeProvider(provider); }
     const database = statePath(id, bindings.getAgentDir());
-    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id) await notify(job, result, current); } };
+    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, sessionId: id, isParentActive: () => state?.sessionId === id && ctx.sessionManager.getSessionId() === id, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id && ctx.sessionManager.getSessionId() === id) await notify(job, result, current); } };
     let runtime: SessionRuntime;
     try { runtime = await openSessionRuntime(runtimeOptions); }
     catch (error) {
@@ -66,7 +66,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     return;
   };
   const ensure = async (ctx: ExtensionContext) => { const id = ctx.sessionManager.getSessionId(); if (state?.sessionId === id) return state; lifecycle = lifecycle.then(() => open(ctx)); await lifecycle; if (!state || state.sessionId !== id) throw new Error("No se pudo iniciar pi-agents."); return state; };
-  const start = async (ctx: ExtensionContext, agent: string, task: string, requestId: string, actor: StartRequest["actor"]) => { const current = await ensure(ctx); return current.runtime.jobs.start({ requestId, actor, intent: { agent, task, cwd: ctx.cwd } }, intent => resolveInput(ctx, current.models, intent, bindings)); };
+  const start = async (ctx: ExtensionContext, agent: string, task: string, requestId: string, actor: StartRequest["actor"]) => { const current = await ensure(ctx); const request = { requestId, actor, intent: { agent, task, cwd: ctx.cwd } }; return actor.kind === "model" && current.runtime.parent ? current.runtime.parent.start(request, intent => resolveInput(ctx, current.models, intent, bindings)) : current.runtime.jobs.start(request, intent => resolveInput(ctx, current.models, intent, bindings)); };
   const render = (entry: unknown, theme: any) => { if (!display(entry)) return undefined; const color = entry.level === "error" ? "error" : entry.level === "success" ? "success" : "accent"; return bindings.text(`${theme.fg(color, theme.bold(entry.title))}\n${entry.text}`) as Component; };
   pi.registerEntryRenderer(NOTICE, (entry: any, _options: any, theme: any) => render(entry.data, theme)); pi.registerEntryRenderer(OUTPUT, (entry: any, _options: any, theme: any) => render(entry.data, theme));
   pi.on("session_start", async (_event, ctx) => { lifecycle = lifecycle.then(async () => { try { await open(ctx); } catch (error) { report(error); } }); await lifecycle; });
@@ -89,8 +89,14 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
       if (!await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${params.id}?`)) return { content: [{ type: "text", text: "Cancelación no autorizada." }], isError: true };
     }
     const request = { requestId: params.request_id, action: params.action, actor: { kind: "model", id: toolCallId }, ...(params.reason === undefined ? {} : { reason: params.reason }) } as any;
-    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request);
+    const outcome = params.action === "retry" && current.runtime.parent ? await current.runtime.parent.retry(params.id, request) : params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request);
     return toolReply(outcome, formatControl);
+  } } as any));
+  registerQueryTool(({ name: "pi_agents_review", label: "Pi Agents review", description: "Decide una revisión parental durable.", parameters: Type.Object({ id: textType(), status: textType(), request_id: textType(), reason: Type.Optional?.(textType()) ?? textType() }), async execute(_toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) {
+    const keys = params && typeof params === "object" ? Object.keys(params) : [];
+    if (!params || keys.some(key => !["id", "status", "request_id", "reason"].includes(key)) || typeof params.id !== "string" || !params.id || typeof params.status !== "string" || !["approved", "rejected"].includes(params.status) || typeof params.request_id !== "string" || !params.request_id || (params.reason !== undefined && (typeof params.reason !== "string" || params.reason.length > 2048))) return { content: [{ type: "text", text: "Solicitud de revisión inválida." }], isError: true };
+    const current = await ensure(ctx); if (!current.runtime.parent) return { content: [{ type: "text", text: "No hay contexto parental nativo." }], isError: true };
+    return toolReply(await current.runtime.parent.decideReview(params.id, { requestId: params.request_id, status: params.status, ...(params.reason === undefined ? {} : { reason: params.reason }) }), formatReview);
   } } as any));
   pi.registerCommand("subagents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
     try {

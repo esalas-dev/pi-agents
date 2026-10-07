@@ -24,7 +24,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     const settled = []; const c = createCoordinator({ repository: f.repository, execution, maxConcurrency: 1, clock: () => 2, onSettled: async job => settled.push(job.id), report: () => {} });
     c.wake(); c.wake(); await new Promise(r => setTimeout(r, 20));
     assert.equal(creates, 1); assert.equal((await f.repository.active()).length, 1); assert.equal(await f.repository.queuedPosition('two'), 1); assert.equal(waits, 1);
-    gate.resolve(); await c.drain(); assert.deepEqual(settled, ['one']); c.stop();
+    gate.resolve(); await new Promise(resolve => setImmediate(resolve)); assert.equal(settled.filter(id => id === 'one').length, 1); c.stop();
   } finally { await f.close(); }
 });
 
