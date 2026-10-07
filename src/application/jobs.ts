@@ -1,4 +1,4 @@
-import type { JobRecord, JobQueryView, JobView, ResultView, WaitOptions } from "../domain/jobs.ts";
+import type { JobFilter, JobListView, JobRecord, JobQueryView, JobView, ResultView, WaitOptions } from "../domain/jobs.ts";
 import { DomainError, failure, type Outcome } from "../domain/errors.ts";
 import type { AdmissionReceipt, ConsumeReceipt, ConsumeRequest, ResolveInput, ReviewReceipt, StartRequest } from "../domain/requests.ts";
 import type { ResultAccess, ReviewDecision } from "../domain/jobs.ts";
@@ -7,10 +7,13 @@ import type { StartService } from "./start.ts";
 import type { WaitService } from "./wait.ts";
 import type { ResultService } from "./result.ts";
 import type { ReviewService } from "./review.ts";
+import type { QueryService } from "./query.ts";
 
 export type JobsService = {
   start(request: StartRequest, resolve: ResolveInput): Promise<Outcome<AdmissionReceipt>>;
   status(id: string): Promise<Outcome<JobView>>;
+  getJob(id: string, options?: { includeTask?: boolean }): Promise<Outcome<JobQueryView>>;
+  listJobs(filter: JobFilter): Promise<Outcome<{ items: readonly JobListView[]; nextCursor?: string }>>;
   result(id: string): Promise<Outcome<ResultView>>;
   waitForJob(id: string, options?: WaitOptions): Promise<Outcome<JobQueryView>>;
   getResult(id: string, access: ResultAccess): Promise<Outcome<ResultView>>;
@@ -20,13 +23,21 @@ export type JobsService = {
   unnotified(): Promise<Outcome<JobRecord[]>>;
 };
 
-export function createJobsService(repository: JobRepository, startService: StartService, waitService?: WaitService, resultService?: ResultService, reviewService?: ReviewService): JobsService {
+export function createJobsService(repository: JobRepository, startService: StartService, waitService?: WaitService, resultService?: ResultService, reviewService?: ReviewService, queryService?: QueryService): JobsService {
   return {
     start: (request, resolve) => startService.start(request, resolve),
     async status(id) {
       const job = await repository.get(id);
       if (!job) return failure(new DomainError("JOB_NOT_FOUND"));
       return { success: true, value: { job, queuePosition: await repository.queuedPosition(id) } };
+    },
+    async getJob(id, options) {
+      if (!queryService) return failure(new DomainError("STORAGE_ERROR"));
+      return queryService.getJob(id, options);
+    },
+    async listJobs(filter) {
+      if (!queryService) return failure(new DomainError("STORAGE_ERROR"));
+      return queryService.listJobs(filter);
     },
     async result(id) {
       const job = await repository.get(id);

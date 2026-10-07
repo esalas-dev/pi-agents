@@ -8,8 +8,8 @@ import { resolveInput } from '../src/adapters/pi/resolve.ts';
 import { formatStatus, formatResult, briefSummary } from '../src/adapters/pi/display.ts';
 
 function host(ctx) {
-  const handlers = {}; const registered = {}; const entries = [];
-  const pi = { on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => { registered.tool = tool; }, registerCommand: (name, command) => { registered.command = { name, ...command }; }, registerEntryRenderer: () => {}, appendEntry: (type, data) => entries.push({ type, data }) };
+  const handlers = {}; const registered = { tools: [] }; const entries = [];
+  const pi = { on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => { registered.tools.push(tool); registered.tool = tool; }, registerCommand: (name, command) => { registered.command = { name, ...command }; }, registerEntryRenderer: () => {}, appendEntry: (type, data) => entries.push({ type, data }) };
   return { pi, handlers, registered, entries, dispatch: async (name, ...args) => handlers[name]?.(...args, ctx) };
 }
 function modelRuntime(model) { return { registerNativeProvider() {}, getModel: () => model }; }
@@ -25,7 +25,7 @@ test('registro no abre runtime al construir y tool devuelve recibo inmediato con
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-adapter-register-')); const ctx = context(directory); const model = { provider: 'faux', id: 'faux-1' }; const h = host(ctx);
   try {
     registerPiAgents(h.pi, { getAgentDir: () => directory, createModels: async () => modelRuntime(model), resolveModel: () => ({ model }), text: content => content, Type: { Object: x => x, String: () => ({}) }, version: 'test' });
-    assert.equal(h.registered.tool.name, 'pi_agents'); assert.deepEqual(Object.keys(h.registered.command), ['name', 'description', 'handler']); assert.equal(typeof h.handlers.session_start, 'function');
+    assert.deepEqual(h.registered.tools.map(tool => tool.name), ['pi_agents', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result']); assert.deepEqual(Object.keys(h.registered.command), ['name', 'description', 'handler']); assert.equal(typeof h.handlers.session_start, 'function');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
