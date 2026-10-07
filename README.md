@@ -65,9 +65,13 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 /pi-agents wait <id> [--until <estado>] [--timeout <segundos>]
 /pi-agents approve <id> [--reason <texto>]
 /pi-agents reject <id> [--reason <texto>]
+/pi-agents cancel <id> [--reason <texto>] [--yes]
+/pi-agents pause <id> [--reason <texto>] [--yes]
+/pi-agents resume <id> [--reason <texto>] [--yes]
+/pi-agents retry <id> [--reason <texto>] [--yes]
 ```
 
-`list` usa paginación keyset con cursor opaco por `(createdAt,id)` descendente. `wait` acepta timeout de 0 a 300 segundos y abortar la espera no cancela el job. `approve` y `reject` solo son válidos como acciones humanas desde la TUI activa.
+`list` usa paginación keyset con cursor opaco por `(createdAt,id)` descendente. `wait` acepta timeout de 0 a 300 segundos y abortar la espera no cancela el job. `approve` y `reject` solo son válidos como acciones humanas desde la TUI activa. `cancel`, `pause`, `resume` y `retry` escriben una intención idempotente en el ledger; la cancelación de un job activo exige autoridad TUI y confirmación, salvo `--yes` explícito dentro de la TUI.
 
 Ejemplo:
 
@@ -80,12 +84,15 @@ El inicio agrega una entrada con un ID como `psa_7ab31c01db62`. `status` muestra
 Estados públicos:
 
 - `queued`
+- `paused`
 - `running`
+- `cancelling`
 - `completed`
 - `failed`
 - `interrupted`
+- `cancelled`
 
-`provisioning` es interno y se presenta como `running`.
+`provisioning` es interno y se presenta como `running`. La pausa activa no está soportada por la API pública de Pi Durable y devuelve `PAUSE_ACTIVE_UNSUPPORTED`; `interrupted` indica que no se pudo confirmar el aborto, mientras `cancelled` solo se publica con confirmación durable.
 
 ## Uso automático
 
@@ -94,7 +101,8 @@ La extensión registra `pi_agents` para iniciar trabajos y las tools de consulta
 - `pi_agents_status({ id })`;
 - `pi_agents_list({ statuses?, agent?, limit?, cursor?, pending_review? })`;
 - `pi_agents_wait({ id, until?, timeout_seconds? })`;
-- `pi_agents_result({ id, consume?, request_id? })`.
+- `pi_agents_result({ id, consume?, request_id? })`;
+- `pi_agents_control({ id, action, request_id, reason? })`, con acciones `pause`, `resume`, `cancel` y `retry`.
 
 La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no aprueban resultados ni devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
 
@@ -115,7 +123,7 @@ La separación por sesión evita mezclar resultados y reduce conflictos entre pr
 - herramientas no seguras producen el tratamiento `interrupted` de Pi Durable en vez de repetir ciegamente efectos;
 - resultados ya confirmados no vuelven a ejecutarse.
 
-La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados.
+La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3, y las de esquema 3 una tercera migración explícita 3→4 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados; el esquema 4 añade control e historial append-only.
 
 ## Concurrencia y configuración
 
@@ -135,7 +143,7 @@ La carpeta de estado puede contener instrucciones, respuestas, rutas, argumentos
 
 ## Límites de esta versión
 
-- No hay cancelación, listado global ni logs en vivo. El timeout de `wait` solo limita la espera y no cancela el job.
+- No hay listado global ni logs en vivo. El timeout de `wait` solo limita la espera y no cancela el job. La pausa activa no se simula: devuelve `PAUSE_ACTIVE_UNSUPPORTED`.
 - No se puentean herramientas de la sesión principal, MCP, codemode ni herramientas de otras extensiones. Pi no expone una API pública para ejecutarlas después de que la llamada original haya terminado.
 - Los modelos virtuales cuya definición no puede reconstruirse mediante la API pública se rechazan. Los proveedores físicos registrados en la sesión se copian al runtime durable mediante APIs públicas.
 - `read` de Pi Durable no soporta imágenes actualmente.
@@ -165,7 +173,8 @@ Los `peerDependencies` son suministrados por Pi y no deben añadirse como depend
 - locks, inspección de versiones, backup, migración v1 y recuperación del runtime;
 - adaptadores Pi, autoridad TUI-only, consulta/listado/espera, revisión/consumo y smoke de carga;
 - límite de concurrencia;
-- cierre y reapertura durante una generación.
+- cierre y reapertura durante una generación;
+- controles de cola, retry enlazado, abortos públicos, reconciliación y migración 3→4.
 
 Para verificar que Pi puede cargar el paquete sin invocar un modelo:
 
