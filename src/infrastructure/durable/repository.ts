@@ -3,7 +3,7 @@ import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
 import type { ConsumptionState, JobRecord, JobResult, ReviewState } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
-import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, ParentAuthority, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
@@ -16,7 +16,7 @@ export type JobRepository = {
   consumption(id: string): Promise<ConsumptionState | undefined>;
   decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
   applyControl(id: string, request: ControlRequest, at: number): Promise<ControlReceipt>;
-  retry(id: string, request: RetryRequest, at: number): Promise<RetryReceipt>;
+  retry(id: string, request: RetryRequest, at: number, parent?: ParentAuthority): Promise<RetryReceipt>;
   consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
@@ -28,8 +28,10 @@ export type JobRepository = {
   markRunning(id: string, submissionId: number, at: number): Promise<void>;
   create(job: JobRecord, result?: JobResult): Promise<void>;
   claimNext(maxConcurrency: number, createConversation: CreateConversation): Promise<JobRecord | undefined>;
-  receipt(requestId: string): Promise<RequestRecord | undefined>;
-  admit(request: StartRequest & { payloadHash: string }, input: Omit<JobRecord, "id" | "status" | "createdAt" | "updatedAt" | "notified">): Promise<AdmissionReceipt>;
+  receipt(requestId: string, parent?: ParentAuthority): Promise<RequestRecord | undefined>;
+  sealParent(): void;
+  drainParent(): Promise<void>;
+  admit(request: StartRequest & { payloadHash: string }, input: Omit<JobRecord, "id" | "status" | "createdAt" | "updatedAt" | "notified">, parent?: ParentAuthority): Promise<AdmissionReceipt>;
 };
 
 const activeStatuses = new Set(["provisioning", "running", "cancelling"]);
@@ -50,7 +52,22 @@ function storedJob(job: JobRecord): JobRecord {
 
 function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
-export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId): JobRepository {
+export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId, parentAuthority?: ParentAuthority): JobRepository {
+  let parentSealed = false;
+  let parentInFlight = 0;
+  let drainResolve: (() => void) | undefined;
+  const parentToken = (parent?: ParentAuthority): ParentAuthority | undefined => {
+    if (parent === undefined) return undefined;
+    if (!parentAuthority || parent !== parentAuthority || typeof parent.isActive !== "function" || typeof parent.sessionId !== "string" || !parent.sessionId || !parent.isActive()) throw new DomainError("INVALID_REQUEST");
+    if (parentSealed) throw new DomainError("RUNTIME_CLOSING");
+    return parent;
+  };
+  const beginParent = (parent?: ParentAuthority) => {
+    const token = parentToken(parent);
+    if (token) parentInFlight++;
+    return token;
+  };
+  const endParent = (token?: ParentAuthority) => { if (token && --parentInFlight === 0 && drainResolve) { const resolve = drainResolve; drainResolve = undefined; resolve(); } };
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
   const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult?: boolean) => {
@@ -74,12 +91,19 @@ export function createJobRepository(session: Session, context: Context, clock: C
     await writeIndexFor(tx, job, false, Boolean(result));
   };
   return {
-    async receipt(requestId) {
-      const key = createHash("sha256").update(requestId).digest("hex");
-      const cell = await session.snapshot(RequestLedgerDocFamily, key, context) as { record: RequestRecord | null } | undefined;
-      return cell?.record ? structuredClone(cell.record) : undefined;
+    async receipt(requestId, parent) {
+      const token = beginParent(parent);
+      try {
+        const key = createHash("sha256").update(requestId).digest("hex");
+        const cell = await session.snapshot(RequestLedgerDocFamily, key, context) as { record: RequestRecord | null } | undefined;
+        if (!cell?.record) return undefined;
+        if (token && cell.record.parentSessionId !== token.sessionId) throw new DomainError("INVALID_REQUEST");
+        return structuredClone(cell.record);
+      } finally { endParent(token); }
     },
-    async admit(request, input) {
+    async admit(request, input, parent) {
+      const token = beginParent(parent);
+      try {
       const key = createHash("sha256").update(request.requestId).digest("hex");
       let receipt: AdmissionReceipt | undefined;
       await session.commit(async tx => {
@@ -87,14 +111,17 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const existing = cell.record as RequestRecord | null;
         if (existing) {
           if (existing.requestId !== request.requestId || existing.operation !== "start" || existing.actor.kind !== request.actor.kind || existing.actor.id !== request.actor.id || existing.payloadHash !== request.payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+          if (token && existing.parentSessionId !== token.sessionId) throw new DomainError("INVALID_REQUEST");
           receipt = plain(existing.response);
           return;
         }
         const id = createId();
         const now = clock();
-        const job: JobRecord = { ...structuredClone(input), createdBy: structuredClone(request.actor), id, status: "queued", createdAt: now, updatedAt: now, notified: false };
+        const cleanInput = structuredClone(input);
+        delete cleanInput.parentSessionId;
+        const job: JobRecord = { ...cleanInput, ...(token ? { parentSessionId: token.sessionId } : {}), createdBy: structuredClone(request.actor), id, status: "queued", createdAt: now, updatedAt: now, notified: false };
         assertJob(job);
-        const admitted: RequestRecord = { requestId: request.requestId, operation: "start", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash: request.payloadHash, admittedAt: now, response: { jobId: id, status: "queued", agent: job.agent.name } };
+        const admitted: RequestRecord = { requestId: request.requestId, operation: "start", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash: request.payloadHash, admittedAt: now, response: { jobId: id, status: "queued", agent: job.agent.name }, ...(token ? { parentSessionId: token.sessionId } : {}) };
         cell.record = admitted;
         await commitJob(tx, job);
         const review = await tx.doc(JobReviewDocFamily, id, { status: initialReviewStatus(job) });
@@ -103,8 +130,11 @@ export function createJobRepository(session: Session, context: Context, clock: C
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
+      } finally { endParent(token); }
     },
     async get(id) { return structuredClone(await readJob(id)); },
+    sealParent() { parentSealed = true; },
+    drainParent() { if (parentInFlight === 0) return Promise.resolve(); return new Promise(resolve => { drainResolve = resolve; }); },
     async index() { return structuredClone(await readIndex()); },
     async review(id) {
       return structuredClone(await session.snapshot(JobReviewDocFamily, id, context) as JobReviewDocument | undefined);
@@ -195,13 +225,16 @@ export function createJobRepository(session: Session, context: Context, clock: C
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
     },
-    async retry(id, request, at) {
+    async retry(id, request, at, parent) {
+      const token = beginParent(parent);
+      try {
       assertControlRequest(request);
       let receipt: RetryReceipt | undefined;
       await session.commit(async tx => {
         const rawOriginal = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         const original = rawOriginal ? plain(rawOriginal) : undefined;
         if (!original) throw new DomainError("JOB_NOT_FOUND");
+        if (token && (original.parentSessionId !== token.sessionId || request.actor.kind !== "model")) throw new DomainError("INVALID_REQUEST");
         const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "retry", jobId: id, actor: request.actor, ...(request.reason === undefined ? {} : { reason: request.reason }) })).digest("hex");
         const key = createHash("sha256").update(request.requestId).digest("hex");
         const cell = await tx.doc(RequestLedgerDocFamily, key, null);
@@ -215,7 +248,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const retryJob: JobRecord = {
           id: createId(), status: "queued", task: original.task, cwd: original.cwd,
           agent: plain(original.agent), model: plain(original.model), thinkingLevel: original.thinkingLevel,
-          createdAt: at, updatedAt: at, createdBy: plain(request.actor), notified: false,
+          createdAt: at, updatedAt: at, createdBy: plain(request.actor), ...(token ? { parentSessionId: token.sessionId } : {}), notified: false,
           retryOf: original.id, rootAttemptId: original.rootAttemptId ?? original.id, attemptNumber: (original.attemptNumber ?? 1) + 1,
         };
         const next: RetryReceipt = { jobId: retryJob.id, requestId: request.requestId, action: "retry", previousStatus: original.status, status: "queued", replayed: false, appliedAt: at, retryJobId: retryJob.id, retryOf: original.id, attemptNumber: retryJob.attemptNumber };
@@ -224,11 +257,12 @@ export function createJobRepository(session: Session, context: Context, clock: C
         history.events = [...(history.events ?? []), { action: "retry" as const, requestId: request.requestId, actor: plain(request.actor), requestedAt: at, appliedAt: at, previousStatus: original.status, nextStatus: original.status, result: retryJob.id }].slice(-128);
         const review = await tx.doc(JobReviewDocFamily, retryJob.id, { status: initialReviewStatus(retryJob) });
         review.status = initialReviewStatus(retryJob);
-        cell.record = { requestId: request.requestId, operation: "retry", actor: plain(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: retryJob.id, status: "queued", agent: retryJob.agent.name }, receipt: next as unknown as JsonValue };
+        cell.record = { requestId: request.requestId, operation: "retry", actor: plain(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: retryJob.id, status: "queued", agent: retryJob.agent.name }, ...(token ? { parentSessionId: token.sessionId } : {}), receipt: next as unknown as JsonValue };
         receipt = next;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
+      } finally { endParent(token); }
     },
     async consume(id, request, at) {
       let receipt: ConsumeReceipt | undefined;

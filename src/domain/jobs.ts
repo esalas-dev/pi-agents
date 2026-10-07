@@ -31,7 +31,7 @@ export type JobControl = { pending: "cancel"; requestedAt: number; requestedBy: 
 export type JobRecord = {
   id: string; status: JobStatus; task: string; cwd: string; createdAt: number; updatedAt: number; startedAt?: number; finishedAt?: number;
   agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel; conversationId?: number; submissionId?: number;
-  result?: JobResult; resultMeta?: Omit<JobResult, "finalResponse">; createdBy?: Actor; notified: boolean;
+  result?: JobResult; resultMeta?: Omit<JobResult, "finalResponse">; createdBy?: Actor; parentSessionId?: string; notified: boolean;
   control?: JobControl; retryOf?: string; attemptNumber?: number; rootAttemptId?: string; queueOrdinal?: number; controlHistory?: import("./requests.ts").ControlEvent[];
 };
 

@@ -7,7 +7,7 @@ import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite
 import { createJobRepository } from '../../src/infrastructure/durable/repository.ts';
 import { JobsIndexDoc, JobDocFamily, JobResultDocFamily, RequestLedgerDocFamily, StorageMetaDoc } from '../../src/infrastructure/durable/documents.ts';
 
-export async function makeStoreFixture({ createId = (() => `psa_${Math.random().toString(16).slice(2)}`) } = {}) {
+export async function makeStoreFixture({ createId = (() => `psa_${Math.random().toString(16).slice(2)}`), parentAuthority } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-store-'));
   const database = join(directory, 'jobs.sqlite');
   const readKinds = [];
@@ -28,7 +28,7 @@ export async function makeStoreFixture({ createId = (() => `psa_${Math.random().
       },
     });
     session = createSession(observed);
-    repository = createJobRepository(session, context, () => 2000, createId);
+    repository = createJobRepository(session, context, () => 2000, createId, parentAuthority);
   };
   await open();
   const close = async () => { await session?.close(context); await rm(directory, { recursive: true, force: true }); };

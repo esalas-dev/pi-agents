@@ -1,10 +1,10 @@
 import type { JobRepository } from "../infrastructure/durable/repository.ts";
-import { assertControlRequest, type ControlPolicy, type ControlReceipt, type ControlRequest, type Clock, type RetryReceipt, type RetryRequest } from "../domain/requests.ts";
+import { assertControlRequest, type ControlPolicy, type ControlReceipt, type ControlRequest, type Clock, type ParentAuthority, type RetryReceipt, type RetryRequest } from "../domain/requests.ts";
 import { failure, type Outcome, DomainError } from "../domain/errors.ts";
 
 export type ControlService = {
   control(id: string, request: ControlRequest): Promise<Outcome<ControlReceipt>>;
-  retry(id: string, request: RetryRequest): Promise<Outcome<RetryReceipt>>;
+  retry(id: string, request: RetryRequest, parent?: ParentAuthority): Promise<Outcome<RetryReceipt>>;
 };
 
 export function defaultControlPolicy(job: { createdBy?: { kind: string; id?: string } }, request: ControlRequest): boolean {
@@ -25,13 +25,13 @@ export function createControlService(repository: JobRepository, clock: Clock = D
         return failure(error);
       }
     },
-    async retry(id, request) {
+    async retry(id, request, parent) {
       try {
         assertControlRequest(request);
         const job = await repository.get(id);
         if (!job) throw new DomainError("JOB_NOT_FOUND");
-        if (!policy(job, request)) throw new DomainError("CONTROL_NOT_AUTHORIZED");
-        return { success: true, value: await repository.retry(id, request, clock()) };
+        if (!parent && !policy(job, request)) throw new DomainError("CONTROL_NOT_AUTHORIZED");
+        return { success: true, value: await repository.retry(id, request, clock(), parent) };
       } catch (error) {
         return failure(error);
       }
