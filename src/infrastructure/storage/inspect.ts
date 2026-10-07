@@ -7,8 +7,24 @@ import { canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import type { Lease } from "./lease.ts";
 import { LegacyJobsDoc } from "../durable/legacy-v1.ts";
+import { JobDocFamily, JobResultDocFamily, JobsIndexDoc, StorageMetaDoc } from "../durable/documents.ts";
 
-export type StorageInspection = { kind: "empty" } | { kind: "legacy-v1"; jobs: number; sourceHash: string } | { kind: "current"; schemaVersion: 2 };
+export type StorageInspection = { kind: "empty" } | { kind: "legacy-v1"; jobs: number; sourceHash: string } | { kind: "current"; schemaVersion: 2 | 3; jobs?: number; sourceHash?: string };
+
+function hiddenCurrent(schemaVersion: 2 | 3, extras: { jobs?: number; sourceHash?: string } = {}): StorageInspection {
+  const value = { kind: "current" as const, schemaVersion } as StorageInspection & Record<string, unknown>;
+  for (const [key, item] of Object.entries(extras)) Object.defineProperty(value, key, { value: item, enumerable: false });
+  return value;
+}
+
+async function schema2Source(session: ReturnType<typeof createSession>, context: Context, meta: unknown, index: Awaited<ReturnType<ReturnType<typeof createSession>["snapshot"]>>): Promise<string> {
+  const jobs: Record<string, unknown> = {};
+  const summaries = (index as { summaries: Record<string, { hasResult: boolean }> }).summaries;
+  for (const id of Object.keys(summaries)) {
+    jobs[id] = { job: await session.snapshot(JobDocFamily, id, context), ...(summaries[id].hasResult ? { result: await session.snapshot(JobResultDocFamily, id, context) } : {}) };
+  }
+  return createHash("sha256").update(canonicalJson({ version: 2, meta, index, jobs })).digest("hex");
+}
 
 export async function inspectStorage(lease: Lease, context: Context): Promise<StorageInspection> {
   let storage;
@@ -25,10 +41,15 @@ export async function inspectStorage(lease: Lease, context: Context): Promise<St
     const kinds = new Set(documents.map(document => document.kind));
     if (kinds.has("pi-agents.storage")) {
       session = createSession(storage);
-      const meta = await session.snapshot((await import("../durable/documents.ts")).StorageMetaDoc, context);
-      if (meta?.storageSchemaVersion !== 2) throw new DomainError("STORAGE_INCONSISTENT");
+      const meta = await session.snapshot(StorageMetaDoc, context);
+      if (meta?.storageSchemaVersion !== 2 && meta?.storageSchemaVersion !== 3) throw new DomainError("STORAGE_INCONSISTENT");
       if ([...kinds].some(kind => kind === "pi-agents.jobs")) throw new DomainError("STORAGE_INCONSISTENT");
-      return { kind: "current", schemaVersion: 2 };
+      if (meta.storageSchemaVersion === 3) return hiddenCurrent(3);
+      const index = await session.snapshot(JobsIndexDoc, context);
+      if (!index) throw new DomainError("STORAGE_INCONSISTENT");
+      const jobs = Object.keys(index.summaries).length;
+      const sourceHash = await schema2Source(session, context, meta, index);
+      return hiddenCurrent(2, { jobs, sourceHash });
     }
     if (kinds.has("pi-agents.jobs")) {
       session = createSession(storage);

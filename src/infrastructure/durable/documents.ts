@@ -3,7 +3,7 @@ import type { JsonValue } from "@earendil-works/chord";
 import type { JobRecord, JobResult, ReviewState, ConsumptionState } from "../../domain/jobs.ts";
 
 export type StorageMeta = {
-  storageSchemaVersion: 2;
+  storageSchemaVersion: 2 | 3;
   source: "new" | "migrated";
   migrationRequestId?: string;
   migratedAt?: number;
@@ -13,7 +13,7 @@ export type StorageMeta = {
   backupHash?: string;
 };
 export type JobsIndex = {
-  storageSchemaVersion: 2;
+  storageSchemaVersion: 2 | 3;
   order: string[];
   summaries: Record<string, { id: string; status: JobRecord["status"]; agent: string; createdAt: number; updatedAt: number; hasResult: boolean; notified: boolean; reviewStatus?: ReviewState }>;
 };
