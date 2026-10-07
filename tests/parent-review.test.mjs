@@ -26,17 +26,81 @@ const parentDecision = (requestId, status = 'approved', reason) => ({ requestId,
   } finally { await current.fixture.close(); }
 });
 
-test('failed con resultado no implica éxito técnico', async () => { const current = await setup('failed'); try { const out = await current.service.decideReview('child', parentDecision('p-failed'), authority); assert.equal(out.success, true); const resultService = createResultService(current.fixture.repository, createQueryService(current.fixture.repository)); const peek = await resultService.getResult('child', { mode: 'tool', operation: 'peek', actor: { kind: 'model', id: 'm' } }); assert.equal(peek.value.result.status, 'failed'); } finally { await current.fixture.close(); } });
+test('failed con resultado no implica éxito técnico', async () => {
+  const current = await setup('failed');
+  try {
+    const out = await current.service.decideReview('child', parentDecision('p-failed'), authority);
+    assert.equal(out.success, true);
+    const resultService = createResultService(current.fixture.repository, createQueryService(current.fixture.repository));
+    const peek = await resultService.getResult('child', { mode: 'tool', operation: 'peek', actor: { kind: 'model', id: 'm' } });
+    assert.equal(peek.value.result.status, 'failed');
+  } finally {
+    await current.fixture.close();
+  }
+});
 
-test('modelo genérico, autoridad copiada, ajena, sealed o legacy no bastan', async () => { const current = await setup(); try { const generic = await current.service.decideReview('child', { ...parentDecision('generic'), actor: { kind: 'model', id: 'parent:s1' } }); assert.equal(generic.error.code, 'INVALID_REQUEST'); assert.equal((await current.service.decideReview('child', parentDecision('copy'), { ...authority })).error.code, 'INVALID_REQUEST'); assert.equal((await current.service.decideReview('child', parentDecision('foreign'), { sessionId: 's2', isActive: () => true })).error.code, 'INVALID_REQUEST'); current.fixture.repository.sealParent(); assert.equal((await current.service.decideReview('child', parentDecision('sealed'), authority)).error.code, 'RUNTIME_CLOSING'); } finally { await current.fixture.close(); } });
+test('modelo genérico, autoridad copiada, ajena, sealed o legacy no bastan', async () => {
+  const current = await setup();
+  try {
+    const generic = await current.service.decideReview('child', { ...parentDecision('generic'), actor: { kind: 'model', id: 'parent:s1' } });
+    assert.equal(generic.error.code, 'INVALID_REQUEST');
+    assert.equal((await current.service.decideReview('child', parentDecision('copy'), { ...authority })).error.code, 'INVALID_REQUEST');
+    assert.equal((await current.service.decideReview('child', parentDecision('foreign'), { sessionId: 's2', isActive: () => true })).error.code, 'INVALID_REQUEST');
+    current.fixture.repository.sealParent();
+    assert.equal((await current.service.decideReview('child', parentDecision('sealed'), authority)).error.code, 'RUNTIME_CLOSING');
+  } finally {
+    await current.fixture.close();
+  }
+});
 
-test('no resultado y reason 2049 son rechazados', async () => { const current = await setup(); try { const noResult = await setup(); await noResult.fixture.seedJob(job('none'), undefined); assert.equal((await noResult.service.decideReview('none', parentDecision('none'), authority)).error.code, 'RESULT_NOT_READY'); await noResult.fixture.close(); assert.equal((await current.service.decideReview('child', parentDecision('long', 'approved', 'x'.repeat(2049)), authority)).error.code, 'INVALID_REQUEST'); } finally { await current.fixture.close(); } });
+test('no resultado y reason 2049 son rechazados', async () => {
+  const current = await setup();
+  try {
+    const noResult = await setup();
+    await noResult.fixture.seedJob(job('none'), undefined);
+    assert.equal((await noResult.service.decideReview('none', parentDecision('none'), authority)).error.code, 'RESULT_NOT_READY');
+    await noResult.fixture.close();
+    assert.equal((await current.service.decideReview('child', parentDecision('long', 'approved', 'x'.repeat(2049)), authority)).error.code, 'INVALID_REQUEST');
+  } finally {
+    await current.fixture.close();
+  }
+});
 
-test('reason ausente y 2048 son válidos', async () => { for (const reason of [undefined, 'x'.repeat(2048)]) { const current = await setup(); try { const out = await current.service.decideReview('child', parentDecision(`reason-${reason?.length ?? 0}`, 'approved', reason), authority); assert.equal(out.success, true); } finally { await current.fixture.close(); } } });
+test('reason ausente y 2048 son válidos', async () => {
+  for (const reason of [undefined, 'x'.repeat(2048)]) {
+    const current = await setup();
+    try {
+      const out = await current.service.decideReview('child', parentDecision(`reason-${reason?.length ?? 0}`, 'approved', reason), authority);
+      assert.equal(out.success, true);
+    } finally {
+      await current.fixture.close();
+    }
+  }
+});
 
-test('mismo ID con status actor o reason distintos entra en conflicto', async () => { const current = await setup(); try { assert.equal((await current.service.decideReview('child', parentDecision('same'), authority)).success, true); for (const decision of [{ ...parentDecision('same', 'rejected') }, { ...parentDecision('same'), reason: 'other' }]) assert.equal((await current.service.decideReview('child', decision, authority)).error.code, 'REQUEST_ID_CONFLICT'); } finally { await current.fixture.close(); } });
+test('mismo ID con status actor o reason distintos entra en conflicto', async () => {
+  const current = await setup();
+  try {
+    assert.equal((await current.service.decideReview('child', parentDecision('same'), authority)).success, true);
+    for (const decision of [{ ...parentDecision('same', 'rejected') }, { ...parentDecision('same'), reason: 'other' }]) {
+      assert.equal((await current.service.decideReview('child', decision, authority)).error.code, 'REQUEST_ID_CONFLICT');
+    }
+  } finally {
+    await current.fixture.close();
+  }
+});
 
-test('humano conserva precedencia y bloquea decisión parental posterior', async () => { const current = await setup(); try { const human = await current.service.decideReview('child', { requestId: 'human', status: 'approved', actor: { kind: 'human', id: 'u' } }); assert.equal(human.success, true); const parent = await current.service.decideReview('child', parentDecision('after-human'), authority); assert.equal(parent.error.code, 'INVALID_REQUEST'); } finally { await current.fixture.close(); } });
+test('humano conserva precedencia y bloquea decisión parental posterior', async () => {
+  const current = await setup();
+  try {
+    const human = await current.service.decideReview('child', { requestId: 'human', status: 'approved', actor: { kind: 'human', id: 'u' } });
+    assert.equal(human.success, true);
+    const parent = await current.service.decideReview('child', parentDecision('after-human'), authority);
+    assert.equal(parent.error.code, 'INVALID_REQUEST');
+  } finally {
+    await current.fixture.close();
+  }
+});
 
 test('same-status parental conserva fecha autor motivo pero crea ledger nuevo', async () => {
   const current = await setup();
@@ -106,9 +170,31 @@ test('actor humano malformado siempre es INVALID_REQUEST y no escribe', async ()
   }
 });
 
-test('legacy approved/rejected sin actor se considera humano', async () => { const current = await setup('completed', { status: 'approved', decidedAt: 3, decidedBy: 'old' }); try { const out = await current.service.decideReview('child', parentDecision('legacy'), authority); assert.equal(out.error.code, 'INVALID_REQUEST'); } finally { await current.fixture.close(); } });
+test('legacy approved/rejected sin actor se considera humano', async () => {
+  const current = await setup('completed', { status: 'approved', decidedAt: 3, decidedBy: 'old' });
+  try {
+    const out = await current.service.decideReview('child', parentDecision('legacy'), authority);
+    assert.equal(out.error.code, 'INVALID_REQUEST');
+  } finally {
+    await current.fixture.close();
+  }
+});
 
-test('reopen conserva recibo parental y rechazo bloquea replay consume antiguo', async () => { const current = await setup(); try { const approved = await current.service.decideReview('child', parentDecision('approve'), authority); assert.equal(approved.success, true); await current.fixture.reopen(); const reopened = createReviewService(current.fixture.repository, () => 20); assert.deepEqual(await reopened.decideReview('child', parentDecision('approve'), authority), approved); const resultService = createResultService(current.fixture.repository, createQueryService(current.fixture.repository)); const consumed = await resultService.consumeResult('child', { requestId: 'consume', actor: { kind: 'model', id: 'm' }, consumer: 'm' }); assert.equal(consumed.success, true); } finally { await current.fixture.close(); } });
+test('reopen conserva recibo parental y permite consume aprobado', async () => {
+  const current = await setup();
+  try {
+    const approved = await current.service.decideReview('child', parentDecision('approve'), authority);
+    assert.equal(approved.success, true);
+    await current.fixture.reopen();
+    const reopened = createReviewService(current.fixture.repository, () => 20);
+    assert.deepEqual(await reopened.decideReview('child', parentDecision('approve'), authority), approved);
+    const resultService = createResultService(current.fixture.repository, createQueryService(current.fixture.repository));
+    const consumed = await resultService.consumeResult('child', { requestId: 'consume', actor: { kind: 'model', id: 'm' }, consumer: 'm' });
+    assert.equal(consumed.success, true);
+  } finally {
+    await current.fixture.close();
+  }
+});
 
 test('rollback no deja review index ni ledger', async () => {
   const current = await setup();
