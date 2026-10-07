@@ -40,21 +40,25 @@ Después de cerrar y reabrir Pi se reconstruyen consultas y esperas desde docume
 
 | Criterio | Evidencia automatizada | Estado | Limitación |
 | --- | --- | --- | --- |
-| Consulta y listado sin materializar resultados | `tests/query.test.mjs` | verificado | Falta smoke TUI final |
+| Consulta y listado sin materializar resultados | `tests/query.test.mjs`, `npm test` | verificado | Falta smoke TUI interactivo |
 | Cursor estable con timestamps repetidos | `tests/query.test.mjs` | verificado | Solo sin inserciones entre páginas |
 | Carrera snapshot/watch, timeout y aborto | `tests/wait.test.mjs` | verificado | No prueba cierre concurrente de sesión |
 | Revisión humana separada de tools | `tests/review-consume.test.mjs`, `tests/pi-query-adapters.test.mjs` | verificado | Falta aceptación TUI humana |
 | Consumo idempotente y replay del ledger | `tests/review-consume.test.mjs` | verificado | La semántica sin `requestId` no se ofrece |
-| Truncado UTF-8 a 64 KiB con hash | `tests/pi-query-display.test.mjs` | verificado | La salida final de Pi requiere smoke |
-| Migración explícita esquema 2 → 3 | `tests/migration-v2.test.mjs` | verificado | Backup probado en Node local |
+| Truncado UTF-8 a 64 KiB con hash | `tests/pi-query-display.test.mjs`, `npm test` | verificado | Falta aceptación TUI interactiva |
+| Migración explícita esquema 2 → 3 | `tests/migration-v2.test.mjs`, `npm test` | verificado | Backup probado en Node local |
 | Bloqueo de runtime en esquema 2 | `tests/session-query-runtime.test.mjs` | verificado | Falta prueba TUI de la confirmación |
 | Cierre y reapertura | `tests/session-query-runtime.test.mjs`, `tests/review-consume.test.mjs` | verificado | No se afirma aceptación interactiva |
 
+## Gates ejecutados
+
+- `npm run check`: verde.
+- `npm test`: verde, 79/79 pruebas.
+- `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models __pi_agents_phase01_smoke_no_match__`: código 0; no se invocó ningún modelo.
+- `npm pack --dry-run --json`: paquete sin SQLite, backups, configuración local ni `node_modules`.
+
 ## Gates pendientes
 
-- `npm run check` y `npm test` en el commit final.
-- Smoke offline de carga del paquete con Pi `1.0.4`.
-- `npm pack --dry-run --json` sin estado local ni bases SQLite.
 - Revisión independiente del branch.
 - Validación humana TUI de listado, espera, resultado, aprobación, rechazo y migración.
 
