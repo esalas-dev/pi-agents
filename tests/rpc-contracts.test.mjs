@@ -67,6 +67,27 @@ test('aplica UTF-8, correlación e IDs sobredimensionados', () => {
   assert.equal(hasOversizedIds({ requestId: 'ok', callerId: 'ok', sessionId: 'ok' }), false);
 });
 
+test('acepta errores públicos de dominio en operaciones no-review sin data', () => {
+  const cases = [
+    ['status', 'JOB_NOT_FOUND'],
+    ['wait', 'WAIT_TIMEOUT'],
+    ['result', 'RESULT_NOT_READY'],
+    ['list', 'INVALID_FILTER'],
+    ['spawn', 'AGENT_NOT_FOUND'],
+    ['control', 'CONTROL_INVALID_STATE'],
+  ];
+  for (const [operation, code] of cases) {
+    const parsed = parseRpcResponse(operation, errorResponse({ code, message: 'x', retryable: false, details: {} }));
+    assert.equal(parsed.error.code, code);
+  }
+});
+
+test('aplica los límites de códigos de error específicamente a review', () => {
+  assert.equal(parseRpcResponse('review', errorResponse({ code: 'RPC_REVIEW_FORBIDDEN', message: 'x', retryable: false, details: {} })).error.code, 'RPC_REVIEW_FORBIDDEN');
+  assert.equal(parseRpcResponse('review', errorResponse({ code: 'PROTOCOL_UNSUPPORTED', message: 'x', retryable: false, details: {} })).error.code, 'PROTOCOL_UNSUPPORTED');
+  assert.throws(() => parseRpcResponse('review', errorResponse({ code: 'JOB_NOT_FOUND', message: 'x', retryable: false, details: {} })));
+});
+
 test('valida DTO completo por operación, códigos y adición informativa', () => {
   assert.equal(parseRpcResponse('status', { ...response, futureInfo: true }).data.id, 'job-1');
   assert.throws(() => parseRpcResponse('status', { ...response, data: { id: 'job-1' } }));

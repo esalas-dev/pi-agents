@@ -52,14 +52,27 @@ function number(value: unknown): value is number { return typeof value === "numb
 function keys(value: Record<string, unknown>, allowed: string[]) { return Object.keys(value).every(key => allowed.includes(key)); }
 function requiredKeys(value: Record<string, unknown>, required: string[]) { return required.every(key => own(value, key)); }
 function validStatus(value: unknown): value is JobStatusPublic { return typeof value === "string" && statuses.has(value as JobStatusPublic); }
+function validNonNegativeNumber(value: unknown): value is number { return number(value) && value >= 0; }
+function validOptionalTimestamp(value: unknown): boolean { return value === undefined || validNonNegativeNumber(value); }
+function validModel(value: unknown): boolean {
+  if (!plain(value) || !requiredKeys(value, ["provider", "modelId"])) return false;
+  return string(value.provider) && string(value.modelId);
+}
+function validConsumption(value: unknown): boolean {
+  if (!plain(value) || !requiredKeys(value, ["count"]) || !Number.isInteger(value.count) || (value.count as number) < 0) return false;
+  return validOptionalTimestamp(value.firstConsumedAt) && validOptionalTimestamp(value.lastConsumedAt);
+}
+function validReviewStatus(value: unknown): boolean {
+  return typeof value === "string" && ["not_required", "pending", "approved", "rejected"].includes(value);
+}
 function validJob(value: unknown): value is RpcJobDto {
   if (!plain(value) || !requiredKeys(value, ["id", "status", "agent", "model", "createdAt", "updatedAt", "hasResult", "reviewStatus", "consumption"])) return false;
-  const model = value.model as Record<string, unknown>; const consumption = value.consumption as Record<string, unknown>;
-  return string(value.id) && validStatus(value.status) && string(value.agent) && plain(model) && requiredKeys(model, ["provider", "modelId"]) && string(model.provider) && string(model.modelId)
-    && number(value.createdAt) && value.createdAt >= 0 && number(value.updatedAt) && value.updatedAt >= 0 && (value.startedAt === undefined || (number(value.startedAt) && value.startedAt >= 0)) && (value.finishedAt === undefined || (number(value.finishedAt) && value.finishedAt >= 0))
-    && (value.queuePosition === undefined || (Number.isInteger(value.queuePosition) && (value.queuePosition as number) >= 0)) && (value.durationMs === undefined || (number(value.durationMs) && value.durationMs >= 0)) && typeof value.hasResult === "boolean"
-    && typeof value.reviewStatus === "string" && ["not_required", "pending", "approved", "rejected"].includes(value.reviewStatus) && plain(consumption) && requiredKeys(consumption, ["count"]) && Number.isInteger(consumption.count) && (consumption.count as number) >= 0
-    && (consumption.firstConsumedAt === undefined || (number(consumption.firstConsumedAt) && consumption.firstConsumedAt >= 0)) && (consumption.lastConsumedAt === undefined || (number(consumption.lastConsumedAt) && consumption.lastConsumedAt >= 0));
+  if (!string(value.id) || !validStatus(value.status) || !string(value.agent)) return false;
+  if (!validModel(value.model) || !validNonNegativeNumber(value.createdAt) || !validNonNegativeNumber(value.updatedAt)) return false;
+  if (!validOptionalTimestamp(value.startedAt) || !validOptionalTimestamp(value.finishedAt)) return false;
+  if (value.queuePosition !== undefined && (!Number.isInteger(value.queuePosition) || (value.queuePosition as number) < 0)) return false;
+  if (value.durationMs !== undefined && !validNonNegativeNumber(value.durationMs)) return false;
+  return typeof value.hasResult === "boolean" && validReviewStatus(value.reviewStatus) && validConsumption(value.consumption);
 }
 function paramsFor(operation: RpcOperation, value: unknown): boolean {
   if (!plain(value)) return false;
@@ -81,29 +94,76 @@ export function parseRpcRequest<O extends RpcOperation>(operation: O, input: unk
   if (!keys(value, ["protocolVersion", "requestId", "correlationId", "callerId", "sessionId", "params"]) || !requiredKeys(value, ["protocolVersion", "requestId", "correlationId", "callerId", "params"]) || !limitedId(value.requestId) || !isSafeCorrelation(value.correlationId) || !limitedId(value.callerId) || (value.sessionId !== undefined && !limitedId(value.sessionId)) || (operation !== "ping" && !limitedId(value.sessionId)) || !paramsFor(operation, value.params)) fail();
   return value as RpcRequest<O>;
 }
+const discoveryLimits = { maxListPage: 100, maxWaitSeconds: 300, maxResultBytes: 65536, recentEventWindow: 1000, queryTimeoutMs: 5000, mutationTimeoutMs: 30000, maxIdBytes: 256, maxCorrelationLength: 128 };
+function validCapabilities(value: unknown): boolean {
+  if (!plain(value) || typeof value.query !== "boolean" || typeof value.wait !== "boolean" || typeof value.result !== "boolean" || typeof value.spawn !== "boolean" || typeof value.control !== "boolean") return false;
+  if (value.rpcReview !== false || value.activePause !== false || !plain(value.activeCancel)) return false;
+  return value.activeCancel.requiresHumanConfirmation === true && typeof value.activeCancel.available === "boolean";
+}
 function validDiscovery(value: unknown): value is RpcDiscovery {
   if (!plain(value) || !requiredKeys(value, ["protocolVersion", "sessionId", "implementationVersion", "operations", "capabilities", "limits"])) return false;
-  const c = value.capabilities as Record<string, unknown>; const a = c?.activeCancel as Record<string, unknown>; const l = value.limits as Record<string, unknown>;
-  return value.protocolVersion === 1 && limitedId(value.sessionId) && string(value.implementationVersion) && Array.isArray(value.operations) && value.operations.length === operations.length && value.operations.every(op => typeof op === "string" && operations.includes(op as RpcOperation)) && plain(c) && typeof c.query === "boolean" && typeof c.wait === "boolean" && typeof c.result === "boolean" && typeof c.spawn === "boolean" && typeof c.control === "boolean" && c.rpcReview === false && c.activePause === false && plain(a) && a.requiresHumanConfirmation === true && typeof a.available === "boolean" && plain(l) && Object.entries({ maxListPage: 100, maxWaitSeconds: 300, maxResultBytes: 65536, recentEventWindow: 1000, queryTimeoutMs: 5000, mutationTimeoutMs: 30000, maxIdBytes: 256, maxCorrelationLength: 128 }).every(([k, v]) => l[k] === v);
+  if (value.protocolVersion !== 1 || !limitedId(value.sessionId) || !string(value.implementationVersion)) return false;
+  if (!Array.isArray(value.operations) || value.operations.length !== operations.length || !value.operations.every(op => typeof op === "string" && operations.includes(op as RpcOperation))) return false;
+  if (!validCapabilities(value.capabilities) || !plain(value.limits)) return false;
+  const limits = value.limits as Record<string, unknown>;
+  return Object.entries(discoveryLimits).every(([key, expected]) => limits[key] === expected);
+}
+function validListData(value: unknown): boolean {
+  return plain(value) && requiredKeys(value, ["items"]) && Array.isArray(value.items) && value.items.every(validJob) && (value.nextCursor === undefined || string(value.nextCursor));
+}
+function validSpawnData(value: unknown): boolean {
+  return plain(value) && requiredKeys(value, ["jobId", "status", "agent"]) && string(value.jobId) && value.status === "queued" && string(value.agent);
+}
+function validControlData(value: unknown): boolean {
+  if (!plain(value) || !requiredKeys(value, ["jobId", "requestId", "action", "previousStatus", "status", "replayed", "appliedAt"])) return false;
+  if (!string(value.jobId) || !limitedId(value.requestId) || typeof value.action !== "string") return false;
+  if (!["pause", "resume", "cancel", "retry"].includes(value.action) || !validStatus(value.previousStatus) || !validStatus(value.status)) return false;
+  if (typeof value.replayed !== "boolean" || !validNonNegativeNumber(value.appliedAt)) return false;
+  if (value.retryJobId !== undefined && !string(value.retryJobId)) return false;
+  if (value.retryOf !== undefined && !string(value.retryOf)) return false;
+  return value.attemptNumber === undefined || (Number.isInteger(value.attemptNumber) && (value.attemptNumber as number) >= 0);
+}
+function validResultData(value: unknown): boolean {
+  if (!plain(value) || !requiredKeys(value, ["job", "result"]) || !validJob(value.job) || !plain(value.result)) return false;
+  const result = value.result;
+  if (!requiredKeys(result, ["text", "totalBytes", "sha256", "truncated", "durationMs", "model", "status"])) return false;
+  if (typeof result.text !== "string" || !Number.isInteger(result.totalBytes) || (result.totalBytes as number) < 0) return false;
+  if (!string(result.sha256) || typeof result.truncated !== "boolean" || !validNonNegativeNumber(result.durationMs) || !validModel(result.model)) return false;
+  return typeof result.status === "string" && ["completed", "failed", "interrupted"].includes(result.status);
 }
 function validData(operation: RpcOperation, value: unknown): boolean {
   if (operation === "ping") return validDiscovery(value);
   if (operation === "status" || operation === "wait") return validJob(value);
-  if (operation === "list") return plain(value) && requiredKeys(value, ["items"]) && Array.isArray(value.items) && value.items.every(validJob) && (value.nextCursor === undefined || string(value.nextCursor));
-  if (operation === "spawn") return plain(value) && requiredKeys(value, ["jobId", "status", "agent"]) && string(value.jobId) && value.status === "queued" && string(value.agent);
-  if (operation === "control") return plain(value) && requiredKeys(value, ["jobId", "requestId", "action", "previousStatus", "status", "replayed", "appliedAt"]) && string(value.jobId) && limitedId(value.requestId) && typeof value.action === "string" && ["pause", "resume", "cancel", "retry"].includes(value.action) && validStatus(value.previousStatus) && validStatus(value.status) && typeof value.replayed === "boolean" && number(value.appliedAt) && value.appliedAt >= 0 && (value.retryJobId === undefined || string(value.retryJobId)) && (value.retryOf === undefined || string(value.retryOf)) && (value.attemptNumber === undefined || (typeof value.attemptNumber === "number" && Number.isInteger(value.attemptNumber) && value.attemptNumber >= 0));
-  if (operation === "result") { const r = (value as Record<string, unknown>)?.result as Record<string, unknown>; return plain(value) && requiredKeys(value, ["job", "result"]) && validJob(value.job) && plain(r) && requiredKeys(r, ["text", "totalBytes", "sha256", "truncated", "durationMs", "model", "status"]) && typeof r.text === "string" && Number.isInteger(r.totalBytes) && (r.totalBytes as number) >= 0 && string(r.sha256) && typeof r.truncated === "boolean" && number(r.durationMs) && r.durationMs >= 0 && plain(r.model) && requiredKeys(r.model, ["provider", "modelId"]) && string(r.model.provider) && string(r.model.modelId) && typeof r.status === "string" && ["completed", "failed", "interrupted"].includes(r.status); }
+  if (operation === "list") return validListData(value);
+  if (operation === "spawn") return validSpawnData(value);
+  if (operation === "control") return validControlData(value);
+  if (operation === "result") return validResultData(value);
   return false;
+}
+function validErrorShape(value: unknown): value is RpcError {
+  if (!plain(value) || !requiredKeys(value, ["code", "message", "retryable", "details"])) return false;
+  return typeof value.code === "string" && errorCodes.has(value.code) && string(value.message) && typeof value.retryable === "boolean" && plain(value.details) && Object.keys(value.details).length === 0;
+}
+function validErrorForOperation(operation: RpcOperation, value: unknown): value is RpcError {
+  if (!validErrorShape(value)) return false;
+  if (operation !== "review") return true;
+  return responseErrorCodes.has(value.code);
+}
+function validReviewFailure(value: unknown): boolean {
+  return validErrorShape(value) && responseErrorCodes.has(value.code);
 }
 export function parseRpcResponse<O extends RpcOperation>(operation: O, input: unknown): RpcResponse<O> {
   if (!operations.includes(operation) || !plain(input)) fail();
   const value = input as Record<string, unknown>;
   if (value.protocolVersion !== 1) fail("PROTOCOL_UNSUPPORTED");
   if (!requiredKeys(value, ["protocolVersion", "requestId", "correlationId", "sessionId", "success"]) || !limitedId(value.requestId) || !isSafeCorrelation(value.correlationId) || !limitedId(value.sessionId) || typeof value.success !== "boolean") fail();
-  const error = value.error as Record<string, unknown>;
-  const validError = plain(error) && requiredKeys(error, ["code", "message", "retryable", "details"]) && typeof error.code === "string" && errorCodes.has(error.code) && responseErrorCodes.has(error.code as string) && string(error.message) && typeof error.retryable === "boolean" && plain(error.details) && Object.keys(error.details).length === 0;
-  if (value.success === true ? (!own(value, "data") || own(value, "error") || !validData(operation, value.data)) : (own(value, "data") || !validError || (operation === "review" ? (error.code as string) !== "RPC_REVIEW_FORBIDDEN" && !transportErrorCodes.has(error.code as string) : false))) fail(operation === "review" && value.success === true ? "RPC_REVIEW_FORBIDDEN" : "INVALID_REQUEST");
-  if (operation === "review" && value.success === true) fail("RPC_REVIEW_FORBIDDEN");
+  const error = value.error;
+  const validFailure = validErrorForOperation(operation, error) && (operation !== "review" || validReviewFailure(error));
+  if (value.success === true) {
+    if (operation === "review" || !own(value, "data") || own(value, "error") || !validData(operation, value.data)) fail(operation === "review" ? "RPC_REVIEW_FORBIDDEN" : "INVALID_REQUEST");
+  } else if (own(value, "data") || !validFailure || (operation === "review" && (error as RpcError).code !== "RPC_REVIEW_FORBIDDEN" && !responseErrorCodes.has((error as RpcError).code))) {
+    fail();
+  }
   return value as RpcResponse<O>;
 }
 export function isSafeCorrelation(input: unknown): input is string { return typeof input === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(input); }
