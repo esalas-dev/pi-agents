@@ -27,6 +27,9 @@ export function formatWait(view: JobQueryView): string {
 export function formatReview(receipt: Pick<ReviewReceipt, "jobId" | "status" | "decidedBy">): string {
   return `Trabajo ${receipt.jobId}: revisión ${receipt.status}${receipt.decidedBy ? ` por ${receipt.decidedBy}` : ""}`;
 }
+export function formatControl(receipt: { jobId: string; action: string; status: string }): string {
+  return `Trabajo ${receipt.jobId}: ${receipt.action} → ${receipt.status}`;
+}
 
 export type BoundedToolResult = { text: string; totalBytes: number; sha256: string; truncated: boolean };
 export function truncateToolResult(result: string, maxBytes = 64 * 1024): BoundedToolResult {

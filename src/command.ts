@@ -4,7 +4,8 @@ export type PiAgentsCommand =
   | { action: "result"; id: string }
   | { action: "list"; statuses?: string[]; limit?: number; cursor?: string; pendingReview?: boolean }
   | { action: "wait"; id: string; until?: string; timeoutSeconds?: number }
-  | { action: "approve" | "reject"; id: string; reason?: string };
+  | { action: "approve" | "reject"; id: string; reason?: string }
+  | { action: "cancel" | "pause" | "resume" | "retry"; id: string; reason?: string; yes: boolean };
 
 export class CommandSyntaxError extends Error {
   constructor(message: string) {
@@ -61,7 +62,7 @@ export function tokenizeCommandLine(input: string): string[] {
   return tokens;
 }
 
-const statuses = new Set(["queued", "running", "completed", "failed", "interrupted"]);
+const statuses = new Set(["queued", "paused", "running", "cancelling", "completed", "failed", "interrupted", "cancelled"]);
 const numberOption = (value: string, min: number, max: number, name: string): number => {
   if (!/^\d+(?:\.\d+)?$/.test(value)) throw new CommandSyntaxError(`Valor inválido para ${name}.`);
   const number = Number(value);
@@ -101,6 +102,17 @@ export function parsePiAgentsCommand(input: string): PiAgentsCommand {
       if (option === "--until") { const until = tokens[++index]; if (!until || (until !== "terminal" && !statuses.has(until))) throw new CommandSyntaxError("Estado de espera inválido."); parsed.until = until; }
       else if (option === "--timeout") parsed.timeoutSeconds = numberOption(tokens[++index] ?? "", 0, 300, "--timeout");
       else throw new CommandSyntaxError(`Opción desconocida: ${option}`);
+    }
+    return parsed;
+  }
+  if (["cancel", "pause", "resume", "retry"].includes(action)) {
+    if (!tokens[1]) throw new CommandSyntaxError(`Uso: /pi-agents ${action} <id>`);
+    const parsed: Extract<PiAgentsCommand, { action: "cancel" | "pause" | "resume" | "retry" }> = { action: action as "cancel" | "pause" | "resume" | "retry", id: tokens[1], yes: false };
+    for (let index = 2; index < tokens.length; index++) {
+      const option = tokens[index];
+      if (option === "--yes") { if (parsed.yes) throw new CommandSyntaxError("Opción repetida."); parsed.yes = true; }
+      else if (option === "--reason" && parsed.reason === undefined) { const reason = tokens[++index]; if (!reason || reason.length > 2048) throw new CommandSyntaxError("La razón debe tener entre 1 y 2048 caracteres."); parsed.reason = reason; }
+      else throw new CommandSyntaxError("Uso: --reason <texto> [--yes]");
     }
     return parsed;
   }
