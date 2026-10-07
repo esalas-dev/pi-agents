@@ -21,7 +21,7 @@
 - «No se añaden a `dependencies` ni se empaquetan copias directas»: aplica a paquetes suministrados por Pi; inventariar las dependencias transitivas de Durable.
 - «El nuevo mínimo Node será `26.10.0`, sin equiparar ese rango a una matriz probada.»
 - «No hay migración por lotes en esta fase.» No usar SQL propio para mutar tablas internas de Durable.
-- Conservar `/pi-agents <agente> <tarea>`, `status`, `result` y `pi_agents({ agent, task })`; añadir únicamente `/pi-agents-storage migrate`.
+- Conservar `/subagents <agente> <tarea>`, `status`, `result` y `pi_agents({ agent, task })`; añadir únicamente `/subagents-storage migrate`.
 - No implementar fases 01–10, promoción, autoaprobación, purga, downgrade directo ni APIs privadas.
 - No abrir SQLite reales del usuario durante pruebas; usar fixtures sintéticas, proveedor faux y directorios temporales.
 

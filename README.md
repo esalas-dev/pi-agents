@@ -58,13 +58,13 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 ## Uso manual
 
 ```text
-/pi-agents <agente> "<tarea>"
-/pi-agents status <id>
-/pi-agents result <id>
-/pi-agents list [--status <estado>] [--limit <n>] [--cursor <cursor>]
-/pi-agents wait <id> [--until <estado>] [--timeout <segundos>]
-/pi-agents approve <id> [--reason <texto>]
-/pi-agents reject <id> [--reason <texto>]
+/subagents <agente> "<tarea>"
+/subagents status <id>
+/subagents result <id>
+/subagents list [--status <estado>] [--limit <n>] [--cursor <cursor>]
+/subagents wait <id> [--until <estado>] [--timeout <segundos>]
+/subagents approve <id> [--reason <texto>]
+/subagents reject <id> [--reason <texto>]
 ```
 
 `list` usa paginación keyset con cursor opaco por `(createdAt,id)` descendente. `wait` acepta timeout de 0 a 300 segundos y abortar la espera no cancela el job. `approve` y `reject` solo son válidos como acciones humanas desde la TUI activa.
@@ -72,7 +72,7 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 Ejemplo:
 
 ```text
-/pi-agents reviewer "Revisa los cambios actuales y prioriza defectos funcionales"
+/subagents reviewer "Revisa los cambios actuales y prioriza defectos funcionales"
 ```
 
 El inicio agrega una entrada con un ID como `psa_7ab31c01db62`. `status` muestra estado, agente, modelo, cwd, duración y error. `result` añade además la respuesta final completa cuando está disponible; es una vista humana y no consume el resultado.

@@ -11,12 +11,12 @@ La fase añade consulta por ID, listado de la sesión, espera no cancelante, res
 Comandos:
 
 ```text
-/pi-agents status <id>
-/pi-agents result <id>
-/pi-agents list [--status <estado>] [--limit <n>] [--cursor <cursor>]
-/pi-agents wait <id> [--until <estado>] [--timeout <segundos>]
-/pi-agents approve <id> [--reason <texto>]
-/pi-agents reject <id> [--reason <texto>]
+/subagents status <id>
+/subagents result <id>
+/subagents list [--status <estado>] [--limit <n>] [--cursor <cursor>]
+/subagents wait <id> [--until <estado>] [--timeout <segundos>]
+/subagents approve <id> [--reason <texto>]
+/subagents reject <id> [--reason <texto>]
 ```
 
 Tools:

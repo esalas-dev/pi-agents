@@ -412,7 +412,7 @@ Spec normativa: [`10-interfaz-operativa.md`](10-interfaz-operativa.md).
 
 ### Entregables
 
-- panel `/pi-agents` para jobs, grupos, schedules, workflows y recuperación;
+- panel `/subagents` para jobs, grupos, schedules, workflows y recuperación;
 - confirmaciones proporcionales a cada efecto;
 - detalle paginado y carga diferida de payloads grandes;
 - refresco por eventos más relectura durable;

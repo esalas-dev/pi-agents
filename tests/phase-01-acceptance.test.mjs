@@ -11,7 +11,7 @@ test('documenta la interfaz y los gates de fase 01', async () => {
     read('README.md'), read('docs/ARCHITECTURE.md'), read('specs/ROADMAP.md'), read('docs/PHASE-01-ACCEPTANCE.md'),
   ]);
   const all = `${readme}\n${architecture}\n${roadmap}\n${acceptance}`;
-  for (const name of ['/pi-agents list', '/pi-agents wait', '/pi-agents approve', '/pi-agents reject', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result']) assert.match(all, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const name of ['/subagents list', '/subagents wait', '/subagents approve', '/subagents reject', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result']) assert.match(all, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(all, /64 KiB/);
   assert.match(all, /esquema 2/);
   assert.match(all, /2.*3|3.*2/);

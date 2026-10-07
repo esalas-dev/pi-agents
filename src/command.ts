@@ -71,10 +71,10 @@ const numberOption = (value: string, min: number, max: number, name: string): nu
 
 export function parsePiAgentsCommand(input: string): PiAgentsCommand {
   const tokens = tokenizeCommandLine(input);
-  if (tokens.length === 0) throw new CommandSyntaxError('Uso: /pi-agents <agente> "<tarea>" | status <id> | result <id>');
+  if (tokens.length === 0) throw new CommandSyntaxError('Uso: /subagents <agente> "<tarea>" | status <id> | result <id>');
   const action = tokens[0];
   if (action === "status" || action === "result") {
-    if (tokens.length !== 2 || !tokens[1]) throw new CommandSyntaxError(`Uso: /pi-agents ${action} <id>`);
+    if (tokens.length !== 2 || !tokens[1]) throw new CommandSyntaxError(`Uso: /subagents ${action} <id>`);
     return { action, id: tokens[1] };
   }
   if (action === "list") {
@@ -94,7 +94,7 @@ export function parsePiAgentsCommand(input: string): PiAgentsCommand {
     return parsed;
   }
   if (action === "wait") {
-    if (!tokens[1]) throw new CommandSyntaxError("Uso: /pi-agents wait <id>");
+    if (!tokens[1]) throw new CommandSyntaxError("Uso: /subagents wait <id>");
     const parsed: Extract<PiAgentsCommand, { action: "wait" }> = { action, id: tokens[1] };
     for (let index = 2; index < tokens.length; index++) {
       const option = tokens[index];
@@ -105,7 +105,7 @@ export function parsePiAgentsCommand(input: string): PiAgentsCommand {
     return parsed;
   }
   if (action === "approve" || action === "reject") {
-    if (!tokens[1]) throw new CommandSyntaxError(`Uso: /pi-agents ${action} <id>`);
+    if (!tokens[1]) throw new CommandSyntaxError(`Uso: /subagents ${action} <id>`);
     const parsed: Extract<PiAgentsCommand, { action: "approve" | "reject" }> = { action, id: tokens[1] };
     for (let index = 2; index < tokens.length; index++) {
       if (tokens[index] !== "--reason" || parsed.reason !== undefined) throw new CommandSyntaxError("Uso: --reason <texto>");
@@ -113,6 +113,6 @@ export function parsePiAgentsCommand(input: string): PiAgentsCommand {
     }
     return parsed;
   }
-  if (tokens.length < 2) throw new CommandSyntaxError('Uso: /pi-agents <agente> "<tarea>"');
+  if (tokens.length < 2) throw new CommandSyntaxError('Uso: /subagents <agente> "<tarea>"');
   return { action: "start", agent: action, task: tokens.slice(1).join(" ") };
 }

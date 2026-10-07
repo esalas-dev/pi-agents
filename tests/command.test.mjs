@@ -29,6 +29,10 @@ test('analiza espera y decisiones humanas con razón', () => {
   assert.throws(() => parsePiAgentsCommand('approve job-1 --unknown x'), CommandSyntaxError);
 });
 
+test('usa /subagents en la ayuda de sintaxis', () => {
+  assert.throws(() => parsePiAgentsCommand(''), /Uso: \/subagents/);
+});
+
 test('rechaza comillas abiertas y conserva escapes en comillas dobles', () => {
   assert.deepEqual(tokenizeCommandLine('agent "usa \\"npm test\\""'), ['agent', 'usa "npm test"']);
   assert.throws(() => tokenizeCommandLine('agent "incompleta'), /comilla sin cerrar/);

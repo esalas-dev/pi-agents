@@ -89,13 +89,13 @@ Relativo y absoluto pasan a `completed` después de reservar su única ocurrenci
 ### Comandos
 
 ```text
-/pi-agents schedule create <agente> "<tarea>" --at <expr> [--timezone <tz>]
-/pi-agents schedule list
-/pi-agents schedule status <id>
-/pi-agents schedule pause <id>
-/pi-agents schedule resume <id>
-/pi-agents schedule delete <id>
-/pi-agents schedule refresh <id>
+/subagents schedule create <agente> "<tarea>" --at <expr> [--timezone <tz>]
+/subagents schedule list
+/subagents schedule status <id>
+/subagents schedule pause <id>
+/subagents schedule resume <id>
+/subagents schedule delete <id>
+/subagents schedule refresh <id>
 ```
 
 Crear, refresh y delete requieren confirmación humana en TUI. La tool de modelo puede crear schedules solo si una política explícita lo habilita; predeterminado: deshabilitado.

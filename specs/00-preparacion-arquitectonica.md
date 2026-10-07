@@ -39,7 +39,7 @@ El éxito consiste en conservar el comportamiento público existente, migrar bas
 
 Se conservan:
 
-- `/pi-agents <agente> <tarea>`, `status <id>` y `result <id>`;
+- `/subagents <agente> <tarea>`, `status <id>` y `result <id>`;
 - tool `pi_agents({ agent, task })` y admisión inmediata de un job;
 - descubrimiento personal/proyecto, confianza nativa, precedencia y herramientas permitidas;
 - resolución y snapshot de agente/modelo, conversación `ownerless`, almacenamiento por sesión;
@@ -47,7 +47,7 @@ Se conservan:
 - límite de concurrencia, configuración de directorio de estado y deduplicación de notificaciones;
 - resultados y notificaciones fuera del contexto del modelo principal.
 
-Se añade únicamente una entrada pública de mantenimiento: `/pi-agents-storage migrate`, descrita más adelante. El cambio de política de entorno y la deduplicación del replay de la tool son cambios deliberados de esta fase.
+Se añade únicamente una entrada pública de mantenimiento: `/subagents-storage migrate`, descrita más adelante. El cambio de política de entorno y la deduplicación del replay de la tool son cambios deliberados de esta fase.
 
 Fuera de alcance: listado público, wait, revisión, consumo, cancel/pause/retry, RPC, eventos de integración/outbox, JSON Schema, gates, grupos, worktrees, steering, cron, workflows, panel TUI, retención/purga automática y promoción. Tampoco se soporta downgrade directo de una base migrada.
 
@@ -200,7 +200,7 @@ Se inspecciona el esquema antes de activar el scheduler. Una base nueva vacía s
 
 ### Entrada humana
 
-`/pi-agents-storage migrate` actúa únicamente sobre la base de la sesión actual, sin parámetro de ruta arbitraria. Es independiente de los nombres de agentes. Informa de origen/destino, número de jobs, ubicación del backup y ausencia de downgrade directo; pide confirmación mediante UI humana.
+`/subagents-storage migrate` actúa únicamente sobre la base de la sesión actual, sin parámetro de ruta arbitraria. Es independiente de los nombres de agentes. Informa de origen/destino, número de jobs, ubicación del backup y ausencia de downgrade directo; pide confirmación mediante UI humana.
 
 Sin UI de confirmación o si se declina, no convierte ni reanuda trabajos. Las tools y modos headless solo reciben el diagnóstico. Una base actual responde «no requiere migración» sin volver a convertirla. Invocarlo sobre una sesión nueva no crea un backup ficticio.
 
