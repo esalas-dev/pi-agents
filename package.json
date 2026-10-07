@@ -1,5 +1,5 @@
 {
-  "name": "pi-agents",
+  "name": "pi-durable-subagents",
   "version": "0.1.0",
   "description": "Subagentes aislados y durables en segundo plano para Pi",
   "type": "module",
