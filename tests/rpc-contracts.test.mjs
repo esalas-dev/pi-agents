@@ -23,6 +23,7 @@ const provisioningView = {
   hasResult: false, reviewStatus: 'not_required', consumption: { count: 0, requestIds: ['SECRET_SENTINEL'], lastConsumer: 'SECRET_SENTINEL' }, resultMeta: { error: 'SECRET_SENTINEL' },
 };
 function invalid(value, operation = 'status') { assert.throws(() => parseRpcRequest(operation, value), RpcValidationError); }
+function errorResponse(error) { const { data, ...base } = response; return { ...base, success: false, error }; }
 
  test('valida requests por operación, sesión y límites sin cuotas inventadas', () => {
   assert.deepEqual(parseRpcRequest('status', valid), valid);
@@ -75,6 +76,39 @@ test('valida DTO completo por operación, códigos y adición informativa', () =
   assert.throws(() => parseRpcResponse('status', { ...response, success: false, error: { code: 'INVALID_REQUEST', message: 'x', retryable: false, details: {} }, data: job }));
   assert.throws(() => parseRpcResponse('status', { ...response, success: false, error: { code: 'INVALID_REQUEST', message: 'x', retryable: false, details: {} } }));
   assert.throws(() => parseRpcResponse('status', { ...response, data: { ...job, id: undefined } }));
+  assert.throws(() => parseRpcResponse('status', { ...response, success: false, error: { code: 'JOB_NOT_FOUND', message: 'x', retryable: false, details: {} } }));
+  assert.throws(() => parseRpcResponse('review', { ...response, success: false, error: { code: 'JOB_NOT_FOUND', message: 'x', retryable: false, details: {} } }));
+  assert.equal(parseRpcResponse('review', errorResponse({ code: 'RPC_REVIEW_FORBIDDEN', message: 'x', retryable: false, details: {} })).error.code, 'RPC_REVIEW_FORBIDDEN');
+  assert.throws(() => parseRpcResponse('status', { ...response, success: false, error: { code: 'INVALID_REQUEST', message: 'x', retryable: false, details: { secret: true } } }));
+});
+
+test('exige tipos estrictos en estados, acciones, códigos y opcionales de control', () => {
+  assert.throws(() => parseRpcRequest('control', { ...valid, params: { id: 'job-1', action: ['pause'] } }));
+  assert.throws(() => parseRpcRequest('list', { ...valid, params: { statuses: ['queued'], createdAfter: 10, createdBefore: 1 } }));
+  assert.throws(() => parseRpcResponse('status', { ...response, data: { ...job, reviewStatus: ['approved'] } }));
+  assert.throws(() => parseRpcResponse('control', { ...response, data: { jobId: 'j', requestId: 'r', action: ['pause'], previousStatus: 'queued', status: 'paused', replayed: false, appliedAt: 1 } }));
+  for (const patch of [{ retryJobId: 1 }, { retryOf: null }, { attemptNumber: -1 }, { attemptNumber: 1.5 }]) {
+    assert.throws(() => parseRpcResponse('control', { ...response, data: { jobId: 'j', requestId: 'r', action: 'retry', previousStatus: 'queued', status: 'queued', replayed: false, appliedAt: 1, ...patch } }));
+  }
+});
+
+test('distingue errores previos de transporte y deriva códigos runtime del dominio', async () => {
+  const { runtimeErrorCodes } = await import('../src/domain/errors.ts');
+  assert.ok(runtimeErrorCodes.includes('JOB_NOT_FOUND'));
+  assert.ok(runtimeErrorCodes.includes('CONTROL_CONFLICT'));
+  assert.throws(() => parseRpcRequest('review', { ...valid, protocolVersion: 2, params: {} }), e => e.code === 'PROTOCOL_UNSUPPORTED');
+  assert.equal(parseRpcResponse('review', errorResponse({ code: 'PROTOCOL_UNSUPPORTED', message: 'x', retryable: false, details: {} })).error.code, 'PROTOCOL_UNSUPPORTED');
+  assert.equal(parseRpcResponse('review', errorResponse({ code: 'RPC_SHUTTING_DOWN', message: 'x', retryable: false, details: {} })).error.code, 'RPC_SHUTTING_DOWN');
+});
+
+test('mantiene positivos informativos sin cuotas silenciosas y valida IDs', async () => {
+  const long = 'x'.repeat(257);
+  assert.equal(parseRpcRequest('spawn', { ...valid, params: { agent: long, task: long } }).params.agent.length, 257);
+  assert.equal(parseRpcResponse('status', { ...response, data: { ...job, agent: long, model: { provider: long, modelId: long } } }).data.agent.length, 257);
+  assert.equal(parseRpcResponse('list', { ...response, data: { items: [], nextCursor: long } }).data.nextCursor.length, 257);
+  assert.equal(parseRpcResponse('result', { ...response, data: { job, result: { text: long, totalBytes: 257, sha256: 'hash', truncated: false, durationMs: 1, model: { provider: 'p', modelId: 'm' }, status: 'completed' } } }).data.result.text.length, 257);
+  assert.throws(() => parseRpcRequest('status', { ...valid, sessionId: long }));
+  assert.throws(() => parseRpcResponse('status', { ...response, requestId: long }));
 });
 
 test('valida data específica de list/spawn/result y discovery', () => {

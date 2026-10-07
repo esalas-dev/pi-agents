@@ -29,6 +29,8 @@ const messages: Record<ErrorCode, string> = {
   PAUSE_ACTIVE_UNSUPPORTED: "La pausa activa no está soportada por la API pública de Pi Durable.", CONTROL_INVALID_STATE: "El trabajo no admite esta operación de control en su estado actual.", CONTROL_NOT_AUTHORIZED: "El actor no está autorizado para controlar este trabajo.", CONTROL_CONFLICT: "La operación de control entra en conflicto con una solicitud existente.", RETRY_NOT_ALLOWED: "El trabajo no admite retry en su estado actual.",
 };
 
+export const runtimeErrorCodes: readonly ErrorCode[] = Object.freeze(Object.keys(messages) as ErrorCode[]);
+
 export class DomainError extends Error {
   readonly error: AppError;
   constructor(code: ErrorCode, message = messages[code], retryable = false, details: Record<string, unknown> = {}) {
