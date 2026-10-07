@@ -3,7 +3,7 @@ import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
 import type { ConsumptionState, JobRecord, JobResult } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
-import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
@@ -16,6 +16,7 @@ export type JobRepository = {
   consumption(id: string): Promise<ConsumptionState | undefined>;
   decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
   applyControl(id: string, request: ControlRequest, at: number): Promise<ControlReceipt>;
+  retry(id: string, request: RetryRequest, at: number): Promise<RetryReceipt>;
   consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
@@ -187,6 +188,39 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const decided: ControlReceipt = { jobId: id, requestId: request.requestId, action: request.action, previousStatus, status: job.status, replayed: false, appliedAt: at };
         const record: RequestRecord = { requestId: request.requestId, operation: "control", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
         cell.record = record; receipt = decided;
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
+    },
+    async retry(id, request, at) {
+      assertControlRequest(request);
+      let receipt: RetryReceipt | undefined;
+      await session.commit(async tx => {
+        const rawOriginal = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        const original = rawOriginal ? plain(rawOriginal) : undefined;
+        if (!original) throw new DomainError("JOB_NOT_FOUND");
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "retry", jobId: id, actor: request.actor, ...(request.reason === undefined ? {} : { reason: request.reason }) })).digest("hex");
+        const key = createHash("sha256").update(request.requestId).digest("hex");
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "retry" || existing.payloadHash !== payloadHash) throw new DomainError("CONTROL_CONFLICT");
+          receipt = { ...(plain(existing.receipt) as RetryReceipt), replayed: true };
+          return;
+        }
+        if (!terminalStatuses.has(original.status)) throw new DomainError("RETRY_NOT_ALLOWED");
+        const retryJob: JobRecord = {
+          id: createId(), status: "queued", task: original.task, cwd: original.cwd,
+          agent: plain(original.agent), model: plain(original.model), thinkingLevel: original.thinkingLevel,
+          createdAt: at, updatedAt: at, createdBy: plain(request.actor), notified: false,
+          retryOf: original.id, rootAttemptId: original.rootAttemptId ?? original.id, attemptNumber: (original.attemptNumber ?? 1) + 1,
+        };
+        const next: RetryReceipt = { jobId: retryJob.id, requestId: request.requestId, action: "retry", previousStatus: original.status, status: "queued", replayed: false, appliedAt: at, retryJobId: retryJob.id, retryOf: original.id, attemptNumber: retryJob.attemptNumber };
+        await commitJob(tx, retryJob);
+        const review = await tx.doc(JobReviewDocFamily, retryJob.id, { status: initialReviewStatus(retryJob) });
+        review.status = initialReviewStatus(retryJob);
+        cell.record = { requestId: request.requestId, operation: "retry", actor: plain(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: retryJob.id, status: "queued", agent: retryJob.agent.name }, receipt: next as unknown as JsonValue };
+        receipt = next;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
