@@ -19,6 +19,7 @@ export function createStartService(repository: JobRepository, wake: () => void, 
   return {
     async start(request, resolve, parent) {
       if (sealed) return failure(new DomainError("RUNTIME_CLOSING"));
+      if (parent && request.actor.kind !== "model") return failure(new DomainError("INVALID_REQUEST"));
       let canonical;
       try { canonical = canonicalStart(request); } catch (error) { return failure(error); }
       let existing;
