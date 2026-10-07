@@ -45,6 +45,15 @@ test('cancela queued y paused de forma terminal, pero pausa activa no soportada'
   } finally { await fixture.close(); }
 });
 
+test('rechaza solicitudes de control malformadas antes de evaluar autorización', async () => {
+  const fixture = await makeStoreFixture({ createId: () => 'unused' });
+  try {
+    await fixture.seedJob(job('job-invalid'), undefined);
+    const outcome = await createControlService(fixture.repository, () => 2001).control('job-invalid', { requestId: 'bad', action: 'pause' });
+    assert.equal(outcome.success, false); assert.equal(outcome.error.code, 'INVALID_REQUEST');
+  } finally { await fixture.close(); }
+});
+
 test('repite control por requestId sin duplicar efecto y detecta conflicto', async () => {
   const fixture = await makeStoreFixture({ createId: () => 'unused' });
   try {

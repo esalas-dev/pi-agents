@@ -1,5 +1,5 @@
 import type { JobRepository } from "../infrastructure/durable/repository.ts";
-import type { ControlPolicy, ControlReceipt, ControlRequest, Clock, RetryReceipt, RetryRequest } from "../domain/requests.ts";
+import { assertControlRequest, type ControlPolicy, type ControlReceipt, type ControlRequest, type Clock, type RetryReceipt, type RetryRequest } from "../domain/requests.ts";
 import { failure, type Outcome, DomainError } from "../domain/errors.ts";
 
 export type ControlService = {
@@ -16,6 +16,7 @@ export function createControlService(repository: JobRepository, clock: Clock = D
   return {
     async control(id, request) {
       try {
+        assertControlRequest(request);
         const job = await repository.get(id);
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         if (!policy(job, request)) throw new DomainError("CONTROL_NOT_AUTHORIZED");
@@ -26,6 +27,7 @@ export function createControlService(repository: JobRepository, clock: Clock = D
     },
     async retry(id, request) {
       try {
+        assertControlRequest(request);
         const job = await repository.get(id);
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         if (!policy(job, request)) throw new DomainError("CONTROL_NOT_AUTHORIZED");
