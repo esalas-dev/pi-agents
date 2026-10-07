@@ -1,6 +1,7 @@
 import { defineDoc, defineDocFamily } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
 import type { JobRecord, JobResult, ReviewState, ConsumptionState } from "../../domain/jobs.ts";
+import type { ControlEvent } from "../../domain/requests.ts";
 
 export type StorageMeta = {
   storageSchemaVersion: 2 | 3;
@@ -21,6 +22,7 @@ export type JobDocument = JobRecord;
 export type JobResultDocument = JobResult;
 export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; reason?: string };
 export type JobConsumptionDocument = ConsumptionState;
+export type JobControlDocument = { events: ControlEvent[] };
 export type LedgerCell = { record: JsonValue };
 
 export const StorageMetaDoc = defineDoc<StorageMeta>({
@@ -53,6 +55,12 @@ export const JobReviewDocFamily = defineDocFamily<JobReviewDocument, JsonValue>(
 export const JobConsumptionDocFamily = defineDocFamily<JobConsumptionDocument, JsonValue>({
   kind: "pi-agents.job-consumption", version: 1, scope: "session", family: true,
   initial: (seed) => seed as JobConsumptionDocument,
+  checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 31,
+});
+
+export const JobControlDocFamily = defineDocFamily<JobControlDocument, JsonValue>({
+  kind: "pi-agents.job-control", version: 1, scope: "session", family: true,
+  initial: (seed) => seed as JobControlDocument,
   checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 31,
 });
 

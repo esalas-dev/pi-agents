@@ -2,7 +2,7 @@ import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { Actor } from "./requests.ts";
 import { DomainError } from "./errors.ts";
 
-export type JobStatus = "queued" | "provisioning" | "running" | "completed" | "failed" | "interrupted";
+export type JobStatus = "queued" | "paused" | "provisioning" | "running" | "cancelling" | "completed" | "failed" | "interrupted" | "cancelled";
 export type JobStatusPublic = Exclude<JobStatus, "provisioning">;
 export type ReviewState = "not_required" | "pending" | "approved" | "rejected";
 export type ConsumptionState = { firstConsumedAt?: number; lastConsumedAt?: number; count: number; lastConsumer?: string; requestIds: string[] };
@@ -27,16 +27,18 @@ export type JobResult = { finalResponse: string; durationMs: number; model: JobM
 export type ResolvedJobInput = { task: string; cwd: string; agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel };
 export type JobView = { job: Readonly<JobRecord>; queuePosition?: number };
 export type ResultView = JobView & { result?: Readonly<JobResult> };
+export type JobControl = { pending: "cancel"; requestedAt: number; requestedBy: Actor; requestId: string };
 export type JobRecord = {
   id: string; status: JobStatus; task: string; cwd: string; createdAt: number; updatedAt: number; startedAt?: number; finishedAt?: number;
   agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel; conversationId?: number; submissionId?: number;
   result?: JobResult; resultMeta?: Omit<JobResult, "finalResponse">; createdBy?: Actor; notified: boolean;
+  control?: JobControl; retryOf?: string; attemptNumber?: number; rootAttemptId?: string; queueOrdinal?: number; controlHistory?: import("./requests.ts").ControlEvent[];
 };
 
-const terminal = new Set<JobStatus>(["completed", "failed", "interrupted"]);
+const terminal = new Set<JobStatus>(["completed", "failed", "interrupted", "cancelled"]);
 const tools = new Set(["read", "write", "edit", "bash"]);
 const finite = (value: number) => Number.isFinite(value) && value >= 0;
-const publicStatuses = new Set<JobStatusPublic>(["queued", "running", "completed", "failed", "interrupted"]);
+const publicStatuses = new Set<JobStatusPublic>(["queued", "paused", "running", "cancelling", "completed", "failed", "interrupted", "cancelled"]);
 const reviewStates = new Set<ReviewState>(["not_required", "pending", "approved", "rejected"]);
 
 export function assertJobFilter(filter: JobFilter): void {
@@ -78,7 +80,7 @@ export function assertJob(job: JobRecord): void {
     || job.agent.tools.some(tool => !tools.has(tool)) || !job.model?.provider || !job.model?.modelId
     || !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(job.thinkingLevel)
     || typeof job.notified !== "boolean") throw new DomainError("STORAGE_INCONSISTENT");
-  if (job.status === "provisioning" && job.conversationId === undefined) throw new DomainError("STORAGE_INCONSISTENT");
+  if ((job.status === "provisioning" || job.status === "cancelling") && job.conversationId === undefined) throw new DomainError("STORAGE_INCONSISTENT");
   if (job.status === "running" && (job.conversationId === undefined || job.submissionId === undefined)) throw new DomainError("STORAGE_INCONSISTENT");
   if (terminal.has(job.status) && !job.result) throw new DomainError("STORAGE_INCONSISTENT");
 }
@@ -93,8 +95,12 @@ export function assertResult(result: JobResult): void {
 export function transition(job: JobRecord, next: JobStatus, at: number): JobRecord {
   assertJob(job);
   if (!finite(at) || terminal.has(job.status)) throw new DomainError("STORAGE_INCONSISTENT");
-  const valid = (job.status === "queued" && next === "provisioning") || (job.status === "provisioning" && next === "running")
-    || (!terminal.has(job.status) && next === "failed") || (job.status === "running" && next === "completed");
+  const valid = (job.status === "queued" && (next === "provisioning" || next === "paused" || next === "cancelled"))
+    || (job.status === "paused" && (next === "queued" || next === "cancelled"))
+    || (job.status === "provisioning" && (next === "running" || next === "cancelling"))
+    || (job.status === "running" && (next === "completed" || next === "cancelling"))
+    || (job.status === "cancelling" && next === "cancelled")
+    || (!terminal.has(job.status) && next === "failed");
   if (!valid) throw new DomainError("STORAGE_INCONSISTENT");
   const changed = structuredClone(job);
   changed.status = next; changed.updatedAt = at;

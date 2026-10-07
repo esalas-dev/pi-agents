@@ -3,7 +3,8 @@ export type ErrorCode =
   | "MODEL_UNAVAILABLE" | "REQUEST_ID_CONFLICT" | "RUNTIME_CLOSING" | "MIGRATION_REQUIRED"
   | "MIGRATION_DECLINED" | "BACKUP_FAILED" | "STORAGE_VERSION_UNSUPPORTED" | "STORAGE_INCONSISTENT"
   | "STORAGE_BUSY" | "STORAGE_ERROR" | "INVALID_FILTER" | "WAIT_TIMEOUT" | "WAIT_ABORTED"
-  | "RESULT_NOT_READY" | "RESULT_REVIEW_REQUIRED" | "RESULT_REJECTED";
+  | "RESULT_NOT_READY" | "RESULT_REVIEW_REQUIRED" | "RESULT_REJECTED"
+  | "PAUSE_ACTIVE_UNSUPPORTED" | "CONTROL_INVALID_STATE" | "CONTROL_NOT_AUTHORIZED" | "CONTROL_CONFLICT" | "RETRY_NOT_ALLOWED";
 
 export type AppError = {
   code: ErrorCode;
@@ -25,6 +26,7 @@ const messages: Record<ErrorCode, string> = {
   INVALID_FILTER: "El filtro de consulta no es válido.", WAIT_TIMEOUT: "La espera agotó su tiempo límite.",
   WAIT_ABORTED: "La espera fue abortada.", RESULT_NOT_READY: "El resultado todavía no está disponible.",
   RESULT_REVIEW_REQUIRED: "El resultado requiere revisión humana.", RESULT_REJECTED: "El resultado fue rechazado.",
+  PAUSE_ACTIVE_UNSUPPORTED: "La pausa activa no está soportada por la API pública de Pi Durable.", CONTROL_INVALID_STATE: "El trabajo no admite esta operación de control en su estado actual.", CONTROL_NOT_AUTHORIZED: "El actor no está autorizado para controlar este trabajo.", CONTROL_CONFLICT: "La operación de control entra en conflicto con una solicitud existente.", RETRY_NOT_ALLOWED: "El trabajo no admite retry en su estado actual.",
 };
 
 export class DomainError extends Error {
