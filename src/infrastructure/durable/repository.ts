@@ -24,6 +24,7 @@ export type JobRepository = {
   unnotified(): Promise<JobRecord[]>;
   markNotified(id: string): Promise<void>;
   finish(id: string, result: JobResult, at: number): Promise<void>;
+  finishCancelled(id: string, detail: string, at: number): Promise<void>;
   markRunning(id: string, submissionId: number, at: number): Promise<void>;
   create(job: JobRecord, result?: JobResult): Promise<void>;
   claimNext(maxConcurrency: number, createConversation: CreateConversation): Promise<JobRecord | undefined>;
@@ -31,7 +32,7 @@ export type JobRepository = {
   admit(request: StartRequest & { payloadHash: string }, input: Omit<JobRecord, "id" | "status" | "createdAt" | "updatedAt" | "notified">): Promise<AdmissionReceipt>;
 };
 
-const activeStatuses = new Set(["provisioning", "running"]);
+const activeStatuses = new Set(["provisioning", "running", "cancelling"]);
 const terminalStatuses = new Set(["completed", "failed", "interrupted", "cancelled"]);
 
 function initialReviewStatus(job: Pick<JobRecord, "createdBy">): "pending" | "not_required" {
@@ -287,6 +288,18 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (!job || !job.id) return;
         if (!job.notified) { job.notified = true; job.updatedAt = clock(); }
         await writeIndexFor(tx, job);
+      }, context);
+    },
+    async finishCancelled(id, detail, at) {
+      const result: JobResult = { finalResponse: "", durationMs: 0, model: { provider: "unknown", modelId: "unknown" }, status: "interrupted", error: detail };
+      await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
+        if (!job || job.status !== "cancelling") return;
+        result.model = structuredClone(job.model);
+        job.status = "cancelled"; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, error: detail };
+        job.finishedAt = at; job.updatedAt = at; delete job.control;
+        const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));
+        await writeIndexFor(tx, job, false, true);
       }, context);
     },
     async finish(id, result, at) {

@@ -3,7 +3,7 @@ import type { JobRecord } from "../domain/jobs.ts";
 import type { JobRepository } from "../infrastructure/durable/repository.ts";
 import type { DurableExecution } from "../infrastructure/durable/execution.ts";
 
-export type Coordinator = { recover(): Promise<void>; wake(): void; drain(): Promise<void>; stop(): void };
+export type Coordinator = { recover(): Promise<void>; reconcileControls(): Promise<void>; wake(): void; drain(): Promise<void>; stop(): void };
 export function createCoordinator(options: { repository: JobRepository; execution: DurableExecution; maxConcurrency: number; clock: Clock; onSettled?: (job: JobRecord, result: Awaited<ReturnType<DurableExecution["wait"]>>) => Promise<void>; report: (error: unknown) => void }): Coordinator {
   const monitors = new Map<string, Promise<void>>(); const pending = new Set<Promise<void>>(); let stopped = false; let tail = Promise.resolve();
   const report = (error: unknown) => { try { options.report(error); } catch {} };
@@ -30,8 +30,22 @@ export function createCoordinator(options: { repository: JobRepository; executio
     } catch (error) { await fail(job, error); }
   };
   const startContinuation = (job: JobRecord) => { const task = continueJob(job); pending.add(task); void task.finally(() => pending.delete(task)); };
+  const reconcileControls = async () => {
+    for (const job of await options.repository.active()) {
+      if (job.status !== "cancelling" || job.control?.pending !== "cancel") continue;
+      try {
+        const outcome = await options.execution.abort(job);
+        if (outcome === "aborted" || outcome === "already_terminal") await options.repository.finishCancelled(job.id, outcome, options.clock());
+        else await options.repository.finish(job.id, { finalResponse: "", durationMs: 0, model: job.model, status: "interrupted", error: "No se pudo confirmar la cancelación durable." }, options.clock());
+      } catch (error) {
+        try { await options.repository.finish(job.id, { finalResponse: "", durationMs: 0, model: job.model, status: "interrupted", error: error instanceof Error ? error.message : String(error) }, options.clock()); }
+        catch (finishError) { report(finishError); }
+      }
+    }
+  };
   const pump = async () => {
     if (stopped) return;
+    await reconcileControls();
     while (!stopped) {
       const job = await options.repository.claimNext(options.maxConcurrency, (tx, candidate) => options.execution.create(tx, candidate));
       if (!job) return;
@@ -41,9 +55,11 @@ export function createCoordinator(options: { repository: JobRepository; executio
   function wake() { if (stopped) return; tail = tail.then(pump).catch(report); }
   return {
     async recover() {
+      await reconcileControls();
       for (const job of await options.repository.active()) { if (job.status === "provisioning") startContinuation(job); else if (job.status === "running") monitor(job); }
       wake(); await tail;
     },
+    reconcileControls,
     wake,
     async drain() { await tail; while (pending.size || monitors.size) { await Promise.allSettled([...pending, ...monitors]); } await tail; },
     stop() { stopped = true; },
