@@ -2,7 +2,7 @@
 
 ## Estado y autoridad del documento
 
-**Diseño conversacional aprobado; documento escrito pendiente de revisión y aprobación humana.** Fecha: 2026-10-07 UTC. No autoriza implementación, instalación de dependencias ni migraciones reales. La aprobación de este documento habilitará la elaboración de un plan, que también requerirá revisión y elección humana del método de ejecución.
+**Diseño conversacional y documento escrito aprobados humanamente.** Fecha: 2026-10-07 UTC. El usuario aprobó explícitamente el documento versionado en `e0d0a99`. Esta aprobación habilita la elaboración del plan, no la implementación, instalación de dependencias ni migraciones reales. El plan requerirá revisión y elección humana del método de ejecución.
 
 Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad.
 
@@ -12,7 +12,7 @@ Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 0
 
 Permitir que **extensiones locales de confianza** observen y operen subagentes mediante contratos públicos, sin importar módulos internos. Éxito significa reutilizar servicios de dominio, conservar idempotencia tras reapertura, persistir eventos junto con los cambios que describen y evitar exposición de contenido sensible.
 
-Aprobaciones conversacionales explícitas: arquitectura y autoridad; persistencia y recuperación; contrato y lifecycle; mapeo de eventos y pruebas. No se presume aprobación del documento escrito a partir de ellas.
+Aprobaciones conversacionales explícitas: arquitectura y autoridad; persistencia y recuperación; contrato y lifecycle; mapeo de eventos y pruebas. La aprobación del documento escrito se obtuvo por separado, después de su revisión.
 
 ### Incluido
 
@@ -90,7 +90,7 @@ Error: mismos campos de correlación y sesión, `success: false` y `error: { cod
 
 `requestId` identifica la intención durable; `correlationId` identifica un intento de transporte. Al repetir una mutación se conserva `requestId` y se genera otro `correlationId`. No se admiten solicitudes concurrentes con la misma correlación dentro de la generación activa: el duplicado se descarta antes de iniciar otro efecto y se informa localmente, sin emitir una segunda respuesta en el canal del intento original. El caller instala el listener antes de emitir y verifica operación, correlación, solicitud y sesión en la respuesta.
 
-Todos los sobres se validan en runtime. IDs son strings no vacíos; `correlationId` debe ser seguro para interpolar en un canal, con caracteres ASCII alfanuméricos, punto, guion y guion bajo y máximo 128 caracteres. `sessionId`, `requestId` y `callerId` no se interpolan en canales. No se aceptan funciones, valores no JSON, referencias circulares ni campos de autoridad. Parámetros desconocidos se rechazan; los campos informativos opcionales nuevos de respuestas pueden ignorarse para compatibilidad aditiva.
+Todos los sobres se validan en runtime. IDs son strings no vacíos; `requestId`, `callerId` y `sessionId` tienen un máximo de 256 bytes UTF-8 cada uno. `correlationId` debe ser seguro para interpolar en un canal, con caracteres ASCII alfanuméricos, punto, guion y guion bajo y máximo 128 caracteres. Los sobres con IDs que excedan estos límites se descartan antes de ejecutar, sin reflejar el ID inválido en una respuesta ni volcar el contenido en logs. Esta precisión fue aprobada humanamente durante la planificación el 2026-10-07 para preservar el presupuesto del sobre. `sessionId`, `requestId` y `callerId` no se interpolan en canales. No se aceptan funciones, valores no JSON, referencias circulares ni campos de autoridad. Parámetros desconocidos se rechazan; los campos informativos opcionales nuevos de respuestas pueden ignorarse para compatibilidad aditiva.
 
 Únicamente se admite `protocolVersion: 1`: versiones diferentes responden `PROTOCOL_UNSUPPORTED`. Si un sobre malformado no contiene correlación segura, no se genera un canal arbitrario para contestarlo; se informa localmente sin volcar el payload. No se replica la solicitud en logs o errores.
 

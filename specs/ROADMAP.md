@@ -80,8 +80,8 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | ---: | --- | --- | --- | --- |
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
-| 02 | `en validación` | Cancelación, pausa, reanudación y retry durables | 01 | Pruebas humanas aprobadas explícitamente. Revisar el informe independiente, decidir la promoción del PR #5 y revalidar main; corrección con 99/99 pruebas y host Pi 1.0.4. Mantener la pausa activa como no soportada. |
-| 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
+| 02 | `completada` | Cancelación, pausa, reanudación y retry durables | 01 | Cierre por aprobación humana y PR #4/#5 fusionados; main `f87d77e` revalidado con 99/99 pruebas. Mantener la pausa activa como no soportada y conservar los límites de evidencia del informe de aceptación. |
+| 03 | `lista para planificar` | RPC versionado, capacidades, eventos y outbox | 01–02 | Documento escrito aprobado humanamente (`e0d0a99`, 2026-10-07). Revisar el [plan de fase 03](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) y elegir método de ejecución; sin implementación autorizada. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
 | 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
@@ -201,9 +201,11 @@ Pi Durable `1.0.1` expone abort de submission, conversación y task, pero no una
 
 Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia pasan tras cierre y reapertura. Una capacidad degradada queda visible en documentación y RPC posterior.
 
+**Cierre registrado:** PR #4 y corrección PR #5 fusionados; `main` en `f87d77e` revalidado con `npm run check`, `npm test` (99/99) y smoke offline verdes. La persona responsable aprobó explícitamente las pruebas humanas y confirmó «PR validado». La revisión independiente se ejecutó, pero su resultado no fue recuperado por el asistente; no se afirma un veredicto favorable del informe. Véanse la decisión humana de cierre y los límites de evidencia en [`docs/PHASE-02-ACCEPTANCE.md`](../docs/PHASE-02-ACCEPTANCE.md).
+
 ## Fase 03 — Eventos y RPC versionado
 
-Spec normativa: [`03-eventos-rpc.md`](03-eventos-rpc.md).
+Índice de spec: [`03-eventos-rpc.md`](03-eventos-rpc.md). Diseño conversacional y [documento escrito de diseño](../docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md) aprobados humanamente el 2026-10-07; habilitada la planificación, no la ejecución. Fase aún no implementada. [Plan de implementación](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) redactado y revisado inline, pendiente de revisión humana y método de ejecución. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
 
 ### Gate de entrada
 
@@ -221,11 +223,14 @@ Spec normativa: [`03-eventos-rpc.md`](03-eventos-rpc.md).
 - eventos sin tareas, resultados, stdout ni secretos;
 - cierre de listeners y rechazo durante shutdown.
 
-### Decisiones abiertas
+### Decisiones acordadas en el diseño
 
-- representación escalable del outbox y retención de eventos recientes;
-- canonización de payloads para idempotencia RPC;
-- política de callers confiables, reconociendo que `pi.events` no autentica identidad.
+- RPC fino para extensiones locales de confianza; actor `extension` y caller declarativo, sin autenticación ni revisión RPC habilitable por allowlist;
+- outbox con documentos por evento e índices paginados, atomicidad obligatoria con transiciones y secuencia por sesión;
+- pendientes sin descarte; ventana indexada de los últimos 1000 emitidos, sin prometer limpieza física del histórico;
+- ledger existente sin TTL y canonización de dominio; `correlationId` separado del `requestId` durable;
+- cancelación activa con confirmación humana TUI y protección frente a carreras; migración humana 4 → 5 con backup;
+- documento escrito aprobado; pendientes revisión del plan y elección del método de ejecución.
 
 ### Gate de salida
 
