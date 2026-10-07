@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
-import type { JobRecord, JobResult } from "../../domain/jobs.ts";
+import type { ConsumptionState, JobRecord, JobResult } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
 import type { AdmissionReceipt, Clock, CreateId, RequestRecord, StartRequest } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
-import { JobDocFamily, JobResultDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from "./documents.ts";
+import { JobConsumptionDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
   get(id: string): Promise<JobRecord | undefined>;
+  index(): Promise<JobsIndex | undefined>;
+  review(id: string): Promise<JobReviewDocument | undefined>;
+  consumption(id: string): Promise<ConsumptionState | undefined>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
   active(): Promise<JobRecord[]>;
@@ -91,6 +94,13 @@ export function createJobRepository(session: Session, context: Context, clock: C
       return receipt;
     },
     async get(id) { return structuredClone(await readJob(id)); },
+    async index() { return structuredClone(await readIndex()); },
+    async review(id) {
+      return structuredClone(await session.snapshot(JobReviewDocFamily, id, context) as JobReviewDocument | undefined);
+    },
+    async consumption(id) {
+      return structuredClone(await session.snapshot(JobConsumptionDocFamily, id, context) as ConsumptionState | undefined);
+    },
     async result(id) {
       const job = await readJob(id);
       if (!job) return undefined;

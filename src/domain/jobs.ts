@@ -19,7 +19,7 @@ export type JobListView = {
   finishedAt?: number; queuePosition?: number; durationMs?: number; hasResult: boolean; reviewStatus: ReviewState;
   consumption: Readonly<ConsumptionState>; task?: string;
 };
-export type JobQueryView = JobListView & { task: string; resultMeta?: Omit<JobResult, "finalResponse"> };
+export type JobQueryView = JobListView & { task?: string; resultMeta?: Omit<JobResult, "finalResponse"> };
 export type WaitResult = JobQueryView;
 export type JobAgentSnapshot = { name: string; description: string; systemPrompt: string; source: "personal" | "project"; filePath: string; tools: string[] };
 export type JobModel = { provider: string; modelId: string };

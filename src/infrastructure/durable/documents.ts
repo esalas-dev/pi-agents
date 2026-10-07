@@ -15,7 +15,7 @@ export type StorageMeta = {
 export type JobsIndex = {
   storageSchemaVersion: 2;
   order: string[];
-  summaries: Record<string, { id: string; status: JobRecord["status"]; agent: string; createdAt: number; updatedAt: number; hasResult: boolean; notified: boolean }>;
+  summaries: Record<string, { id: string; status: JobRecord["status"]; agent: string; createdAt: number; updatedAt: number; hasResult: boolean; notified: boolean; reviewStatus?: ReviewState }>;
 };
 export type JobDocument = JobRecord;
 export type JobResultDocument = JobResult;
