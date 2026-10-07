@@ -14,6 +14,10 @@ El entorno objetivo expone `@earendil-works/pi-durable` `1.0.1`. La inspección 
 
 Decisión: la pausa activa responde `PAUSE_ACTIVE_UNSUPPORTED`; no se simula con flags. La cancelación activa es cooperativa y usa únicamente las APIs públicas confirmadas.
 
+### Versionado de almacenamiento
+
+La fase incrementa el almacenamiento de esquema 3 a esquema 4. La migración 3→4 es explícita, exige backup y autorización humana, conserva jobs, resultados, revisiones, consumos y ledger, e inicializa los campos de control e historial sin abrir el Harness mientras la base siga en esquema 3.
+
 ## Decisiones principales
 
 - Las solicitudes se persisten antes de actuar.
