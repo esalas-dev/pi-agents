@@ -61,7 +61,13 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 /pi-agents <agente> "<tarea>"
 /pi-agents status <id>
 /pi-agents result <id>
+/pi-agents list [--status <estado>] [--limit <n>] [--cursor <cursor>]
+/pi-agents wait <id> [--until <estado>] [--timeout <segundos>]
+/pi-agents approve <id> [--reason <texto>]
+/pi-agents reject <id> [--reason <texto>]
 ```
+
+`list` usa paginación keyset con cursor opaco por `(createdAt,id)` descendente. `wait` acepta timeout de 0 a 300 segundos y abortar la espera no cancela el job. `approve` y `reject` solo son válidos como acciones humanas desde la TUI activa.
 
 Ejemplo:
 
@@ -69,7 +75,7 @@ Ejemplo:
 /pi-agents reviewer "Revisa los cambios actuales y prioriza defectos funcionales"
 ```
 
-El inicio agrega una entrada con un ID como `psa_7ab31c01db62`. `status` muestra estado, agente, modelo, cwd, duración y error. `result` añade además la respuesta final completa cuando está disponible.
+El inicio agrega una entrada con un ID como `psa_7ab31c01db62`. `status` muestra estado, agente, modelo, cwd, duración y error. `result` añade además la respuesta final completa cuando está disponible; es una vista humana y no consume el resultado.
 
 Estados públicos:
 
@@ -83,16 +89,14 @@ Estados públicos:
 
 ## Uso automático
 
-La extensión registra `pi_agents`:
+La extensión registra `pi_agents` para iniciar trabajos y las tools de consulta:
 
-```json
-{
-  "agent": "reviewer",
-  "task": "Revisa la implementación actual"
-}
-```
+- `pi_agents_status({ id })`;
+- `pi_agents_list({ statuses?, agent?, limit?, cursor?, pending_review? })`;
+- `pi_agents_wait({ id, until?, timeout_seconds? })`;
+- `pi_agents_result({ id, consume?, request_id? })`.
 
-La herramienta siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Al finalizar se añade a la sesión principal una entrada no enviada al modelo con el ID y un resumen breve.
+La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no aprueban resultados ni devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
 
 ## Persistencia y recuperación
 
@@ -111,7 +115,7 @@ La separación por sesión evita mezclar resultados y reduce conflictos entre pr
 - herramientas no seguras producen el tratamiento `interrupted` de Pi Durable en vez de repetir ciegamente efectos;
 - resultados ya confirmados no vuelven a ejecutarse.
 
-La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica; una base legacy no se abre directamente.
+La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados.
 
 ## Concurrencia y configuración
 
@@ -131,7 +135,7 @@ La carpeta de estado puede contener instrucciones, respuestas, rutas, argumentos
 
 ## Límites de esta versión
 
-- No hay cancelación, listado global, logs en vivo ni timeout propio.
+- No hay cancelación, listado global ni logs en vivo. El timeout de `wait` solo limita la espera y no cancela el job.
 - No se puentean herramientas de la sesión principal, MCP, codemode ni herramientas de otras extensiones. Pi no expone una API pública para ejecutarlas después de que la llamada original haya terminado.
 - Los modelos virtuales cuya definición no puede reconstruirse mediante la API pública se rechazan. Los proveedores físicos registrados en la sesión se copian al runtime durable mediante APIs públicas.
 - `read` de Pi Durable no soporta imágenes actualmente.
@@ -149,7 +153,7 @@ npm test
 
 `npm run check` ejecuta TypeScript estricto sin emisión y comprueba la sintaxis de todos los `.ts` productivos. Descubre el Pi de `PATH`; para otra instalación, define `PI_AGENTS_PI_PACKAGE_ROOT` con la raíz de su paquete. Las rutas locales se generan en `.cache/pi-agents/tsconfig.host.json`, ignorado por Git; no modifican la resolución runtime. El chequeo de sintaxis utiliza `stripTypeScriptTypes`, API pública experimental de Node que emite una advertencia informativa.
 
-Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El proyecto resuelve `pi-ai 1.0.1` localmente y el host inspeccionado incluye `1.0.4`.
+Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo usan el host Pi `1.0.4` y sus peers públicos alineados; las versiones históricas no forman parte de la compatibilidad prometida.
 
 Los `peerDependencies` son suministrados por Pi y no deben añadirse como dependencias runtime directas. Las dependencias transitivas de Pi Durable se inventarían por separado; no se asume que coinciden con las del host. Las pruebas cubren:
 
@@ -159,7 +163,7 @@ Los `peerDependencies` son suministrados por Pi y no deben añadirse como depend
 - sintaxis del comando;
 - ejecución y persistencia SQLite;
 - locks, inspección de versiones, backup, migración v1 y recuperación del runtime;
-- adaptadores Pi, autoridad TUI-only y smoke de carga.
+- adaptadores Pi, autoridad TUI-only, consulta/listado/espera, revisión/consumo y smoke de carga;
 - límite de concurrencia;
 - cierre y reapertura durante una generación.
 
