@@ -177,7 +177,7 @@ Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, car
 
 ## Fase 02 — Control durable del ciclo de vida
 
-Spec normativa: [`02-control-ciclo-de-vida.md`](02-control-ciclo-de-vida.md).
+Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](02-control-ciclo-de-vida.md). El spike de APIs públicas de Pi Durable `1.0.1` está cerrado: cancelación cooperativa y reconciliación están disponibles; pausa activa no está expuesta y se degrada explícitamente a `PAUSE_ACTIVE_UNSUPPORTED`.
 
 ### Gate de entrada
 

@@ -2,11 +2,17 @@
 
 ## Estado y dependencias
 
-Propuesta. Depende de la especificación 01 para consulta, actores, `requestId` y errores.
+Especificación aprobada para planificación. La implementación permanece bloqueada hasta cerrar la aceptación TUI de fase 01. Depende de la especificación 01 para consulta, actores, `requestId` y errores.
 
 ## Objetivo
 
 Permitir que una autoridad solicite cancelar, pausar, reanudar o reintentar trabajos, conservando la intención y su resultado a través de cierres del proceso.
+
+### Spike de APIs públicas
+
+El entorno objetivo expone `@earendil-works/pi-durable` `1.0.1`. La inspección directa de `README.md` y `dist/**/*.d.ts` confirmó `Submission.abort()`, `Conversation.abort()`, `Harness.abortSubmission()`, `Harness.abortTask()`, `Harness.resume()`, `Harness.submission()` e `Harness.inspect()`. `whenBusy: "steer"` es steering de entradas, no una pausa de la generación. No se observó una API pública genérica de pausa/reanudación de una generación activa.
+
+Decisión: la pausa activa responde `PAUSE_ACTIVE_UNSUPPORTED`; no se simula con flags. La cancelación activa es cooperativa y usa únicamente las APIs públicas confirmadas.
 
 ## Decisiones principales
 
@@ -26,15 +32,13 @@ cancelling
 cancelled
 ```
 
-Estados internos adicionales permitidos:
+Estado interno adicional permitido:
 
 ```text
-pause_requested
-resume_requested
 cancel_requested
 ```
 
-La representación pública puede mapear `pause_requested` a `running` con `control.pending = "pause"`, pero el estado interno debe permanecer observable para diagnóstico.
+La intención de cancelación debe permanecer observable mediante `control.pending = "cancel"` hasta que el reconciliador confirme el efecto. Las pausas y reanudaciones de jobs en cola son commits atómicos y no dejan una solicitud pendiente.
 
 ## Máquina de estados
 
@@ -42,8 +46,7 @@ La representación pública puede mapear `pause_requested` a `running` con `cont
 queued ──pause──▶ paused ──resume──▶ queued
 queued ──cancel─▶ cancelled
 
-provisioning/running ──pause──▶ pause_requested ──checkpoint seguro──▶ paused
-pause_requested ──resume──▶ running              (retira solicitud aún no aplicada)
+provisioning/running ──pause──▶ PAUSE_ACTIVE_UNSUPPORTED
 
 provisioning/running/paused ──cancel──▶ cancel_requested/cancelling
 cancel_requested ──confirmación Durable──▶ cancelled
@@ -65,7 +68,7 @@ Toda operación recibe:
 - actor;
 - motivo opcional, máximo 2 KiB.
 
-La respuesta incluye estado previo, estado resultante y si la petición ya existía.
+La respuesta incluye estado previo, estado resultante y si la petición ya existía. El ledger durable registra la operación `control`, el hash canónico y el recibo; repetir el mismo `requestId` devuelve el recibo original y cambiar su payload produce `CONTROL_CONFLICT`.
 
 ### RF-02 — Pausa de jobs en cola
 
@@ -73,15 +76,9 @@ Un job `queued` pasa a `paused` en un solo commit y se elimina de `queue`. Se co
 
 ### RF-03 — Pausa de jobs activos
 
-Antes de implementar debe realizarse un spike contra la API pública de Pi Durable para determinar si existe:
+El spike contra Pi Durable `1.0.1` no encontró una pausa pública de submission, conversación o generación. `whenBusy: "steer"` solo inserta una entrada en un límite de turno y no congela la ejecución.
 
-- pausa de submission;
-- steering a un límite seguro;
-- o cancelación reanudable desde checkpoint.
-
-Si no existe soporte público, la pausa activa debe declararse no soportada con `PAUSE_ACTIVE_UNSUPPORTED`; no se simulará dejando un booleano mientras la generación continúa.
-
-Una pausa aceptada se considera aplicada solo cuando el scheduler Durable confirma que no habrá más efectos hasta `resume`.
+Por tanto, `pause` sobre `provisioning` o `running` falla con `PAUSE_ACTIVE_UNSUPPORTED` sin persistir una falsa pausa. La fase solo implementa pausa de jobs en cola y reanudación de jobs pausados en cola.
 
 ### RF-04 — Cancelación
 
@@ -92,7 +89,7 @@ Una pausa aceptada se considera aplicada solo cuando el scheduler Durable confir
 
 ### RF-05 — Reanudación
 
-`resume` retira una pausa aplicada y recoloca el job en cola o reanuda su submission según su estado Durable. Debe reutilizar conversation y submission existentes cuando la API lo permita; no crea una segunda conversación silenciosamente.
+`resume` solo acepta un job `paused` sin submission activa y lo recoloca al final de la cola. No reanuda una generación activa ni crea una segunda conversación silenciosamente. Si una pausa activa no está soportada, el job nunca alcanza `paused` por esa ruta.
 
 ### RF-06 — Retry
 
@@ -124,7 +121,7 @@ No se sobrescriben solicitudes previas.
 ### Comandos
 
 ```text
-/pi-agents cancel <id> [--reason <texto>]
+/pi-agents cancel <id> [--reason <texto>] [--yes]
 /pi-agents pause <id> [--reason <texto>]
 /pi-agents resume <id> [--reason <texto>]
 /pi-agents retry <id> [--reason <texto>]
@@ -149,7 +146,7 @@ Una política configurable puede prohibir que el modelo cancele, reanude o reint
 
 ```ts
 control?: {
-  pending?: "pause" | "resume" | "cancel";
+  pending?: "cancel";
   requestedAt?: number;
   requestedBy?: Actor;
   requestId?: string;
@@ -161,7 +158,7 @@ queueOrdinal?: number;
 controlHistory?: ControlEvent[];
 ```
 
-El historial en el registro se limita por tamaño. Si supera 64 KiB se mueve a un documento append-only enlazado.
+El historial en el registro se limita por tamaño. Si supera 64 KiB se mueve a un documento append-only enlazado. La intención se persiste antes de invocar cualquier aborto Durable.
 
 ## Reconciliación tras caída
 
@@ -175,11 +172,19 @@ El historial en el registro se limita por tamaño. Si supera 64 KiB se mueve a u
 
 ## Conflictos
 
-- `cancel` domina `pause` y `resume` pendientes.
+- Un commit de `cancel` gana frente a un commit concurrente de `pause` o `resume`.
 - `pause` repetido es éxito idempotente.
-- `resume` sobre job no pausado devuelve `INVALID_STATE`, salvo que retire una pausa aún no aplicada.
+- `resume` sobre job no pausado devuelve `CONTROL_INVALID_STATE`.
 - Dos retries con requestIds distintos crean dos intentos deliberados y deben advertirse en UI.
 - Una operación sobre un job terminal nunca reescribe el terminal.
+
+## Errores de control
+
+- `PAUSE_ACTIVE_UNSUPPORTED`
+- `CONTROL_INVALID_STATE`
+- `CONTROL_NOT_AUTHORIZED`
+- `CONTROL_CONFLICT`
+- `RETRY_NOT_ALLOWED`
 
 ## Seguridad y autoridad
 
