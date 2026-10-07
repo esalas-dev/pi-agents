@@ -1,6 +1,6 @@
 # Aceptación de fase 02 — control durable del ciclo de vida
 
-Estado: **en validación**. La implementación está en `feat/phase-02`; los gates automatizados se han repetido correctamente con dependencias locales. Siguen pendientes la aceptación TUI humana final, la revisión independiente y la decisión humana de promoción/merge.
+Estado: **en validación**. La implementación de fase 02 fue fusionada mediante PR #4; la regresión de integración tiene una corrección validada en PR #5. Los gates automatizados de la corrección pasan y las pruebas humanas fueron aprobadas explícitamente por la persona responsable. Siguen pendientes la revisión del informe independiente y la decisión humana de promoción/merge del PR #5.
 
 ## Alcance implementado
 
@@ -83,9 +83,15 @@ La rama `fix/phase02-control-merge` restaura esos tres cambios exactamente como 
 - Smoke offline de carga: código 0, sin invocar modelo.
 - `git diff --check`: sin errores.
 
-Esta evidencia corresponde a la rama de corrección, no a `main` antes de integrarla. La aceptación TUI humana final sigue pendiente.
+Esta evidencia corresponde a la rama de corrección, no a `main` antes de integrarla.
+
+## Aprobación humana — 2026-10-06 (2026-10-07 UTC)
+
+La persona responsable confirmó explícitamente en esta sesión: **«doy por aprobadas las pruebas humanas»**. Se registra como aprobación humana del gate de aceptación TUI de fase 02, separado de los gates automatizados del PR #5 (`ecdb46c`, 99/99 pruebas).
+
+Esta aprobación no afirma que el asistente haya ejecutado nuevos escenarios TUI ni borra las limitaciones de la evidencia histórica. No se aportaron nuevos logs interactivos. Tampoco equivale a aprobar el informe independiente ni a autorizar el merge del PR #5.
 
 ## Gates pendientes
 
-1. Realizar smoke TUI humano desde un directorio no relacionado: cancelación confirmada, pausa queued, resume, retry y migración.
-2. Revisión independiente de la rama y decisión humana sobre promoción/merge.
+1. Revisar el resultado del informe independiente de la corrección; el agente ha terminado, pero su resultado requiere revisión humana.
+2. Decisión humana de promoción/merge del PR #5 y revalidación del `main` resultante.
