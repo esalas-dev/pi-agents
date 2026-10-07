@@ -32,8 +32,11 @@ export type JobRepository = {
 const activeStatuses = new Set(["provisioning", "running"]);
 const terminalStatuses = new Set(["completed", "failed", "interrupted"]);
 
+function initialReviewStatus(job: Pick<JobRecord, "createdBy">): "pending" | "not_required" {
+  return job.createdBy?.kind === "model" || job.createdBy?.kind === "extension" ? "pending" : "not_required";
+}
 function summary(job: JobRecord, hasResult = Boolean(job.result)) {
-  return { id: job.id, status: job.status, agent: job.agent.name, createdAt: job.createdAt, updatedAt: job.updatedAt, hasResult, notified: job.notified };
+  return { id: job.id, status: job.status, agent: job.agent.name, createdAt: job.createdAt, updatedAt: job.updatedAt, hasResult, notified: job.notified, reviewStatus: initialReviewStatus(job) };
 }
 
 function storedJob(job: JobRecord): JobRecord {
@@ -86,11 +89,13 @@ export function createJobRepository(session: Session, context: Context, clock: C
         }
         const id = createId();
         const now = clock();
-        const job: JobRecord = { ...structuredClone(input), id, status: "queued", createdAt: now, updatedAt: now, notified: false };
+        const job: JobRecord = { ...structuredClone(input), createdBy: structuredClone(request.actor), id, status: "queued", createdAt: now, updatedAt: now, notified: false };
         assertJob(job);
         const admitted: RequestRecord = { requestId: request.requestId, operation: "start", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash: request.payloadHash, admittedAt: now, response: { jobId: id, status: "queued", agent: job.agent.name } };
         cell.record = admitted;
         await commitJob(tx, job);
+        const review = await tx.doc(JobReviewDocFamily, id, { status: initialReviewStatus(job) });
+        review.status = initialReviewStatus(job);
         receipt = structuredClone(admitted.response);
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");

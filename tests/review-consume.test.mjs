@@ -84,6 +84,17 @@ test('aprueba y consume con replay idempotente y consumidores distintos', async 
   } finally { await current.fixture.close(); }
 });
 
+test('la admisión de un actor model crea revisión pending', async () => {
+  const fixture = await makeStoreFixture({ createId: () => 'admitted-model' });
+  try {
+    const receipt = await fixture.repository.admit({ requestId: 'start-model', actor: { kind: 'model', id: 'm' }, intent: { agent: 'agent-a', task: 'task', cwd: '/tmp/project' }, payloadHash: 'hash' }, {
+      task: 'task', cwd: '/tmp/project', agent: { name: 'agent-a', description: 'A', systemPrompt: 'p', source: 'personal', filePath: '/tmp/a', tools: [] }, model: { provider: 'faux', modelId: 'faux-1' }, thinkingLevel: 'off',
+    });
+    assert.equal(receipt.jobId, 'admitted-model');
+    assert.equal((await fixture.repository.review(receipt.jobId)).status, 'pending');
+  } finally { await fixture.close(); }
+});
+
 test('resultado ausente o no terminal no se puede recuperar', async () => {
   const fixture = await makeStoreFixture();
   try {

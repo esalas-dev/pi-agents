@@ -162,7 +162,7 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 
 - implementación en la rama `feat/phase-01`;
 - pruebas unitarias e integración de consulta, espera, revisión, consumo, migración 2 → 3, adaptadores y reapertura;
-- gates automatizados: `npm run check`, `npm test` (79/79), smoke Pi offline y `npm pack --dry-run --json` verdes;
+- gates automatizados: `npm run check`, `npm test` (81/81), smoke Pi offline y `npm pack --dry-run --json` verdes;
 - matriz de aceptación: [`docs/PHASE-01-ACCEPTANCE.md`](../docs/PHASE-01-ACCEPTANCE.md).
 
 ### Bloqueos restantes

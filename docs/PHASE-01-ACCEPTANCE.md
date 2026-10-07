@@ -53,7 +53,7 @@ Después de cerrar y reabrir Pi se reconstruyen consultas y esperas desde docume
 ## Gates ejecutados
 
 - `npm run check`: verde.
-- `npm test`: verde, 79/79 pruebas.
+- `npm test`: verde, 81/81 pruebas.
 - `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models __pi_agents_phase01_smoke_no_match__`: código 0; no se invocó ningún modelo.
 - `npm pack --dry-run --json`: paquete sin SQLite, backups, configuración local ni `node_modules`.
 
