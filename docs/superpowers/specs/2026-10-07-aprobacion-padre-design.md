@@ -2,7 +2,7 @@
 
 ## Estado y autorización
 
-Fecha: 2026-10-07. **Diseño conversacional aprobado; especificación escrita pendiente de revisión humana.** El usuario eligió «solo sus propios subagentes» y aprobó una herramienta explícita del padre, sin autoaprobación de hijos, sin revisión RPC y sin nuevos permisos de promoción. Esta autorización habilita este documento, no implementación, instalación, migración real ni aprobación retroactiva.
+Fecha: 2026-10-07. **Diseño conversacional y especificación escrita aprobados humanamente.** El usuario eligió «solo sus propios subagentes» y aprobó una herramienta explícita del padre, sin autoaprobación de hijos, sin revisión RPC y sin nuevos permisos de promoción. La aprobación escrita del documento en `9611a5c` habilita elaborar el plan, no implementación, instalación, migración real ni aprobación retroactiva.
 
 Documento aislado en `docs/parent-review-design`, worktree `.worktrees/parent-review`, sobre el bootstrap revisado `98a19223ce582e424ad534e1eebb008033ecc674`. No contiene código de fase 03 en desarrollo ni cambia el paquete actualmente cargado.
 
@@ -137,4 +137,4 @@ TDD RED/GREEN real de policy/ownership/ledger/adapter y covering tests persisten
 
 ## 8. Próximo gate
 
-Revisión humana de esta especificación escrita. Solo después de aprobarla se elaborará el plan de implementación y se elegirá su ejecución. Esta rama documental no modifica autoridad ni resuelve la revisión pendiente de T1.
+La revisión humana de esta especificación escrita ya fue aprobada. Próximo gate: revisar `../plans/2026-10-07-aprobacion-padre.md` y confirmar ejecución antes de implementar. Esta rama documental no modifica autoridad ni resuelve la revisión pendiente de T1.
