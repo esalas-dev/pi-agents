@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { canonicalStart } from '../src/domain/requests.ts';
 import { createStartService } from '../src/application/start.ts';
 import { createControlService } from '../src/application/control.ts';
 import { makeStoreFixture } from './helpers/store.mjs';
@@ -176,6 +177,24 @@ test('todos los awaiters de drain observan el fin del storage', async () => {
   } finally { await fixture.close(); }
 });
 
+test('retry replay parental coteja destino y no muta snapshots', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: (() => { let n = 0; return () => `retry-${++n}`; })() });
+  try {
+    await fixture.seedJob({ id: 'source', ...legacyInput('tarea'), status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'model', id: 'call:source' }, parentSessionId: 's1' }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: legacyInput('tarea').model });
+    const req = { requestId: 'retry:bound', action: 'retry', actor: { kind: 'model', id: 'call:source' } };
+    const first = await fixture.repository.retry('source', req, 2, authority);
+    const ledgerBefore = await fixture.repository.receipt(req.requestId);
+    const indexBefore = await fixture.repository.index();
+    await fixture.session.commit(async tx => { const job = await tx.doc(JobDocFamily, first.retryJobId, null); job.parentSessionId = 'other'; }, BACKGROUND_CONTEXT);
+    const jobBefore = await fixture.repository.get(first.retryJobId);
+    const replay = await fixture.repository.retry('source', req, 3, authority).catch(error => error);
+    assert.equal(replay.error?.code ?? replay.code, 'INVALID_REQUEST');
+    assert.deepEqual(await fixture.repository.get(first.retryJobId), jobBefore);
+    assert.deepEqual(await fixture.repository.index(), indexBefore);
+    assert.deepEqual(await fixture.repository.receipt(req.requestId), ledgerBefore);
+  } finally { await fixture.close(); }
+});
+
 test('referencia copiada y contexto genérico no escriben ownership', async () => {
   const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'job-1' });
   try {
@@ -185,5 +204,95 @@ test('referencia copiada y contexto genérico no escriben ownership', async () =
     const generic = await start(fixture, 'start:generic');
     assert.equal(generic.success, true);
     assert.equal((await fixture.repository.get('job-1')).parentSessionId, undefined);
+  } finally { await fixture.close(); }
+});
+
+test('retry extension real conserva actor y no hereda parentSessionId', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'extension-retry' });
+  try {
+    await fixture.seedJob({ id: 'source-extension', ...legacyInput('tarea'), status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'extension', id: 'ext-1' } }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: legacyInput('tarea').model });
+    const outcome = await createControlService(fixture.repository, () => 2).retry('source-extension', { requestId: 'retry:extension', action: 'retry', actor: { kind: 'extension', id: 'ext-1' } });
+    assert.equal(outcome.success, true);
+    assert.equal((await fixture.repository.get('extension-retry')).createdBy.id, 'ext-1');
+    assert.equal((await fixture.repository.get('extension-retry')).parentSessionId, undefined);
+  } finally { await fixture.close(); }
+});
+
+test('legacy replay genérico conserva ledger sin binding y retry parental no adopta', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'legacy-retry' });
+  try {
+    await fixture.seedJob({ id: 'legacy-source', ...legacyInput('tarea'), status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'model', id: 'call:legacy' } }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: legacyInput('tarea').model });
+    const req = { requestId: 'retry:legacy', action: 'retry', actor: { kind: 'model', id: 'call:legacy' } };
+    const first = await fixture.repository.retry('legacy-source', req, 2);
+    const record = await fixture.repository.receipt(req.requestId);
+    assert.equal(record.parentSessionId, undefined);
+    assert.equal((await fixture.repository.retry('legacy-source', req, 3)).replayed, true);
+    const native = await fixture.repository.retry('legacy-source', req, 4, authority).catch(error => error);
+    assert.equal(native.error?.code ?? native.code, 'INVALID_REQUEST');
+    assert.deepEqual(await fixture.repository.receipt(req.requestId), record);
+    assert.equal((await fixture.repository.get(first.retryJobId)).parentSessionId, undefined);
+  } finally { await fixture.close(); }
+});
+
+test('canonicalStart hash es igual con y sin contexto parental', async () => {
+  const generic = await makeStoreFixture({ createId: () => 'generic' });
+  const parental = await makeStoreFixture({ parentAuthority: authority, createId: () => 'parental' });
+  try {
+    const req = request('start:hash');
+    assert.equal((await start(generic, req.requestId)).success, true);
+    assert.equal((await start(parental, req.requestId, authority)).success, true);
+    const expected = canonicalStart(req).payloadHash;
+    assert.equal((await generic.repository.receipt(req.requestId)).payloadHash, expected);
+    assert.equal((await parental.repository.receipt(req.requestId)).payloadHash, expected);
+  } finally { await generic.close(); await parental.close(); }
+});
+
+test('retry origen ajeno o contexto inactivo niega sin escribir', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'never-created' });
+  try {
+    await fixture.seedJob({ id: 'foreign', ...legacyInput('tarea'), status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'model', id: 'call:foreign' }, parentSessionId: 'other' }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: legacyInput('tarea').model });
+    const before = { job: await fixture.repository.get('foreign'), index: await fixture.repository.index() };
+    const denied = { requestId: 'retry:denied', action: 'retry', actor: { kind: 'model', id: 'call:foreign' } };
+    const foreign = await fixture.repository.retry('foreign', denied, 2, authority).catch(error => error);
+    assert.equal(foreign.error?.code ?? foreign.code, 'INVALID_REQUEST');
+    authority.isActive = () => false;
+    const inactive = await fixture.repository.retry('foreign', { ...denied, requestId: 'retry:inactive' }, 2, authority).catch(error => error);
+    assert.equal(inactive.error?.code ?? inactive.code, 'INVALID_REQUEST');
+    assert.deepEqual(await fixture.repository.get('foreign'), before.job);
+    assert.deepEqual(await fixture.repository.index(), before.index);
+    assert.equal(await fixture.repository.receipt('retry:denied'), undefined);
+    assert.equal(await fixture.repository.receipt('retry:inactive'), undefined);
+  } finally { authority.isActive = () => true; await fixture.close(); }
+});
+
+test('fallo de commit real revierte admisión y sanitiza STORAGE_ERROR', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'rollback-job' });
+  try {
+    fixture.failNextCommitAfterStaging();
+    const outcome = await start(fixture, 'start:rollback', authority);
+    assert.equal(outcome.success, false);
+    assert.equal(outcome.error.code, 'STORAGE_ERROR');
+    assert.deepEqual(outcome.error.details, {});
+    await fixture.reopen();
+    assert.equal(await fixture.repository.get('rollback-job'), undefined);
+    assert.equal(await fixture.repository.index(), undefined);
+    assert.equal(await fixture.repository.receipt('start:rollback'), undefined);
+  } finally { await fixture.close(); }
+});
+
+test('fallo de commit real revierte retry sin ledger parcial', async () => {
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'rollback-retry' });
+  try {
+    await fixture.seedJob({ id: 'retry-source', ...legacyInput('tarea'), status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'model', id: 'call:retry' }, parentSessionId: 's1' }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: legacyInput('tarea').model });
+    const before = { job: await fixture.repository.get('retry-source'), index: await fixture.repository.index() };
+    fixture.failNextCommitAfterStaging();
+    const outcome = await createControlService(fixture.repository, () => 2).retry('retry-source', { requestId: 'retry:rollback', action: 'retry', actor: { kind: 'model', id: 'call:retry' } });
+    assert.equal(outcome.success, false);
+    assert.equal(outcome.error.code, 'STORAGE_ERROR');
+    await fixture.reopen();
+    assert.deepEqual(await fixture.repository.get('retry-source'), before.job);
+    assert.deepEqual(await fixture.repository.index(), before.index);
+    assert.equal(await fixture.repository.receipt('retry:rollback'), undefined);
+    assert.equal(await fixture.repository.get('rollback-retry'), undefined);
   } finally { await fixture.close(); }
 });

@@ -263,6 +263,10 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (existing) {
           if (existing.requestId !== request.requestId || existing.operation !== "retry" || existing.payloadHash !== payloadHash) throw new DomainError("CONTROL_CONFLICT");
           if (token && (existing.parentSessionId !== token.sessionId || !token.isActive())) throw new DomainError("INVALID_REQUEST");
+          if (token) {
+            const target = await tx.doc(JobDocFamily, existing.response.jobId, null as unknown as JsonValue) as JobRecord | undefined;
+            if (!target || target.parentSessionId !== token.sessionId) throw new DomainError("INVALID_REQUEST");
+          }
           receipt = { ...(plain(existing.receipt) as RetryReceipt), replayed: true };
           return;
         }
