@@ -118,7 +118,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
-        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "review", jobId: id, status: decision.status, actor: decision.actor, reason: decision.reason })).digest("hex");
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "review", jobId: id, status: decision.status, actor: decision.actor, ...(decision.reason === undefined ? {} : { reason: decision.reason }) })).digest("hex");
         const key = createHash("sha256").update(decision.requestId).digest("hex");
         const cell = await tx.doc(RequestLedgerDocFamily, key, null);
         const existing = cell.record as RequestRecord | null;

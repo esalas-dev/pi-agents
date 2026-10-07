@@ -84,6 +84,24 @@ test('aprueba y consume con replay idempotente y consumidores distintos', async 
   } finally { await current.fixture.close(); }
 });
 
+test('aprueba y rechaza sin motivo opcional con replay idempotente', async () => {
+  for (const status of ['approved', 'rejected']) {
+    const current = await setup();
+    try {
+      const decision = { requestId: `review-without-reason-${status}`, status, actor: { kind: 'human', id: 'tui' } };
+      const first = await current.reviewService.decideReview('job-review', decision);
+      assert.equal(first.success, true, first.error?.message);
+      assert.equal(first.value.status, status);
+      assert.equal(Object.hasOwn(first.value, 'reason'), false);
+      assert.equal((await current.fixture.repository.review('job-review')).status, status);
+      assert.deepEqual(await current.reviewService.decideReview('job-review', decision), first);
+      await current.fixture.reopen();
+      const reopened = createReviewService(current.fixture.repository, () => 3000);
+      assert.deepEqual(await reopened.decideReview('job-review', decision), first);
+    } finally { await current.fixture.close(); }
+  }
+});
+
 test('la admisión de un actor model crea revisión pending', async () => {
   const fixture = await makeStoreFixture({ createId: () => 'admitted-model' });
   try {
