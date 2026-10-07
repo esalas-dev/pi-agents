@@ -2,7 +2,7 @@
 
 ## Estado
 
-Propuesta. Primera fase funcional; depende de completar y validar la [fase 00 — Preparación arquitectónica](00-preparacion-arquitectonica.md). Usa su almacenamiento separado, actores, ledger y servicios compartidos; no parte directamente del monolito v1.
+Diseño aprobado por el usuario después de completar la fase 00. Primera fase funcional; depende del esquema 2 validado en la [fase 00 — Preparación arquitectónica](00-preparacion-arquitectonica.md). Usa su almacenamiento separado, actores, ledger y servicios compartidos; no parte directamente del monolito v1. La implementación queda bloqueada hasta aprobar el plan de ejecución.
 
 ## Objetivo
 
@@ -72,7 +72,7 @@ Cancelar la espera **no** cancela ni modifica el trabajo. El timeout permitido s
 Un resultado terminal debe poder recuperarse sin mutarlo. Se distinguen:
 
 - `peek`: lectura humana que no marca consumo;
-- `consume`: lectura por un consumidor identificado, que persiste `consumedAt`, `consumedBy` y `consumeRequestId`.
+- `consume`: lectura por un consumidor identificado, que persiste un recibo de consumo (`consumedAt`, `consumedBy`, `consumeRequestId`) en el ledger y actualiza el agregado de consumo.
 
 Repetir `consume` con el mismo `requestId` es idempotente. Un consumidor distinto puede leer el resultado, pero el historial de consumo debe conservar al menos el primer y último consumo sin crecimiento ilimitado.
 
@@ -132,31 +132,30 @@ No se añadirá un parámetro de aprobación a ninguna tool.
 
 ## Modelo persistente
 
-Esta fase amplía el esquema global 2 propuesto por fase 00, con una nueva versión y migración propia. El número de versión se fijará al diseñar esta fase sobre la implementación validada. La conversión estructural del monolito v1 pertenece a fase 00.
+Esta fase amplía el esquema global 2 validado en fase 00 con esquema 3 y migración propia. La conversión estructural del monolito v1 pertenece a fase 00; esta fase define explícitamente la conversión esquema 2 → esquema 3.
 
-`JobRecord` incorpora de forma opcional durante la migración:
+El esquema 3 mantiene el job técnico separado de la revisión y el consumo:
 
 ```ts
-review?: {
+JobReviewDocFamily(jobId) {
   status: "not_required" | "pending" | "approved" | "rejected";
   decidedAt?: number;
   decidedBy?: string;
   reason?: string;
-};
-consumption?: {
+}
+
+JobConsumptionDocFamily(jobId) {
   firstConsumedAt?: number;
   lastConsumedAt?: number;
   count: number;
   lastConsumer?: string;
   requestIds: string[]; // historial reciente, no autoridad de deduplicación
-};
-createdBy?: {
-  kind: "human" | "model" | "extension" | "system";
-  id?: string;
-};
+}
 ```
 
-`requestIds` puede limitarse a los últimos 32 IDs para consulta del historial reciente. La autoridad de deduplicación es el ledger durable de fase 00, ampliado para `consume`; expulsar un ID del historial reciente no permite ejecutar de nuevo la misma solicitud. Recibo y contador se actualizan en un único commit.
+`JobRecord` conserva `createdBy?: Actor` para fijar la política de revisión y el índice conserva `reviewStatus` y `hasResult`. La migración 2→3 crea revisión `not_required` y consumo vacío para jobs existentes. Jobs nuevos iniciados por `model` o RPC reciben `pending`; los iniciados por `human` reciben `not_required`, salvo política futura explícita.
+
+`requestIds` puede limitarse a los últimos 32 IDs para consulta del historial reciente. La autoridad de deduplicación es el ledger durable, ampliado con operaciones tipadas `start`, `consume` y `review`; cada recibo de `consume` conserva `consumedAt`, `consumedBy` y `consumeRequestId`. Expulsar un ID del historial reciente no permite ejecutar de nuevo la misma solicitud. Recibo, consumo y decisión se actualizan en un único commit.
 
 ## Consistencia y recuperación
 
@@ -214,3 +213,14 @@ Timeout y aborto de espera no se marcan como error del trabajo.
 - README con nuevos comandos y tools.
 - Arquitectura con servicio de consultas y política de revisión.
 - Tabla de ampliación/migración desde el esquema de fase 00 y prueba de la ruta histórica v1 → fase 00 → fase 01.
+- Plan de implementación aprobado antes de modificar código.
+
+## Decisiones aprobadas de diseño
+
+- La consulta se implementa como una capa de aplicación sobre el repositorio de fase 00; los adaptadores no replican la máquina de estados.
+- `JobsIndexDoc` se usa como proyección compacta para filtros y cursores; el cursor opaco codifica `(createdAt,id)` descendente y no depende de `order`.
+- La espera usa `watchDoc` con el patrón snapshot → suscripción → snapshot; timeout y aborto afectan únicamente a la espera.
+- Las tools no pueden aprobar resultados ni obtener cuerpos `pending`/`rejected`; la aprobación es comando TUI con actor humano.
+- El límite de tool es 64 KiB de texto; el resultado completo continúa en SQLite y el prefijo incluye longitud, SHA-256 e indicador de truncado.
+- El resultado humano es `peek` por defecto. `consume` exige `requestId` para deduplicación fuerte y registra consumidor, contador y timestamps.
+- La migración 2→3 requiere mantenimiento explícito y bloqueo del runtime mientras no finalice.

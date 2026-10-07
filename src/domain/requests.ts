@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { DomainError } from "./errors.ts";
+import type { JobResult } from "./jobs.ts";
 
 export type Actor = { kind: "human" | "model" | "extension" | "system"; id?: string };
 export type StartIntent = { agent: string; task: string; cwd: string };
@@ -8,7 +9,11 @@ export type StartRequest = { requestId: string; actor: Actor; intent: StartInten
 export type Clock = () => number;
 export type CreateId = () => string;
 export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
-export type RequestRecord = { requestId: string; operation: string; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt };
+export type ConsumeRequest = { requestId: string; actor: Actor; consumer: string };
+export type ConsumeReceipt = { jobId: string; requestId: string; consumedAt: number; consumedBy: string; count: number; result: JobResult };
+export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; reason?: string };
+export type RequestOperation = "start" | "consume" | "review" | (string & {});
+export type RequestRecord = { requestId: string; operation: RequestOperation; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt; receipt?: import("@earendil-works/chord").JsonValue };
 export type MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number };
 export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
 

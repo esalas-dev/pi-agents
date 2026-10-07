@@ -2,7 +2,8 @@ export type ErrorCode =
   | "JOB_NOT_FOUND" | "INVALID_REQUEST" | "AGENT_NOT_FOUND" | "UNSUPPORTED_TOOLS"
   | "MODEL_UNAVAILABLE" | "REQUEST_ID_CONFLICT" | "RUNTIME_CLOSING" | "MIGRATION_REQUIRED"
   | "MIGRATION_DECLINED" | "BACKUP_FAILED" | "STORAGE_VERSION_UNSUPPORTED" | "STORAGE_INCONSISTENT"
-  | "STORAGE_BUSY" | "STORAGE_ERROR";
+  | "STORAGE_BUSY" | "STORAGE_ERROR" | "INVALID_FILTER" | "WAIT_TIMEOUT" | "WAIT_ABORTED"
+  | "RESULT_NOT_READY" | "RESULT_REVIEW_REQUIRED" | "RESULT_REJECTED";
 
 export type AppError = {
   code: ErrorCode;
@@ -21,6 +22,9 @@ const messages: Record<ErrorCode, string> = {
   MIGRATION_DECLINED: "La migración no fue autorizada.", BACKUP_FAILED: "No se pudo crear un backup válido.",
   STORAGE_VERSION_UNSUPPORTED: "La versión de almacenamiento no es compatible.", STORAGE_INCONSISTENT: "El almacenamiento es inconsistente.",
   STORAGE_BUSY: "La base está siendo usada por otro proceso.", STORAGE_ERROR: "No se pudo completar la operación de almacenamiento.",
+  INVALID_FILTER: "El filtro de consulta no es válido.", WAIT_TIMEOUT: "La espera agotó su tiempo límite.",
+  WAIT_ABORTED: "La espera fue abortada.", RESULT_NOT_READY: "El resultado todavía no está disponible.",
+  RESULT_REVIEW_REQUIRED: "El resultado requiere revisión humana.", RESULT_REJECTED: "El resultado fue rechazado.",
 };
 
 export class DomainError extends Error {

@@ -11,14 +11,14 @@ import { acquireLease } from '../src/infrastructure/storage/lease.ts';
 import { inspectStorage } from '../src/infrastructure/storage/inspect.ts';
 import { createBackup, verifyBackup } from '../src/infrastructure/storage/backup.ts';
 import { createLegacyFixture } from './helpers/legacy.mjs';
-import { StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
+import { JobsIndexDoc, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
 
 const hasCode = code => error => error?.error?.code === code;
 const FutureDoc = defineDoc({ kind: 'pi-agents.future', version: 1, scope: 'session', initial: () => ({ value: true }) });
 
 async function currentDatabase(database) {
   const session = createSession(await openNodeSqliteStorage(database));
-  try { await session.commit(async tx => { await tx.doc(StorageMetaDoc); }, context); }
+  try { await session.commit(async tx => { await tx.doc(StorageMetaDoc); await tx.doc(JobsIndexDoc); }, context); }
   finally { await session.close(context); }
 }
 

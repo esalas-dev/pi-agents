@@ -79,7 +79,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
-| 01 | `bloqueada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Esperar la validación del esquema 2 de fase 00 y diseñar su ampliación para revisión y consumo. |
+| 01 | `en validación` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Ejecutar gates finales, revisión independiente y aceptación humana TUI. |
 | 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
@@ -143,7 +143,8 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - fase 00 completada;
 - almacenamiento y ledger aprobados;
 - política de actor definida para comando, tool y futuras llamadas RPC;
-- conversión v1 → esquema 2 validada en fase 00 y ampliación de esquema de fase 01 diseñada.
+- conversión v1 → esquema 2 validada en fase 00 y ampliación esquema 2 → 3 diseñada y aprobada;
+- plan de implementación revisado en `docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md`.
 
 ### Entregables
 
@@ -153,17 +154,26 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - consumo idempotente sin depender de un anillo que permita reutilizar IDs antiguos;
 - truncado de tools a 64 KiB con hash y longitud;
 - comandos y tools definidos por la spec;
+- migración explícita y atómica esquema 2 → 3 con backup;
+- bloqueo del runtime mientras la migración esté pendiente;
 - notificaciones sin extractos sensibles del resultado.
 
-### Bloqueos conocidos
+### Evidencia disponible
 
-- validar la partición y migración de fase 00 antes de ampliar el esquema con revisión y consumo;
-- definir cancelación de waits de comando cuando no exista señal de operación en el contexto;
-- identificar al consumidor modelo sin permitir suplantación de actor humano.
+- implementación en la rama `feat/phase-01`;
+- pruebas unitarias e integración de consulta, espera, revisión, consumo, migración 2 → 3, adaptadores y reapertura;
+- gates automatizados: `npm run check`, `npm test` (81/81), smoke Pi offline y `npm pack --dry-run --json` verdes;
+- matriz de aceptación: [`docs/PHASE-01-ACCEPTANCE.md`](../docs/PHASE-01-ACCEPTANCE.md).
+
+### Bloqueos restantes
+
+- revisión independiente del branch;
+- validación humana TUI de listado, espera, resultado, aprobación, rechazo y migración;
+- smoke offline de Pi y `npm pack --dry-run --json` en el gate final.
 
 ### Gate de salida
 
-Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, carreras de wait, revisión, consumo, truncado y migración.
+Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, carreras de wait, revisión, consumo, truncado y migración; además se registran revisión independiente y aceptación humana.
 
 ## Fase 02 — Control durable del ciclo de vida
 

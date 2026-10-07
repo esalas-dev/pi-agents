@@ -35,9 +35,13 @@ Busca:
 
 Los archivos se ordenan por nombre para que la resolución sea determinista. Primero se insertan los personales y después los de proyecto, produciendo reemplazo por `name`.
 
-### Registro y cola (esquema 2)
+### Registro, cola y consulta (esquemas 2 y 3)
 
-La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de admisión.
+La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. En el esquema 3 también separa `JobReviewDocFamily` y `JobConsumptionDocFamily`. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de la operación (`start`, `consume` o `review`).
+
+`QueryService` implementa `getJob` y `listJobs` sobre snapshots Durable. El listado filtra la proyección compacta y usa un cursor keyset opaco de `(createdAt,id)` descendente; no depende del arreglo de orden de cola y no materializa `JobResultDocFamily`. La vista de resultado se carga aparte mediante `ResultService`.
+
+`WaitService` aplica snapshot → `watchDoc` → snapshot. El timeout y `AbortSignal` solo terminan la promesa de espera; nunca llaman una API de cancelación del Harness. El estado Durable sigue siendo la autoridad tras cerrar y reabrir Pi.
 
 El documento conserva la definición resuelta del agente, no solo su nombre. Un trabajo que espera en cola no cambia si el archivo Markdown se modifica antes de comenzar.
 
@@ -100,14 +104,14 @@ De esta forma no se reservan muchas tareas Durable que aparenten estar ejecután
 
 ## Persistencia por sesión principal
 
-El archivo usa el ID de la sesión Pi. Esto aporta:
+El archivo usa el ID de la sesión Pi. Una base de esquema 2 no abre el Harness: mantenimiento TUI, autorización humana y backup verificado deben completar la migración atómica 2 → 3. Esto aporta:
 
 - `status` y `result` con semántica local a la conversación principal;
 - notificaciones dirigidas a la sesión que inició el trabajo;
 - pausa natural al cambiar de sesión;
 - menor probabilidad de que dos procesos Pi abran el mismo almacenamiento.
 
-No hay índice global de jobs en esta versión.
+No hay índice global de jobs en esta versión. Las consultas se limitan al SQLite de la sesión activa.
 
 ## Modelo y proveedores
 
@@ -116,6 +120,12 @@ No hay índice global de jobs en esta versión.
 Esto mantiene autenticación y proveedores ordinarios sin depender de internals. Una definición de modelo virtual no se puede extraer públicamente del registro, por lo que esos modelos se rechazan cuando no aparecen en el runtime durable.
 
 ## Herramientas
+
+Además de `pi_agents` para admitir trabajos, la extensión registra `pi_agents_status`, `pi_agents_list`, `pi_agents_wait` y `pi_agents_result`. Estas tools delegan en `JobsService`; no implementan transiciones ni aprobación.
+
+El esquema 3 protege los resultados con revisión separada: jobs iniciados por modelo o extensión quedan `pending` tras migración; una tool no recibe el cuerpo `pending` o `rejected`. `approve`/`reject` exige actor humano desde la TUI activa y solo cambia el documento de revisión. `peek` humano no marca consumo; `consume` exige `requestId` y actualiza ledger y agregado de consumo en el mismo commit.
+
+Las tools truncan el texto a 64 KiB por bytes UTF-8 y devuelven longitud total, SHA-256 e indicador de truncado. El cuerpo completo permanece en SQLite.
 
 Se instala únicamente `CodingTools` de Pi Durable:
 

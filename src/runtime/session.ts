@@ -18,6 +18,10 @@ import { createExecution } from "../infrastructure/durable/execution.ts";
 import { createCoordinator } from "./coordinator.ts";
 import { createStartService } from "../application/start.ts";
 import { createJobsService, type JobsService } from "../application/jobs.ts";
+import { createQueryService } from "../application/query.ts";
+import { createWaitService } from "../application/wait.ts";
+import { createResultService } from "../application/result.ts";
+import { createReviewService } from "../application/review.ts";
 
 export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
 export type SessionRuntime = { jobs: JobsService; close(): Promise<void> };
@@ -27,10 +31,10 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
   try {
     await mkdir(path.dirname(options.storagePath), { recursive: true, mode: 0o700 });
     lease = await acquireLease(options.storagePath); const inspection = await inspectStorage(lease, options.context);
-    if (inspection.kind === "legacy-v1") throw new DomainError("MIGRATION_REQUIRED");
+    if (inspection.kind === "legacy-v1" || (inspection.kind === "current" && inspection.schemaVersion !== 3)) throw new DomainError("MIGRATION_REQUIRED");
     if (inspection.kind === "empty") {
       const storage = await openNodeSqliteStorage(lease.dbPath); const session = createSession(storage);
-      try { await session.commit(async tx => { await tx.doc(StorageMetaDoc); await tx.doc(JobsIndexDoc); }, options.context); }
+      try { await session.commit(async tx => { const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = 3; const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = 3; }, options.context); }
       finally { await session.close(options.context); }
     }
     const registry = createRegistry(); registry.install(CodingTools);
@@ -39,8 +43,12 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`));
     const execution = createExecution(harness, options.context, tools, clock);
     let coordinator: ReturnType<typeof createCoordinator>;
+    const query = createQueryService(repository);
+    const wait = createWaitService(query, harness, options.context);
+    const result = createResultService(repository, query, clock);
+    const review = createReviewService(repository, clock);
     const start = createStartService(repository, () => coordinator.wake(), report);
-    const jobs = createJobsService(repository, start);
+    const jobs = createJobsService(repository, start, wait, result, review, query);
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
     await coordinator.recover();
     let closed = false;
