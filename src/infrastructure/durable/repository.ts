@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
-import type { ConsumptionState, JobRecord, JobResult } from "../../domain/jobs.ts";
+import type { ConsumptionState, JobRecord, JobResult, ReviewState } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
-import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, RequestRecord, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
-import { canonicalJson } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
+import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
-import { JobConsumptionDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
+import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
@@ -15,6 +15,8 @@ export type JobRepository = {
   review(id: string): Promise<JobReviewDocument | undefined>;
   consumption(id: string): Promise<ConsumptionState | undefined>;
   decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
+  applyControl(id: string, request: ControlRequest, at: number): Promise<ControlReceipt>;
+  retry(id: string, request: RetryRequest, at: number): Promise<RetryReceipt>;
   consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
@@ -22,6 +24,7 @@ export type JobRepository = {
   unnotified(): Promise<JobRecord[]>;
   markNotified(id: string): Promise<void>;
   finish(id: string, result: JobResult, at: number): Promise<void>;
+  finishCancelled(id: string, detail: string, at: number): Promise<void>;
   markRunning(id: string, submissionId: number, at: number): Promise<void>;
   create(job: JobRecord, result?: JobResult): Promise<void>;
   claimNext(maxConcurrency: number, createConversation: CreateConversation): Promise<JobRecord | undefined>;
@@ -29,14 +32,14 @@ export type JobRepository = {
   admit(request: StartRequest & { payloadHash: string }, input: Omit<JobRecord, "id" | "status" | "createdAt" | "updatedAt" | "notified">): Promise<AdmissionReceipt>;
 };
 
-const activeStatuses = new Set(["provisioning", "running"]);
-const terminalStatuses = new Set(["completed", "failed", "interrupted"]);
+const activeStatuses = new Set(["provisioning", "running", "cancelling"]);
+const terminalStatuses = new Set(["completed", "failed", "interrupted", "cancelled"]);
 
 function initialReviewStatus(job: Pick<JobRecord, "createdBy">): "pending" | "not_required" {
   return job.createdBy?.kind === "model" || job.createdBy?.kind === "extension" ? "pending" : "not_required";
 }
-function summary(job: JobRecord, hasResult = Boolean(job.result)) {
-  return { id: job.id, status: job.status, agent: job.agent.name, createdAt: job.createdAt, updatedAt: job.updatedAt, hasResult, notified: job.notified, reviewStatus: initialReviewStatus(job) };
+function summary(job: JobRecord, hasResult = Boolean(job.result), reviewStatus: ReviewState = initialReviewStatus(job)) {
+  return { id: job.id, status: job.status, agent: job.agent.name, createdAt: job.createdAt, updatedAt: job.updatedAt, hasResult, notified: job.notified, reviewStatus };
 }
 
 function storedJob(job: JobRecord): JobRecord {
@@ -57,7 +60,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       index.order = index.order.filter((id: string) => id !== job.id);
       return;
     }
-    index.summaries[job.id] = summary(job, hasResult ?? index.summaries[job.id]?.hasResult ?? Boolean(job.result));
+    index.summaries[job.id] = summary(job, hasResult ?? index.summaries[job.id]?.hasResult ?? Boolean(job.result), index.summaries[job.id]?.reviewStatus ?? initialReviewStatus(job));
     if (!index.order.includes(job.id) && job.status === "queued") index.order.push(job.id);
     if (job.status !== "queued") index.order = index.order.filter((id: string) => id !== job.id);
   };
@@ -134,6 +137,99 @@ export function createJobRepository(session: Session, context: Context, clock: C
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
     },
+    async applyControl(id, request, at) {
+      assertControlRequest(request);
+      let receipt: ControlReceipt | undefined;
+      await session.commit(async tx => {
+        const rawJob = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        const job = rawJob ? plain(rawJob) : undefined;
+        if (!job) throw new DomainError("JOB_NOT_FOUND");
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "control", jobId: id, action: request.action, actor: request.actor, ...(request.reason === undefined ? {} : { reason: request.reason }) })).digest("hex");
+        const key = createHash("sha256").update(request.requestId).digest("hex");
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "control" || existing.payloadHash !== payloadHash) throw new DomainError("CONTROL_CONFLICT");
+          receipt = { ...(plain(existing.receipt) as ControlReceipt), replayed: true };
+          return;
+        }
+        if (request.action === "retry") throw new DomainError("RETRY_NOT_ALLOWED");
+        const index = await tx.doc(JobsIndexDoc);
+        const previousStatus = job.status;
+        let result: JobResult | undefined;
+        if (request.action === "pause") {
+          if (job.status === "provisioning" || job.status === "running" || job.status === "cancelling") throw new DomainError("PAUSE_ACTIVE_UNSUPPORTED");
+          if (job.status !== "queued") throw new DomainError("CONTROL_INVALID_STATE");
+          job.queueOrdinal = index.order.indexOf(id) + 1;
+          job.status = "paused";
+          index.order = index.order.filter(candidate => candidate !== id);
+        } else if (request.action === "resume") {
+          if (job.status !== "paused") throw new DomainError("CONTROL_INVALID_STATE");
+          job.status = "queued";
+          job.queueOrdinal = index.order.length + 1;
+          if (!index.order.includes(id)) index.order.push(id);
+        } else {
+          if (terminalStatuses.has(job.status) || job.status === "cancelling") throw new DomainError("CONTROL_INVALID_STATE");
+          if (job.status === "queued" || job.status === "paused") {
+            job.status = "cancelled";
+            index.order = index.order.filter(candidate => candidate !== id);
+            job.finishedAt = at; job.resultMeta = { durationMs: 0, model: structuredClone(job.model), status: "interrupted", error: "cancelled before execution" };
+            result = { finalResponse: "", durationMs: 0, model: structuredClone(job.model), status: "interrupted", error: "cancelled before execution" };
+          } else {
+            job.status = "cancelling";
+            job.control = { pending: "cancel", requestedAt: at, requestedBy: structuredClone(request.actor), requestId: request.requestId };
+          }
+        }
+        job.updatedAt = at;
+        const event = { action: request.action, requestId: request.requestId, actor: structuredClone(request.actor), requestedAt: at, appliedAt: at, previousStatus, nextStatus: job.status };
+        job.controlHistory = [...(job.controlHistory ?? []), event].slice(-32);
+        const history = await tx.doc(JobControlDocFamily, id, { events: [] }); history.events = [...(history.events ?? []), event].slice(-128);
+        const stored = await tx.doc(JobDocFamily, id, null as unknown as JsonValue); Object.assign(stored, storedJob(job));
+        if (result) { const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result)); }
+        index.summaries[id] = summary(job, Boolean(result) || Boolean(index.summaries[id]?.hasResult), index.summaries[id]?.reviewStatus ?? initialReviewStatus(job));
+        if (job.status !== "queued") index.order = index.order.filter(candidate => candidate !== id);
+        const decided: ControlReceipt = { jobId: id, requestId: request.requestId, action: request.action, previousStatus, status: job.status, replayed: false, appliedAt: at };
+        const record: RequestRecord = { requestId: request.requestId, operation: "control", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
+        cell.record = record; receipt = decided;
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
+    },
+    async retry(id, request, at) {
+      assertControlRequest(request);
+      let receipt: RetryReceipt | undefined;
+      await session.commit(async tx => {
+        const rawOriginal = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        const original = rawOriginal ? plain(rawOriginal) : undefined;
+        if (!original) throw new DomainError("JOB_NOT_FOUND");
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "retry", jobId: id, actor: request.actor, ...(request.reason === undefined ? {} : { reason: request.reason }) })).digest("hex");
+        const key = createHash("sha256").update(request.requestId).digest("hex");
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "retry" || existing.payloadHash !== payloadHash) throw new DomainError("CONTROL_CONFLICT");
+          receipt = { ...(plain(existing.receipt) as RetryReceipt), replayed: true };
+          return;
+        }
+        if (!terminalStatuses.has(original.status)) throw new DomainError("RETRY_NOT_ALLOWED");
+        const retryJob: JobRecord = {
+          id: createId(), status: "queued", task: original.task, cwd: original.cwd,
+          agent: plain(original.agent), model: plain(original.model), thinkingLevel: original.thinkingLevel,
+          createdAt: at, updatedAt: at, createdBy: plain(request.actor), notified: false,
+          retryOf: original.id, rootAttemptId: original.rootAttemptId ?? original.id, attemptNumber: (original.attemptNumber ?? 1) + 1,
+        };
+        const next: RetryReceipt = { jobId: retryJob.id, requestId: request.requestId, action: "retry", previousStatus: original.status, status: "queued", replayed: false, appliedAt: at, retryJobId: retryJob.id, retryOf: original.id, attemptNumber: retryJob.attemptNumber };
+        await commitJob(tx, retryJob);
+        const history = await tx.doc(JobControlDocFamily, id, { events: [] });
+        history.events = [...(history.events ?? []), { action: "retry" as const, requestId: request.requestId, actor: plain(request.actor), requestedAt: at, appliedAt: at, previousStatus: original.status, nextStatus: original.status, result: retryJob.id }].slice(-128);
+        const review = await tx.doc(JobReviewDocFamily, retryJob.id, { status: initialReviewStatus(retryJob) });
+        review.status = initialReviewStatus(retryJob);
+        cell.record = { requestId: request.requestId, operation: "retry", actor: plain(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: retryJob.id, status: "queued", agent: retryJob.agent.name }, receipt: next as unknown as JsonValue };
+        receipt = next;
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
+    },
     async consume(id, request, at) {
       let receipt: ConsumeReceipt | undefined;
       await session.commit(async tx => {
@@ -196,6 +292,18 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (!job || !job.id) return;
         if (!job.notified) { job.notified = true; job.updatedAt = clock(); }
         await writeIndexFor(tx, job);
+      }, context);
+    },
+    async finishCancelled(id, detail, at) {
+      const result: JobResult = { finalResponse: "", durationMs: 0, model: { provider: "unknown", modelId: "unknown" }, status: "interrupted", error: detail };
+      await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
+        if (!job || job.status !== "cancelling") return;
+        result.model = structuredClone(job.model);
+        job.status = "cancelled"; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, error: detail };
+        job.finishedAt = at; job.updatedAt = at; delete job.control;
+        const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));
+        await writeIndexFor(tx, job, false, true);
       }, context);
     },
     async finish(id, result, at) {

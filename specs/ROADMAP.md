@@ -80,7 +80,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | ---: | --- | --- | --- | --- |
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
-| 02 | `lista para planificar` | Cancelación, pausa, reanudación y retry durables | 01 | Crear y revisar el plan de implementación, manteniendo la pausa activa como no soportada. |
+| 02 | `en validación` | Cancelación, pausa, reanudación y retry durables | 01 | Completar aceptación TUI final, revisión independiente y decisión humana de promoción; gates automatizados repetidos con 99/99 pruebas y host Pi 1.0.4. Mantener la pausa activa como no soportada. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
@@ -184,6 +184,9 @@ Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](02-
 ### Entregables
 
 - control idempotente común para comando, tool y RPC futuro;
+- migración explícita esquema 3 → 4 con backup y bloqueo del runtime;
+- comandos `cancel`, `pause`, `resume`, `retry` y tool `pi_agents_control`;
+- estados `paused`, `cancelling`, `cancelled` e incertidumbre `interrupted`;
 - cancelación de jobs en cola y activos;
 - pausa y reanudación de jobs en cola;
 - retry como nuevo job enlazado e historial inmutable;

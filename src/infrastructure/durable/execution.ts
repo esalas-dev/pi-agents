@@ -3,7 +3,7 @@ import { AssistantEntry, configure, type ConversationId, type Harness, type Subm
 import type { Clock } from "../../domain/requests.ts";
 import type { JobModel, JobRecord, JobResult } from "../../domain/jobs.ts";
 
-export type DurableExecution = { create(tx: Tx, job: JobRecord): Promise<number>; submit(job: JobRecord): Promise<number>; wait(job: JobRecord): Promise<JobResult> };
+export type DurableExecution = { create(tx: Tx, job: JobRecord): Promise<number>; submit(job: JobRecord): Promise<number>; wait(job: JobRecord): Promise<JobResult>; abort(job: JobRecord): Promise<"aborted" | "already_terminal" | "uncertain"> };
 function assistantText(entry: unknown): { text: string; model?: JobModel } {
   const first = (entry as { model?: Array<{ role?: string; provider?: string; model?: string; content?: Array<{ type?: string; text?: string }> }> } | undefined)?.model?.[0];
   if (first?.role !== "assistant") return { text: "" };
@@ -23,6 +23,21 @@ export function createExecution(harness: Harness, context: Context, tools: Reado
       if (!conversation) throw new Error("La conversación durable no existe.");
       const submission = await conversation.submit({ type: "input", content: job.task, requestId: `pi-agents:${job.id}` }, context);
       return submission.id;
+    },
+    async abort(job) {
+      if (job.conversationId === undefined) return "uncertain";
+      const conversation = await harness.conversation(job.conversationId as ConversationId, context);
+      if (!conversation) return "uncertain";
+      try {
+        await conversation.abort(context);
+        return "aborted";
+      } catch {
+        if (job.submissionId === undefined) return "uncertain";
+        const result = await harness.abortSubmission(job.submissionId as SubmissionId, context, job.conversationId as ConversationId);
+        if (result === "aborted") return "aborted";
+        if (result === "settled") return "already_terminal";
+        return "uncertain";
+      }
     },
     async wait(job) {
       if (job.submissionId === undefined || job.conversationId === undefined) throw new Error("La ejecución durable carece de identificadores.");

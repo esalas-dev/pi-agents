@@ -35,9 +35,9 @@ Busca:
 
 Los archivos se ordenan por nombre para que la resolución sea determinista. Primero se insertan los personales y después los de proyecto, produciendo reemplazo por `name`.
 
-### Registro, cola y consulta (esquemas 2 y 3)
+### Registro, cola, consulta y control (esquemas 2, 3 y 4)
 
-La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. En el esquema 3 también separa `JobReviewDocFamily` y `JobConsumptionDocFamily`. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de la operación (`start`, `consume` o `review`).
+La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. En el esquema 3 también separa `JobReviewDocFamily` y `JobConsumptionDocFamily`; el esquema 4 añade `JobControlDocFamily`, `controlHistory`, campos de intento y estados de ciclo de vida. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de la operación (`start`, `consume`, `review`, `control` o `retry`). Las mutaciones de cola y control actualizan job, índice, ledger e historial en el mismo commit.
 
 `QueryService` implementa `getJob` y `listJobs` sobre snapshots Durable. El listado filtra la proyección compacta y usa un cursor keyset opaco de `(createdAt,id)` descendente; no depende del arreglo de orden de cola y no materializa `JobResultDocFamily`. La vista de resultado se carga aparte mediante `ResultService`.
 
@@ -73,10 +73,15 @@ provisioning
 running
   │ Submission.wait()
   ├──────── respuesta ────────▶ completed
-  └──────── error terminal ───▶ failed
+  ├──────── error terminal ───▶ failed
+  └──────── intención cancel ─▶ cancelling ── aborto confirmado ─▶ cancelled
+
+queued ── pause ──▶ paused ── resume ──▶ queued
+queued/paused ── cancel ──▶ cancelled
+retry terminal ──▶ nuevo queued enlazado por `retryOf`
 ```
 
-`interrupted` está reservado en el protocolo público para resultados irreanudables. El cierre normal no convierte trabajos en interrumpidos: Pi Durable deja las tareas pendientes y las reconcilia al reabrir.
+`interrupted` está reservado en el protocolo público para resultados irreanudables o cancelaciones inciertas. El cierre normal no convierte trabajos en interrumpidos: Pi Durable deja las tareas pendientes y las reconcilia al reabrir. La pausa activa devuelve `PAUSE_ACTIVE_UNSUPPORTED`; no se simula con un flag.
 
 ## Ventanas de caída
 
@@ -104,7 +109,7 @@ De esta forma no se reservan muchas tareas Durable que aparenten estar ejecután
 
 ## Persistencia por sesión principal
 
-El archivo usa el ID de la sesión Pi. Una base de esquema 2 no abre el Harness: mantenimiento TUI, autorización humana y backup verificado deben completar la migración atómica 2 → 3. Esto aporta:
+El archivo usa el ID de la sesión Pi. Una base de esquema 2 no abre el Harness: mantenimiento TUI, autorización humana y backup verificado deben completar 2 → 3; una base de esquema 3 requiere después 3 → 4. Ambas migraciones son explícitas y atómicas. Esto aporta:
 
 - `status` y `result` con semántica local a la conversación principal;
 - notificaciones dirigidas a la sesión que inició el trabajo;
@@ -121,7 +126,7 @@ Esto mantiene autenticación y proveedores ordinarios sin depender de internals.
 
 ## Herramientas
 
-Además de `pi_agents` para admitir trabajos, la extensión registra `pi_agents_status`, `pi_agents_list`, `pi_agents_wait` y `pi_agents_result`. Estas tools delegan en `JobsService`; no implementan transiciones ni aprobación.
+Además de `pi_agents` para admitir trabajos, la extensión registra `pi_agents_status`, `pi_agents_list`, `pi_agents_wait`, `pi_agents_result` y `pi_agents_control`. El comando expone `cancel`, `pause`, `resume` y `retry`. Estas tools delegan en `JobsService`; no implementan transiciones ni aprobación.
 
 El esquema 3 protege los resultados con revisión separada: jobs iniciados por modelo o extensión quedan `pending` tras migración; una tool no recibe el cuerpo `pending` o `rejected`. `approve`/`reject` exige actor humano desde la TUI activa y solo cambia el documento de revisión. `peek` humano no marca consumo; `consume` exige `requestId` y actualiza ledger y agregado de consumo en el mismo commit.
 
@@ -136,10 +141,10 @@ Se instala únicamente `CodingTools` de Pi Durable:
 
 No se conserva un `ExtensionToolContext` de la llamada original: su vida termina cuando la herramienta principal retorna. Por ello no sería correcto intentar invocar posteriormente `ctx.executeTool()` desde el trabajo de fondo.
 
-Las herramientas Durable aplican sus políticas de replay. Efectos no seguros no se repiten ciegamente después de una caída.
+Las herramientas Durable aplican sus políticas de replay. La cancelación activa persiste primero `control.pending` y el coordinador usa únicamente `Conversation.abort()`/`Harness.abortSubmission()`. Si el aborto no se puede confirmar, persiste `interrupted`; solo la confirmación publica `cancelled`. Efectos no seguros no se repiten ciegamente después de una caída.
 
 ## Seguridad
 
-La confianza del proyecto es una barrera de carga, no una sandbox. La extensión no lee `.pi/agents` cuando `ctx.isProjectTrusted()` es falso. Una vez autorizado, instrucciones y herramientas se ejecutan con los permisos del proceso anfitrión.
+La tool de control exige `request_id`; los actores model no pueden controlar jobs humanos bajo la política predeterminada y la cancelación activa requiere autoridad TUI. La confianza del proyecto es una barrera de carga, no una sandbox. La extensión no lee `.pi/agents` cuando `ctx.isProjectTrusted()` es falso. Una vez autorizado, instrucciones y herramientas se ejecutan con los permisos del proceso anfitrión.
 
 SQLite y las notificaciones pueden contener información sensible. No deben publicarse ni incorporarse al repositorio.

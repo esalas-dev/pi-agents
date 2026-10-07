@@ -11,7 +11,7 @@ import { parsePiAgentsCommand, CommandSyntaxError } from "../../command.ts";
 import type { JobRecord, JobResult } from "../../domain/jobs.ts";
 import type { StartRequest } from "../../domain/requests.ts";
 import { resolveInput, type PiBindings } from "./resolve.ts";
-import { formatList, formatResult, formatReview, formatStatus, formatWait, briefSummary, truncateToolResult } from "./display.ts";
+import { formatControl, formatList, formatResult, formatReview, formatStatus, formatWait, briefSummary, truncateToolResult } from "./display.ts";
 import { discoverAgents } from "../../agents.ts";
 
 const NOTICE = "pi-agents-notice"; const OUTPUT = "pi-agents-output"; const MAX_CONCURRENCY = 16;
@@ -86,6 +86,17 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
       if (command.action === "status" || command.action === "result") { const view = command.action === "status" ? await current.runtime.jobs.status(command.id) : await current.runtime.jobs.result(command.id); if (!view.success) throw new Error(view.error.message); pi.appendEntry(OUTPUT, { title: `${command.action === "status" ? "Estado" : "Resultado"} · ${command.id}`, text: command.action === "status" ? formatStatus(view.value) : formatResult(view.value), level: "info", jobId: command.id }); return; }
       if (command.action === "list") { const page = await current.runtime.jobs.listJobs({ statuses: command.statuses as any, limit: command.limit, cursor: command.cursor, pendingReview: command.pendingReview }); if (!page.success) throw new Error(page.error.message); pi.appendEntry(OUTPUT, { title: "Trabajos", text: formatList(page.value), level: "info" }); return; }
       if (command.action === "wait") { const waited = await current.runtime.jobs.waitForJob(command.id, { until: command.until as any, timeoutSeconds: command.timeoutSeconds }); if (!waited.success) throw new Error(waited.error.message); pi.appendEntry(OUTPUT, { title: `Espera · ${command.id}`, text: formatWait(waited.value), level: "info", jobId: command.id }); return; }
+      if (["cancel", "pause", "resume", "retry"].includes(command.action)) {
+        const status = await current.runtime.jobs.status(command.id); if (!status.success) throw new Error(status.error.message);
+        const active = ["provisioning", "running", "cancelling"].includes(status.value.job.status);
+        if (command.action === "cancel" && active) {
+          if (!canConfirmMigration(ctx)) throw new Error("La cancelación activa requiere la TUI con UI activa.");
+          if (!command.yes && !await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${command.id}?`)) throw new Error("Cancelación no autorizada.");
+        }
+        const request = { requestId, action: command.action, actor: { kind: "human", id: "tui" }, ...(command.reason === undefined ? {} : { reason: command.reason }) } as any;
+        const outcome = command.action === "retry" ? await current.runtime.jobs.retry(command.id, request) : await current.runtime.jobs.control(command.id, request);
+        if (!outcome.success) throw new Error(outcome.error.message); pi.appendEntry(OUTPUT, { title: `Control · ${command.id}`, text: formatControl(outcome.value), level: "info", jobId: command.id }); return;
+      }
       if (!canConfirmMigration(ctx)) throw new Error("La revisión requiere la TUI con UI activa.");
       const review = await current.runtime.jobs.decideReview(command.id, { requestId, status: command.action === "approve" ? "approved" : "rejected", actor: { kind: "human", id: "tui" }, ...(command.reason === undefined ? {} : { reason: command.reason }) });
       if (!review.success) throw new Error(review.error.message); pi.appendEntry(OUTPUT, { title: "Revisión", text: formatReview(review.value), level: "info", jobId: command.id });

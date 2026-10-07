@@ -1,6 +1,6 @@
 import type { JobFilter, JobListView, JobRecord, JobQueryView, JobView, ResultView, WaitOptions } from "../domain/jobs.ts";
 import { DomainError, failure, type Outcome } from "../domain/errors.ts";
-import type { AdmissionReceipt, ConsumeReceipt, ConsumeRequest, ResolveInput, ReviewReceipt, StartRequest } from "../domain/requests.ts";
+import type { AdmissionReceipt, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, ResolveInput, ReviewReceipt, RetryReceipt, RetryRequest, StartRequest } from "../domain/requests.ts";
 import type { ResultAccess, ReviewDecision } from "../domain/jobs.ts";
 import type { JobRepository } from "../infrastructure/durable/repository.ts";
 import type { StartService } from "./start.ts";
@@ -11,6 +11,8 @@ import type { QueryService } from "./query.ts";
 
 export type JobsService = {
   start(request: StartRequest, resolve: ResolveInput): Promise<Outcome<AdmissionReceipt>>;
+  control(id: string, request: ControlRequest): Promise<Outcome<ControlReceipt>>;
+  retry(id: string, request: RetryRequest): Promise<Outcome<RetryReceipt>>;
   status(id: string): Promise<Outcome<JobView>>;
   getJob(id: string, options?: { includeTask?: boolean }): Promise<Outcome<JobQueryView>>;
   listJobs(filter: JobFilter): Promise<Outcome<{ items: readonly JobListView[]; nextCursor?: string }>>;
@@ -23,9 +25,17 @@ export type JobsService = {
   unnotified(): Promise<Outcome<JobRecord[]>>;
 };
 
-export function createJobsService(repository: JobRepository, startService: StartService, waitService?: WaitService, resultService?: ResultService, reviewService?: ReviewService, queryService?: QueryService): JobsService {
+export function createJobsService(repository: JobRepository, startService: StartService, waitService?: WaitService, resultService?: ResultService, reviewService?: ReviewService, queryService?: QueryService, controlService?: { control(id: string, request: ControlRequest): Promise<Outcome<ControlReceipt>>; retry(id: string, request: RetryRequest): Promise<Outcome<RetryReceipt>> }): JobsService {
   return {
     start: (request, resolve) => startService.start(request, resolve),
+    async control(id, request) {
+      if (!controlService) return failure(new DomainError("STORAGE_ERROR"));
+      return controlService.control(id, request);
+    },
+    async retry(id, request) {
+      if (!controlService) return failure(new DomainError("STORAGE_ERROR"));
+      return controlService.retry(id, request);
+    },
     async status(id) {
       const job = await repository.get(id);
       if (!job) return failure(new DomainError("JOB_NOT_FOUND"));

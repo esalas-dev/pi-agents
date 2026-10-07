@@ -12,7 +12,14 @@ export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string 
 export type ConsumeRequest = { requestId: string; actor: Actor; consumer: string };
 export type ConsumeReceipt = { jobId: string; requestId: string; consumedAt: number; consumedBy: string; count: number; result: JobResult };
 export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; reason?: string };
-export type RequestOperation = "start" | "consume" | "review" | (string & {});
+export type ControlAction = "pause" | "resume" | "cancel" | "retry";
+export type ControlRequest = { requestId: string; action: ControlAction; actor: Actor; reason?: string };
+export type RetryRequest = Omit<ControlRequest, "action"> & { action: "retry" };
+export type ControlEvent = { action: ControlAction; requestId: string; actor: Actor; requestedAt: number; appliedAt?: number; previousStatus: string; nextStatus: string; result?: string; error?: string };
+export type ControlReceipt = { jobId: string; requestId: string; action: ControlAction; previousStatus: string; status: string; replayed: boolean; appliedAt?: number; error?: string };
+export type RetryReceipt = ControlReceipt & { retryJobId?: string; retryOf?: string; attemptNumber?: number };
+export type ControlPolicy = (job: { createdBy?: Actor }, request: ControlRequest) => boolean;
+export type RequestOperation = "start" | "consume" | "review" | "control" | (string & {});
 export type RequestRecord = { requestId: string; operation: RequestOperation; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt; receipt?: import("@earendil-works/chord").JsonValue };
 export type MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number };
 export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
@@ -27,6 +34,13 @@ function jsonValue(value: unknown): unknown {
     return object;
   }
   throw new DomainError("INVALID_REQUEST", "La solicitud contiene un valor no serializable.");
+}
+
+export function assertControlRequest(request: ControlRequest): void {
+  if (!request || typeof request !== "object" || typeof request.requestId !== "string" || !request.requestId
+    || !request.actor || typeof request.actor !== "object" || !["human", "model", "extension", "system"].includes(request.actor.kind)
+    || !["pause", "resume", "cancel", "retry"].includes(request.action)
+    || (request.reason !== undefined && (typeof request.reason !== "string" || request.reason.length > 2048))) throw new DomainError("INVALID_REQUEST");
 }
 
 export function canonicalJson(value: unknown): string {

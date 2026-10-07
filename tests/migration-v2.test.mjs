@@ -64,7 +64,9 @@ test('declinada no modifica esquema 2 y esquema 3 es idempotente', async () => {
     assert.equal(declined.success, false); assert.equal(declined.error.code, 'MIGRATION_DECLINED'); assert.equal((await snapshots(database)).meta.storageSchemaVersion, 2);
     const approved = await service.migrate({ dbPath: database, clock: () => 2000, confirm: async value => ({ requestId: 'human:migrate-v2', actor: { kind: 'human' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2001 }) });
     assert.equal(approved.success, true);
-    const repeated = await service.migrate({ dbPath: database, clock: () => 2002, confirm: async () => { calls++; } });
-    assert.deepEqual(repeated.value, { schemaVersion: 3, migratedJobs: 0 }); assert.equal(calls, 1);
+    const upgraded = await service.migrate({ dbPath: database, clock: () => 2001, confirm: async value => ({ requestId: 'human:migrate-v3', actor: { kind: 'human' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2002 }) });
+    assert.deepEqual(upgraded.value, { schemaVersion: 4, migratedJobs: 3 });
+    const repeated = await service.migrate({ dbPath: database, clock: () => 2003, confirm: async () => { calls++; throw new Error('no authorization on current schema'); } });
+    assert.deepEqual(repeated.value, { schemaVersion: 4, migratedJobs: 0 }); assert.equal(calls, 1);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
