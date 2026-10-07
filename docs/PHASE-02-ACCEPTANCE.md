@@ -1,6 +1,6 @@
 # Aceptación de fase 02 — control durable del ciclo de vida
 
-Estado: **en validación**. La implementación está en `feat/phase-02`; falta la aceptación TUI humana y el gate de type-check requiere una instalación que no se añade automáticamente.
+Estado: **en validación**. La implementación está en `feat/phase-02`; los gates automatizados se han repetido correctamente con dependencias locales. Siguen pendientes la aceptación TUI humana final, la revisión independiente y la decisión humana de promoción/merge.
 
 ## Alcance implementado
 
@@ -36,7 +36,7 @@ Estado: **en validación**. La implementación está en `feat/phase-02`; falta l
 pi_agents_control({ id, action, request_id, reason? })
 ```
 
-## Evidencia de gates ejecutados
+## Evidencia histórica de gates ejecutados
 
 | Comando | Resultado |
 | --- | --- |
@@ -61,8 +61,18 @@ Sesión `phase02-tui`, con `PI_AGENTS_CONCURRENCY=1` y almacenamiento temporal:
 
 La fixture de migración contenía conversaciones/submissions inexistentes y modelo `faux`; por eso la reapertura produjo errores esperables en jobs `queued`, `provisioning` y `running`. Los estados terminales y el job `paused` se conservaron correctamente. Esto cuenta como evidencia TUI parcial, no como aceptación final limpia.
 
+## Revalidación automatizada — 2026-10-06 (2026-10-07 UTC)
+
+Checkout: `.worktrees/phase-02`, rama `feat/phase-02`, código en `d97118247e5a008a6961b1162aded15d544c0a55`. Node `26.10.0`, Pi host `1.0.4`.
+
+- `npm ci --omit=peer`: instalación exacta desde el lockfile, con TypeScript `5.9.3` y `@types/node` `26.6.4`; sin materializar el peer local de Pi. Se retiraron metadatos `.DS_Store` de `node_modules` que impedían su limpieza.
+- `npm run check`: type-check contra los tipos del host Pi `1.0.4` y sintaxis verdes (código 0).
+- `npm test`: **99/99 pasan**, sin fallos, cancelaciones ni pruebas omitidas; incluye las pruebas de TypeScript antes bloqueadas.
+- `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models '__phase02_smoke_no_model__'`: código 0, sin modelos coincidentes. Acredita carga offline, no aceptación TUI.
+- `npm pack --dry-run --json`: código 0, 37 archivos; no incluye SQLite, backups ni configuración local.
+- La instalación y los gates no modificaron archivos versionados. Esta actualización documental registra la evidencia nueva sin borrar las limitaciones de las ejecuciones anteriores.
+
 ## Gates pendientes
 
-1. Repetir los tests de type-check con el binario disponible en la ruta esperada por `tests/typecheck.test.mjs`.
-2. Realizar smoke TUI humano desde un directorio no relacionado: cancelación confirmada, pausa queued, resume, retry y migración.
-3. Revisión independiente de la rama y decisión humana sobre promoción/merge.
+1. Realizar smoke TUI humano desde un directorio no relacionado: cancelación confirmada, pausa queued, resume, retry y migración.
+2. Revisión independiente de la rama y decisión humana sobre promoción/merge.
