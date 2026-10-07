@@ -50,14 +50,14 @@ function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId): JobRepository {
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
-  const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult = Boolean(job.result)) => {
+  const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult?: boolean) => {
     const index = await tx.doc(JobsIndexDoc);
     if (remove) {
       delete index.summaries[job.id];
       index.order = index.order.filter((id: string) => id !== job.id);
       return;
     }
-    index.summaries[job.id] = summary(job, hasResult);
+    index.summaries[job.id] = summary(job, hasResult ?? index.summaries[job.id]?.hasResult ?? Boolean(job.result));
     if (!index.order.includes(job.id) && job.status === "queued") index.order.push(job.id);
     if (job.status !== "queued") index.order = index.order.filter((id: string) => id !== job.id);
   };
