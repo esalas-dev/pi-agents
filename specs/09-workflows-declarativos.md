@@ -179,13 +179,13 @@ Si cambia algún artefacto después de aprobar, la aprobación queda obsoleta y 
 ### Comandos
 
 ```text
-/pi-agents workflow validate <nombre|ruta>
-/pi-agents workflow run <nombre> --input clave=valor
-/pi-agents workflow status <run-id>
-/pi-agents workflow approve <run-id> <step-id> [--reason <texto>]
-/pi-agents workflow reject <run-id> <step-id> [--reason <texto>]
-/pi-agents workflow cancel <run-id>
-/pi-agents workflow rerun <run-id>
+/subagents workflow validate <nombre|ruta>
+/subagents workflow run <nombre> --input clave=valor
+/subagents workflow status <run-id>
+/subagents workflow approve <run-id> <step-id> [--reason <texto>]
+/subagents workflow reject <run-id> <step-id> [--reason <texto>]
+/subagents workflow cancel <run-id>
+/subagents workflow rerun <run-id>
 ```
 
 ### Tool/RPC

@@ -58,15 +58,15 @@ Los agentes del proyecto reemplazan por nombre a los personales. Solo se leen cu
 ## Uso manual
 
 ```text
-/pi-agents <agente> "<tarea>"
-/pi-agents status <id>
-/pi-agents result <id>
+/subagents <agente> "<tarea>"
+/subagents status <id>
+/subagents result <id>
 ```
 
 Ejemplo:
 
 ```text
-/pi-agents reviewer "Revisa los cambios actuales y prioriza defectos funcionales"
+/subagents reviewer "Revisa los cambios actuales y prioriza defectos funcionales"
 ```
 
 El inicio agrega una entrada con un ID como `psa_7ab31c01db62`. `status` muestra estado, agente, modelo, cwd, duración y error. `result` añade además la respuesta final completa cuando está disponible.

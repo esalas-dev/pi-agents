@@ -79,8 +79,8 @@ El resultado terminal referencia conteo e IDs, no copia todos los mensajes.
 ### Comando
 
 ```text
-/pi-agents steer <id> "<mensaje>" [--reason <texto>]
-/pi-agents steering <id>
+/subagents steer <id> "<mensaje>" [--reason <texto>]
+/subagents steering <id>
 ```
 
 El comando requiere confirmación si el job fue creado por otro actor y el mensaje podría cambiar una ejecución con efectos.

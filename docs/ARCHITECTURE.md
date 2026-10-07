@@ -5,7 +5,7 @@
 La extensión ofrece dos entradas al mismo coordinador:
 
 ```text
-/pi-agents ─┐
+/subagents ─┐
            ├─ resolver agente/modelo → JobsDoc → cola → conversación Durable
 pi_agents ──┘                                      └─ envío → generación/herramientas
                                                              └─ resultado → notificación Pi

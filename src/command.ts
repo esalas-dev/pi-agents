@@ -61,18 +61,18 @@ export function tokenizeCommandLine(input: string): string[] {
 export function parsePiAgentsCommand(input: string): PiAgentsCommand {
   const tokens = tokenizeCommandLine(input);
   if (tokens.length === 0) {
-    throw new CommandSyntaxError('Uso: /pi-agents <agente> "<tarea>" | status <id> | result <id>');
+    throw new CommandSyntaxError('Uso: /subagents <agente> "<tarea>" | status <id> | result <id>');
   }
 
   if (tokens[0] === "status" || tokens[0] === "result") {
     if (tokens.length !== 2 || !tokens[1]) {
-      throw new CommandSyntaxError(`Uso: /pi-agents ${tokens[0]} <id>`);
+      throw new CommandSyntaxError(`Uso: /subagents ${tokens[0]} <id>`);
     }
     return { action: tokens[0], id: tokens[1] };
   }
 
   if (tokens.length < 2) {
-    throw new CommandSyntaxError('Uso: /pi-agents <agente> "<tarea>"');
+    throw new CommandSyntaxError('Uso: /subagents <agente> "<tarea>"');
   }
   return { action: "start", agent: tokens[0], task: tokens.slice(1).join(" ") };
 }

@@ -124,10 +124,10 @@ No se sobrescriben solicitudes previas.
 ### Comandos
 
 ```text
-/pi-agents cancel <id> [--reason <texto>]
-/pi-agents pause <id> [--reason <texto>]
-/pi-agents resume <id> [--reason <texto>]
-/pi-agents retry <id> [--reason <texto>]
+/subagents cancel <id> [--reason <texto>]
+/subagents pause <id> [--reason <texto>]
+/subagents resume <id> [--reason <texto>]
+/subagents retry <id> [--reason <texto>]
 ```
 
 `cancel` sobre un job activo requiere confirmación interactiva cuando hay TUI. En modo no interactivo exige `--yes`.

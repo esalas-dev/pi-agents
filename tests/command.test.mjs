@@ -21,6 +21,10 @@ test('analiza status y result con exactamente un id', () => {
   assert.throws(() => parsePiAgentsCommand('result a b'), CommandSyntaxError);
 });
 
+test('usa /subagents en la ayuda de sintaxis', () => {
+  assert.throws(() => parsePiAgentsCommand(''), /Uso: \/subagents/);
+});
+
 test('rechaza comillas abiertas y conserva escapes en comillas dobles', () => {
   assert.deepEqual(tokenizeCommandLine('agent "usa \\"npm test\\""'), ['agent', 'usa "npm test"']);
   assert.throws(() => tokenizeCommandLine('agent "incompleta'), /comilla sin cerrar/);
