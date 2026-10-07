@@ -47,6 +47,20 @@ pi_agents_control({ id, action, request_id, reason? })
 | `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models ...` | Pasa; no encontró modelos coincidentes. |
 | `npm pack --dry-run --json` | Pasa; no incluye SQLite, backups ni configuración local. |
 
+## Evidencia TUI ejecutada
+
+Sesión `phase02-tui`, con `PI_AGENTS_CONCURRENCY=1` y almacenamiento temporal:
+
+- pausa de un job `queued`: `pause → paused`;
+- reanudación: `resume → queued`, con posición visible;
+- cancelación `queued`: `cancel → cancelled`;
+- retry: creó un ID nuevo y dejó el intento original `cancelled` e inmutable;
+- pausa activa: devolvió `PAUSE_ACTIVE_UNSUPPORTED`;
+- cancelación activa: confirmó `cancel → cancelled` mediante TUI;
+- migración 3→4: autorización TUI aceptada; después de cerrar la sesión, `inspectStorage` confirmó `schemaVersion: 4`.
+
+La fixture de migración contenía conversaciones/submissions inexistentes y modelo `faux`; por eso la reapertura produjo errores esperables en jobs `queued`, `provisioning` y `running`. Los estados terminales y el job `paused` se conservaron correctamente. Esto cuenta como evidencia TUI parcial, no como aceptación final limpia.
+
 ## Gates pendientes
 
 1. Repetir los tests de type-check con el binario disponible en la ruta esperada por `tests/typecheck.test.mjs`.
