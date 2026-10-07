@@ -1,4 +1,4 @@
-# pi-agents
+# pi-durable-subagents
 
 Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación** en una conversación aislada y durable, en segundo plano y dentro del mismo proceso. Devuelve inmediatamente un ID, limita la concurrencia, persiste el trabajo en SQLite y notifica su finalización en la sesión principal.
 
@@ -17,16 +17,16 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 Para una instalación local desde el código fuente, instala primero las dependencias propias del paquete —Pi no modifica paquetes locales— y después regístralo desde cualquier directorio:
 
 ```sh
-cd /ruta/a/pi-agents
+cd /ruta/a/pi-durable-subagents
 npm install --omit=peer
-pi install /ruta/a/pi-agents
+pi install /ruta/a/pi-durable-subagents
 pi list
 ```
 
 Pi registra una referencia a esta carpeta; no debe moverse sin reinstalar el paquete. Después de modificar el código usa `/reload` o reinicia Pi. Para retirarlo:
 
 ```sh
-pi remove /ruta/a/pi-agents
+pi remove /ruta/a/pi-durable-subagents
 ```
 
 La instalación debe ser personal, sin `--local`, si se desea disponer de la extensión en distintos proyectos.
@@ -171,7 +171,7 @@ Para verificar que Pi puede cargar el paquete sin invocar un modelo:
 
 ```sh
 PI_OFFLINE=1 pi --no-extensions \
-  --extension /ruta/a/pi-agents/index.ts \
+  --extension /ruta/a/pi-durable-subagents/index.ts \
   --list-models __pi_agents_smoke_no_match__
 ```
 
