@@ -55,7 +55,7 @@ Entorno objetivo exacto: macOS arm64, Node26.10.0, Pi1.0.4 y Pi Durable1.0.1. Ra
 - Tests nuevos indicados por tarea; reutilizar `tests/helpers/store.mjs`. `tests/helpers/runtime.mjs` NO existe en esta base y no debe usarse por suponerlo presente.
 - README/ARCHITECTURE y aceptación separada de pruebas offline/host/fase03. Package ya incluye src/docs; no alterar manifests ni lockfiles por este cambio.
 
-### P1: Persistir procedencia nativa y conservarla sin adopción por replay
+### Task 1: P1 — Persistir procedencia nativa y conservarla sin adopción por replay
 
 **Files:** Modify requests.ts/jobs.ts, repository.ts, application/start.ts y control.ts; Modify `tests/helpers/store.mjs`; Create `tests/parent-admission.test.mjs`. Paths de src según mapa.
 
@@ -85,7 +85,7 @@ Añadir tests nombrados «resolver no introduce ownership», «replay no reasign
 - [ ] **4. GREEN:** `node --test tests/parent-admission.test.mjs tests/start-service.test.mjs tests/retry.test.mjs tests/control.test.mjs`; `npm run check`; `git diff --check`. Logs reales p1-green/check. Si replay de start sigue fuera de transacción, debe revalidar autoridad al acabar el read y conservar vínculo inmutable; no declarar propiedad a partir de un ledger legacy.
 - [ ] **5. Commit** solo Files P1: `feat: record trusted native parent provenance`; report/packaged BASE..HEAD/review independiente; no P2 hasta gate.
 
-### P2: Revisar con autoridad parental, precedencia humana y acceso vigente
+### Task 2: P2 — Revisar con autoridad parental, precedencia humana y acceso vigente
 
 **Files:** Modify jobs.ts/requests.ts/documents.ts/repository.ts, application/review.ts y result.ts si el guard compartido lo requiere; Create `tests/parent-review.test.mjs`; Modify `tests/review-consume.test.mjs` para regresión de replay. No modificar herramientas aún.
 
@@ -114,7 +114,7 @@ Tests críticos adicionales: humano aprueba MISMO status del padre→decidedByAc
 - [ ] **4. GREEN:** `node --test tests/parent-review.test.mjs tests/review-consume.test.mjs tests/query.test.mjs`; `npm run check`; `git diff --check`; logs p2-green/check y snapshot after rollback. Result peek debe consultar política vigente; no añadir ruta que lea pending ni prometer resolver toda integración RPC inexistente.
 - [ ] **5. Commit** solo Files P2: `feat: authorize scoped parent result reviews`; report y review BASE..HEAD. No P3 hasta gate.
 
-### P3: Exponer la herramienta al padre y sellar sesiones sin esperar modelos
+### Task 3: P3 — Exponer la herramienta al padre y sellar sesiones sin esperar modelos
 
 **Files:** Create `src/application/parent.ts`, `tests/parent-native-runtime.test.mjs`; Modify runtime/session.ts, runtime/coordinator.ts, adapters/pi/register.ts/display.ts; Modify `tests/pi-query-adapters.test.mjs`, `tests/pi-adapters.test.mjs`, `tests/coordinator.test.mjs`, `tests/session-runtime.test.mjs`. No cambio de selección CodingTools ni perfiles worker dentro del producto.
 
@@ -146,7 +146,7 @@ Presentación usa formatReview con autor real/recibo; texto no llama humana a de
 - [ ] **4. GREEN:** `node --test --test-timeout=10000 tests/parent-native-runtime.test.mjs tests/coordinator.test.mjs tests/pi-query-adapters.test.mjs tests/pi-adapters.test.mjs tests/session-runtime.test.mjs`; `npm run check`; `git diff --check`. Evidencia p3-green/check incluye asserts de cierre y writer drain, no solo tools.map.
 - [ ] **5. Commit** solo Files P3: `feat: expose native parent review tool`; report/range review. No instalación/load todavía ni aprobar con una herramienta que no está cargada.
 
-### P4: Aceptación offline, documentación y revisión de rama
+### Task 4: P4 — Aceptación offline, documentación y revisión de rama
 
 **Files:** Create `tests/parent-approval-acceptance.test.mjs`, `docs/PARENT-REVIEW-ACCEPTANCE.md`; Modify `README.md`, `docs/ARCHITECTURE.md`. No Git promoción ni root .pi como parte de este commit.
 
