@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
-import type { ConsumptionState, JobRecord, JobResult } from "../../domain/jobs.ts";
+import type { ConsumptionState, JobRecord, JobResult, ReviewState } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
 import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
@@ -38,7 +38,7 @@ const terminalStatuses = new Set(["completed", "failed", "interrupted", "cancell
 function initialReviewStatus(job: Pick<JobRecord, "createdBy">): "pending" | "not_required" {
   return job.createdBy?.kind === "model" || job.createdBy?.kind === "extension" ? "pending" : "not_required";
 }
-function summary(job: JobRecord, hasResult = Boolean(job.result), reviewStatus = initialReviewStatus(job)) {
+function summary(job: JobRecord, hasResult = Boolean(job.result), reviewStatus: ReviewState = initialReviewStatus(job)) {
   return { id: job.id, status: job.status, agent: job.agent.name, createdAt: job.createdAt, updatedAt: job.updatedAt, hasResult, notified: job.notified, reviewStatus };
 }
 

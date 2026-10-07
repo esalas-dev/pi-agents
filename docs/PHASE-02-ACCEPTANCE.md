@@ -36,9 +36,19 @@ Estado: **en validación**. La implementación está en `feat/phase-02`; falta l
 pi_agents_control({ id, action, request_id, reason? })
 ```
 
+## Evidencia de gates ejecutados
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run check` | El comando directo queda bloqueado por `tsc: command not found`; no se instaló ninguna dependencia. Con el `tsc` ya existente en el worktree de fase 00 mediante `PATH=... npm run check`, pasa type-check y sintaxis. |
+| Type-check directo con el `tsc` existente | Pasa sin salida; no se modificó el host. |
+| `npm test` | 95 pasan, 2 fallan únicamente porque `tests/typecheck.test.mjs` busca el binario ausente en `node_modules/typescript/bin/tsc`. |
+| Suite sin `tests/typecheck.test.mjs` | 94/94 pasan. |
+| `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models ...` | Pasa; no encontró modelos coincidentes. |
+| `npm pack --dry-run --json` | Pasa; no incluye SQLite, backups ni configuración local. |
+
 ## Gates pendientes
 
-1. Ejecutar `npm run check` con `typescript` disponible en el entorno objetivo; durante esta ejecución `node_modules/typescript/bin/tsc` no está presente y no se instaló ninguna dependencia.
-2. Ejecutar `npm test` completo y registrar el resultado del type-check.
-3. Realizar smoke Pi y aceptación TUI humana desde un directorio no relacionado.
-4. Revisión independiente de la rama y decisión humana sobre promoción/merge.
+1. Repetir los tests de type-check con el binario disponible en la ruta esperada por `tests/typecheck.test.mjs`.
+2. Realizar smoke TUI humano desde un directorio no relacionado: cancelación confirmada, pausa queued, resume, retry y migración.
+3. Revisión independiente de la rama y decisión humana sobre promoción/merge.
