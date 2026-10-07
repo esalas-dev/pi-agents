@@ -13,6 +13,7 @@ export type JobFilter = {
 export type WaitOptions = { until?: JobStatusPublic | "terminal"; timeoutSeconds?: number; signal?: AbortSignal };
 export type ResultAccess = { mode: "human" | "tool"; operation: "peek" | "consume"; actor: Actor; requestId?: string };
 export type ReviewDecision = { requestId: string; status: Exclude<ReviewState, "not_required" | "pending">; actor: Actor & { kind: "human" }; reason?: string };
+export type ParentReviewDecision = { requestId: string; status: Exclude<ReviewState, "not_required" | "pending">; reason?: string };
 export type JobListView = {
   id: string; status: JobStatusPublic; internalStatus?: JobStatus; agent: JobAgentSnapshot; model: JobModel;
   thinkingLevel: ModelThinkingLevel; cwd: string; createdAt: number; startedAt?: number; updatedAt: number;

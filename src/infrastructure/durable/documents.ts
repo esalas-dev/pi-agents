@@ -20,7 +20,7 @@ export type JobsIndex = {
 };
 export type JobDocument = JobRecord;
 export type JobResultDocument = JobResult;
-export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; reason?: string };
+export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; decidedByActor?: { kind: "human" | "model"; id?: string }; reason?: string };
 export type JobConsumptionDocument = ConsumptionState;
 export type JobControlDocument = { events: ControlEvent[] };
 export type LedgerCell = { record: JsonValue };

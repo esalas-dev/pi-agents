@@ -12,7 +12,7 @@ export type CreateId = () => string;
 export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
 export type ConsumeRequest = { requestId: string; actor: Actor; consumer: string };
 export type ConsumeReceipt = { jobId: string; requestId: string; consumedAt: number; consumedBy: string; count: number; result: JobResult };
-export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; reason?: string };
+export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; decidedByActor?: Actor; reason?: string };
 export type ControlAction = "pause" | "resume" | "cancel" | "retry";
 export type ControlRequest = { requestId: string; action: ControlAction; actor: Actor; reason?: string };
 export type RetryRequest = Omit<ControlRequest, "action"> & { action: "retry" };

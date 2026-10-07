@@ -14,7 +14,7 @@ export type JobRepository = {
   index(): Promise<JobsIndex | undefined>;
   review(id: string): Promise<JobReviewDocument | undefined>;
   consumption(id: string): Promise<ConsumptionState | undefined>;
-  decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
+  decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human" | "model"; id?: string }; reason?: string }, at: number, parent?: ParentAuthority): Promise<ReviewReceipt>;
   applyControl(id: string, request: ControlRequest, at: number): Promise<ControlReceipt>;
   retry(id: string, request: RetryRequest, at: number, parent?: ParentAuthority): Promise<RetryReceipt>;
   consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
@@ -163,30 +163,51 @@ export function createJobRepository(session: Session, context: Context, clock: C
     async consumption(id) {
       return structuredClone(await session.snapshot(JobConsumptionDocFamily, id, context) as ConsumptionState | undefined);
     },
-    async decideReview(id, decision, at) {
-      let receipt: ReviewReceipt | undefined;
-      await session.commit(async tx => {
-        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
-        if (!job) throw new DomainError("JOB_NOT_FOUND");
-        const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
-        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "review", jobId: id, status: decision.status, actor: decision.actor, ...(decision.reason === undefined ? {} : { reason: decision.reason }) })).digest("hex");
-        const key = createHash("sha256").update(decision.requestId).digest("hex");
-        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
-        const existing = cell.record as RequestRecord | null;
-        if (existing) {
-          if (existing.requestId !== decision.requestId || existing.operation !== "review" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
-          receipt = plain(existing.receipt) as ReviewReceipt;
-          return;
-        }
-        review.status = decision.status; review.decidedAt = at; review.decidedBy = decision.actor.id; review.reason = decision.reason;
-        const index = await tx.doc(JobsIndexDoc);
-        if (index.summaries[id]) index.summaries[id].reviewStatus = decision.status;
-        const decided: ReviewReceipt = { jobId: id, requestId: decision.requestId, status: decision.status, decidedAt: at, ...(decision.actor.id === undefined ? {} : { decidedBy: decision.actor.id }), ...(decision.reason === undefined ? {} : { reason: decision.reason }) };
-        const record: RequestRecord = { requestId: decision.requestId, operation: "review", actor: structuredClone(decision.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
-        cell.record = record; receipt = decided;
-      }, context);
-      if (!receipt) throw new DomainError("STORAGE_ERROR");
-      return receipt;
+    async decideReview(id, decision, at, parent) {
+      const token = beginParent(parent);
+      try {
+        let receipt: ReviewReceipt | undefined;
+        await session.commit(async tx => {
+          const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+          if (!job) throw new DomainError("JOB_NOT_FOUND");
+          const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
+          const parental = Boolean(token);
+          if (token) {
+            if (decision.actor.kind !== "model" || decision.actor.id !== `parent:${token.sessionId}` || job.parentSessionId !== token.sessionId || !token.isActive()) throw new DomainError("INVALID_REQUEST");
+            if (!([ "completed", "failed", "interrupted"] as string[]).includes(job.status)) throw new DomainError("RESULT_NOT_READY");
+            const currentIndex = await tx.doc(JobsIndexDoc);
+            if (!currentIndex.summaries[id]?.hasResult) throw new DomainError("RESULT_NOT_READY");
+            const body = await tx.doc(JobResultDocFamily, id, null as unknown as JsonValue) as JobResult | undefined;
+            if (!body || typeof body.finalResponse !== "string") throw new DomainError("RESULT_NOT_READY");
+            if (review.decidedByActor?.kind !== "model" || review.decidedByActor.id !== `parent:${token.sessionId}`) {
+              if (review.decidedAt !== undefined || review.status === "approved" || review.status === "rejected") throw new DomainError("INVALID_REQUEST");
+            }
+          } else if (decision.actor.kind !== "human") throw new DomainError("INVALID_REQUEST");
+          if (decision.reason !== undefined && (typeof decision.reason !== "string" || decision.reason.length > 2048)) throw new DomainError("INVALID_REQUEST");
+          const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "review", jobId: id, status: decision.status, actor: decision.actor, ...(decision.reason === undefined ? {} : { reason: decision.reason }) })).digest("hex");
+          const key = createHash("sha256").update(decision.requestId).digest("hex");
+          const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+          const existing = cell.record as RequestRecord | null;
+          if (existing) {
+            if (existing.requestId !== decision.requestId || existing.operation !== "review" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+            receipt = plain(existing.receipt) as ReviewReceipt;
+            return;
+          }
+          const sameParent = parental && review.decidedByActor?.kind === "model" && review.decidedByActor.id === decision.actor.id;
+          const effectiveAt = sameParent && review.decidedAt !== undefined ? review.decidedAt : at;
+          const effectiveStatus = sameParent && (review.status === decision.status) ? review.status : decision.status;
+          const effectiveReason = sameParent && review.status === decision.status && review.reason !== undefined ? review.reason : decision.reason;
+          review.status = effectiveStatus; review.decidedAt = effectiveAt; review.decidedBy = decision.actor.id; review.reason = effectiveReason;
+          review.decidedByActor = structuredClone(decision.actor);
+          const index = await tx.doc(JobsIndexDoc);
+          if (index.summaries[id]) index.summaries[id].reviewStatus = effectiveStatus;
+          const decided: ReviewReceipt = { jobId: id, requestId: decision.requestId, status: effectiveStatus, decidedAt: effectiveAt, ...(decision.actor.id === undefined ? {} : { decidedBy: decision.actor.id }), decidedByActor: structuredClone(decision.actor), ...(effectiveReason === undefined ? {} : { reason: effectiveReason }) };
+          const record: RequestRecord = { requestId: decision.requestId, operation: "review", actor: structuredClone(decision.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
+          cell.record = record; receipt = decided;
+        }, context);
+        if (!receipt) throw new DomainError("STORAGE_ERROR");
+        return receipt;
+      } finally { endParent(token); }
     },
     async applyControl(id, request, at) {
       assertControlRequest(request);
@@ -300,16 +321,16 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const key = createHash("sha256").update(request.requestId).digest("hex");
         const cell = await tx.doc(RequestLedgerDocFamily, key, null);
         const existing = cell.record as RequestRecord | null;
-        if (existing) {
-          if (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
-          receipt = plain(existing.receipt) as ConsumeReceipt;
-          return;
-        }
         const index = await tx.doc(JobsIndexDoc);
         if (!index.summaries[id]?.hasResult || !terminalStatuses.has(job.status)) throw new DomainError("RESULT_NOT_READY");
         const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
         if (review.status === "pending") throw new DomainError("RESULT_REVIEW_REQUIRED");
         if (review.status === "rejected") throw new DomainError("RESULT_REJECTED");
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+          receipt = plain(existing.receipt) as ConsumeReceipt;
+          return;
+        }
         const body = await tx.doc(JobResultDocFamily, id, null as unknown as JsonValue) as JobResult | undefined;
         if (!body || typeof body.finalResponse !== "string") throw new DomainError("RESULT_NOT_READY");
         const consumption = await tx.doc(JobConsumptionDocFamily, id, { count: 0, requestIds: [] });
