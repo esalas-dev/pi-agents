@@ -8,7 +8,8 @@ export type StartRequest = { requestId: string; actor: Actor; intent: StartInten
 export type Clock = () => number;
 export type CreateId = () => string;
 export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
-export type RequestRecord = { requestId: string; operation: string; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt };
+export type RequestOperation = "start" | "consume" | "review" | (string & {});
+export type RequestRecord = { requestId: string; operation: RequestOperation; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt; receipt?: import("@earendil-works/chord").JsonValue };
 export type MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number };
 export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
 

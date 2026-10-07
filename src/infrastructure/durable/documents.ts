@@ -1,6 +1,6 @@
 import { defineDoc, defineDocFamily } from "@earendil-works/pi-durable";
 import type { JsonValue } from "@earendil-works/chord";
-import type { JobRecord, JobResult } from "../../domain/jobs.ts";
+import type { JobRecord, JobResult, ReviewState, ConsumptionState } from "../../domain/jobs.ts";
 
 export type StorageMeta = {
   storageSchemaVersion: 2;
@@ -19,6 +19,8 @@ export type JobsIndex = {
 };
 export type JobDocument = JobRecord;
 export type JobResultDocument = JobResult;
+export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; reason?: string };
+export type JobConsumptionDocument = ConsumptionState;
 export type LedgerCell = { record: JsonValue };
 
 export const StorageMetaDoc = defineDoc<StorageMeta>({
@@ -39,6 +41,18 @@ export const JobDocFamily = defineDocFamily<JobDocument, JsonValue>({
 export const JobResultDocFamily = defineDocFamily<JobResultDocument, JsonValue>({
   kind: "pi-agents.job-result", version: 1, scope: "session", family: true,
   initial: (seed) => seed as JobResultDocument,
+  checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 31,
+});
+
+export const JobReviewDocFamily = defineDocFamily<JobReviewDocument, JsonValue>({
+  kind: "pi-agents.job-review", version: 1, scope: "session", family: true,
+  initial: (seed) => seed as JobReviewDocument,
+  checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 31,
+});
+
+export const JobConsumptionDocFamily = defineDocFamily<JobConsumptionDocument, JsonValue>({
+  kind: "pi-agents.job-consumption", version: 1, scope: "session", family: true,
+  initial: (seed) => seed as JobConsumptionDocument,
   checkpointWhen: (_value, _ops, info) => info.deltasSinceBase >= 31,
 });
 

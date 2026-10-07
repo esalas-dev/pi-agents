@@ -4,6 +4,23 @@ import { DomainError } from "./errors.ts";
 
 export type JobStatus = "queued" | "provisioning" | "running" | "completed" | "failed" | "interrupted";
 export type JobStatusPublic = Exclude<JobStatus, "provisioning">;
+export type ReviewState = "not_required" | "pending" | "approved" | "rejected";
+export type ConsumptionState = { firstConsumedAt?: number; lastConsumedAt?: number; count: number; lastConsumer?: string; requestIds: string[] };
+export type JobFilter = {
+  statuses?: JobStatusPublic[]; agent?: string; createdBefore?: number; createdAfter?: number;
+  pendingReview?: boolean; limit?: number; cursor?: string;
+};
+export type WaitOptions = { until?: JobStatusPublic | "terminal"; timeoutSeconds?: number; signal?: AbortSignal };
+export type ResultAccess = { mode: "human" | "tool"; operation: "peek" | "consume"; actor: Actor; requestId?: string };
+export type ReviewDecision = { status: Exclude<ReviewState, "not_required" | "pending">; actor: Actor & { kind: "human" }; reason?: string };
+export type JobListView = {
+  id: string; status: JobStatusPublic; internalStatus?: JobStatus; agent: JobAgentSnapshot; model: JobModel;
+  thinkingLevel: ModelThinkingLevel; cwd: string; createdAt: number; startedAt?: number; updatedAt: number;
+  finishedAt?: number; queuePosition?: number; durationMs?: number; hasResult: boolean; reviewStatus: ReviewState;
+  consumption: Readonly<ConsumptionState>; task?: string;
+};
+export type JobQueryView = JobListView & { task: string; resultMeta?: Omit<JobResult, "finalResponse"> };
+export type WaitResult = JobQueryView;
 export type JobAgentSnapshot = { name: string; description: string; systemPrompt: string; source: "personal" | "project"; filePath: string; tools: string[] };
 export type JobModel = { provider: string; modelId: string };
 export type JobResult = { finalResponse: string; durationMs: number; model: JobModel; status: "completed" | "failed" | "interrupted"; error?: string };
@@ -19,6 +36,37 @@ export type JobRecord = {
 const terminal = new Set<JobStatus>(["completed", "failed", "interrupted"]);
 const tools = new Set(["read", "write", "edit", "bash"]);
 const finite = (value: number) => Number.isFinite(value) && value >= 0;
+const publicStatuses = new Set<JobStatusPublic>(["queued", "running", "completed", "failed", "interrupted"]);
+const reviewStates = new Set<ReviewState>(["not_required", "pending", "approved", "rejected"]);
+
+export function assertJobFilter(filter: JobFilter): void {
+  if (!filter || typeof filter !== "object") throw new DomainError("INVALID_FILTER");
+  if (filter.limit !== undefined && (!Number.isInteger(filter.limit) || filter.limit < 1 || filter.limit > 100)) throw new DomainError("INVALID_FILTER");
+  if (filter.statuses !== undefined && (!Array.isArray(filter.statuses) || filter.statuses.length === 0 || filter.statuses.some(status => !publicStatuses.has(status)))) throw new DomainError("INVALID_FILTER");
+  if (filter.agent !== undefined && (typeof filter.agent !== "string" || !filter.agent)) throw new DomainError("INVALID_FILTER");
+  if (filter.createdAfter !== undefined && !finite(filter.createdAfter)) throw new DomainError("INVALID_FILTER");
+  if (filter.createdBefore !== undefined && !finite(filter.createdBefore)) throw new DomainError("INVALID_FILTER");
+  if (filter.createdAfter !== undefined && filter.createdBefore !== undefined && filter.createdAfter > filter.createdBefore) throw new DomainError("INVALID_FILTER");
+  if (filter.pendingReview !== undefined && typeof filter.pendingReview !== "boolean") throw new DomainError("INVALID_FILTER");
+  if (filter.cursor !== undefined && (typeof filter.cursor !== "string" || !filter.cursor)) throw new DomainError("INVALID_FILTER");
+}
+
+export function assertWaitOptions(options: WaitOptions = {}): WaitOptions {
+  if (!options || typeof options !== "object") throw new DomainError("INVALID_FILTER");
+  if (options.until !== undefined && options.until !== "terminal" && !publicStatuses.has(options.until)) throw new DomainError("INVALID_FILTER");
+  if (options.timeoutSeconds !== undefined && (!Number.isFinite(options.timeoutSeconds) || options.timeoutSeconds < 0 || options.timeoutSeconds > 300)) throw new DomainError("INVALID_FILTER");
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) throw new DomainError("INVALID_FILTER");
+  return { ...(options.until === undefined ? {} : { until: options.until }), ...(options.timeoutSeconds === undefined ? {} : { timeoutSeconds: options.timeoutSeconds }), ...(options.signal === undefined ? {} : { signal: options.signal }) };
+}
+
+export function createReviewState(status: ReviewState): { status: ReviewState } {
+  if (!reviewStates.has(status)) throw new DomainError("STORAGE_INCONSISTENT");
+  return { status };
+}
+
+export function createEmptyConsumption(): ConsumptionState {
+  return { count: 0, requestIds: [] };
+}
 
 export function publicStatus(job: Pick<JobRecord, "status">): JobStatusPublic {
   return job.status === "provisioning" ? "running" : job.status;
