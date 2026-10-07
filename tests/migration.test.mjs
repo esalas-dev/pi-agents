@@ -46,11 +46,11 @@ test('declinada, cancelada, actor no humano y origen alterado no modifican v1', 
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('esquema 2 requiere migración explícita y esquema 3 es idempotente', async () => {
+test('esquema 2 y 3 requieren migración explícita y esquema 4 es idempotente', async () => {
   const directory = await mkdtemp(join('/tmp', 'pi-agents-migration-current-'));
   try {
     const fixture = await createLegacyFixture({ directory, scenario: 'queued' }); const service = createMaintenanceService(context);
     let calls = 0; const first = await service.migrate({ dbPath: fixture.database, clock: () => 1, confirm: async info => { calls++; return { requestId: 'v1', actor: { kind: 'human' }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: 1 }; } });
-    assert.equal(first.success, true); const second = await service.migrate({ dbPath: fixture.database, clock: () => 2, confirm: async info => { calls++; return { requestId: 'v2', actor: { kind: 'human' }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: 2 }; } }); assert.deepEqual(second.value, { schemaVersion: 3, migratedJobs: 2 }); const third = await service.migrate({ dbPath: fixture.database, clock: () => 3, confirm: async () => { calls++; } }); assert.deepEqual(third.value, { schemaVersion: 3, migratedJobs: 0 }); assert.equal(calls, 2);
+    assert.equal(first.success, true); const second = await service.migrate({ dbPath: fixture.database, clock: () => 2, confirm: async info => { calls++; return { requestId: 'v2', actor: { kind: 'human' }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: 2 }; } }); assert.deepEqual(second.value, { schemaVersion: 3, migratedJobs: 2 }); const third = await service.migrate({ dbPath: fixture.database, clock: () => 3, confirm: async info => { calls++; return { requestId: 'v3', actor: { kind: 'human' }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: 3 }; } }); assert.deepEqual(third.value, { schemaVersion: 4, migratedJobs: 2 }); const repeated = await service.migrate({ dbPath: fixture.database, clock: () => 4, confirm: async () => { calls++; throw new Error('no authorization on current schema'); } }); assert.deepEqual(repeated.value, { schemaVersion: 4, migratedJobs: 0 }); assert.equal(calls, 3);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

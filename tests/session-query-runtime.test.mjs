@@ -20,7 +20,7 @@ async function seed(database, version) {
   await session.commit(async tx => {
     const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = version;
     const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = version;
-    if (version === 3) {
+    if (version === 4) {
       const stored = await tx.doc(JobDocFamily, job.id, job); Object.assign(stored, job);
       const body = await tx.doc(JobResultDocFamily, job.id, result); Object.assign(body, result);
       const review = await tx.doc(JobReviewDocFamily, job.id, { status: 'approved' }); Object.assign(review, { status: 'approved', decidedBy: 'alice', decidedAt: 3 });
@@ -37,10 +37,10 @@ test('base esquema 2 exige migración antes de abrir Harness y proveedor', async
   finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('runtime schema 3 compone consulta, resultado y revisión tras reapertura', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-v3-')); const database = join(directory, 'jobs.sqlite'); let runtime;
+test('runtime schema 4 compone consulta, control, resultado y revisión tras reapertura', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-v4-')); const database = join(directory, 'jobs.sqlite'); let runtime;
   try {
-    await seed(database, 3); runtime = await openSessionRuntime(options(database));
+    await seed(database, 4); runtime = await openSessionRuntime(options(database));
     const view = await runtime.jobs.getJob('persisted'); assert.equal(view.success, true); assert.equal(view.value.reviewStatus, 'approved'); assert.equal((await runtime.jobs.listJobs({})).value.items[0].id, 'persisted');
     const resultView = await runtime.jobs.getResult('persisted', { mode: 'human', operation: 'peek', actor: { kind: 'human', id: 'alice' } }); assert.equal(resultView.success, true); assert.equal(resultView.value.result.finalResponse, 'persisted result');
     await runtime.close(); await runtime.close(); runtime = await openSessionRuntime(options(database)); assert.equal((await runtime.jobs.getJob('persisted')).value.consumption.count, 1);
