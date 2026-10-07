@@ -3,7 +3,8 @@ import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
 import type { ConsumptionState, JobRecord, JobResult } from "../../domain/jobs.ts";
 import { assertJob, assertResult } from "../../domain/jobs.ts";
-import type { AdmissionReceipt, Clock, CreateId, RequestRecord, StartRequest } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, RequestRecord, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
+import { canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
 
@@ -13,6 +14,8 @@ export type JobRepository = {
   index(): Promise<JobsIndex | undefined>;
   review(id: string): Promise<JobReviewDocument | undefined>;
   consumption(id: string): Promise<ConsumptionState | undefined>;
+  decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
+  consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
   active(): Promise<JobRecord[]>;
@@ -100,6 +103,62 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async consumption(id) {
       return structuredClone(await session.snapshot(JobConsumptionDocFamily, id, context) as ConsumptionState | undefined);
+    },
+    async decideReview(id, decision, at) {
+      let receipt: ReviewReceipt | undefined;
+      await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        if (!job) throw new DomainError("JOB_NOT_FOUND");
+        const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "review", jobId: id, status: decision.status, actor: decision.actor, reason: decision.reason })).digest("hex");
+        const key = createHash("sha256").update(decision.requestId).digest("hex");
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== decision.requestId || existing.operation !== "review" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+          receipt = plain(existing.receipt) as ReviewReceipt;
+          return;
+        }
+        review.status = decision.status; review.decidedAt = at; review.decidedBy = decision.actor.id; review.reason = decision.reason;
+        const index = await tx.doc(JobsIndexDoc);
+        if (index.summaries[id]) index.summaries[id].reviewStatus = decision.status;
+        const decided: ReviewReceipt = { jobId: id, requestId: decision.requestId, status: decision.status, decidedAt: at, ...(decision.actor.id === undefined ? {} : { decidedBy: decision.actor.id }), ...(decision.reason === undefined ? {} : { reason: decision.reason }) };
+        const record: RequestRecord = { requestId: decision.requestId, operation: "review", actor: structuredClone(decision.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
+        cell.record = record; receipt = decided;
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
+    },
+    async consume(id, request, at) {
+      let receipt: ConsumeReceipt | undefined;
+      await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        if (!job) throw new DomainError("JOB_NOT_FOUND");
+        const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "consume", jobId: id, actor: request.actor, consumer: request.consumer })).digest("hex");
+        const key = createHash("sha256").update(request.requestId).digest("hex");
+        const cell = await tx.doc(RequestLedgerDocFamily, key, null);
+        const existing = cell.record as RequestRecord | null;
+        if (existing) {
+          if (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
+          receipt = plain(existing.receipt) as ConsumeReceipt;
+          return;
+        }
+        const index = await tx.doc(JobsIndexDoc);
+        if (!index.summaries[id]?.hasResult || !terminalStatuses.has(job.status)) throw new DomainError("RESULT_NOT_READY");
+        const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
+        if (review.status === "pending") throw new DomainError("RESULT_REVIEW_REQUIRED");
+        if (review.status === "rejected") throw new DomainError("RESULT_REJECTED");
+        const body = await tx.doc(JobResultDocFamily, id, null as unknown as JsonValue) as JobResult | undefined;
+        if (!body || typeof body.finalResponse !== "string") throw new DomainError("RESULT_NOT_READY");
+        const consumption = await tx.doc(JobConsumptionDocFamily, id, { count: 0, requestIds: [] });
+        consumption.count += 1; consumption.firstConsumedAt ??= at; consumption.lastConsumedAt = at; consumption.lastConsumer = request.consumer;
+        consumption.requestIds = [...consumption.requestIds.filter(candidate => candidate !== request.requestId), request.requestId].slice(-32);
+        const consumed: ConsumeReceipt = { jobId: id, requestId: request.requestId, consumedAt: at, consumedBy: request.consumer, count: consumption.count, result: plain(body) };
+        const record: RequestRecord = { requestId: request.requestId, operation: "consume", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: consumed as unknown as JsonValue };
+        cell.record = record; receipt = consumed;
+      }, context);
+      if (!receipt) throw new DomainError("STORAGE_ERROR");
+      return receipt;
     },
     async result(id) {
       const job = await readJob(id);
