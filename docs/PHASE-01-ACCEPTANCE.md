@@ -2,7 +2,7 @@
 
 ## Estado
 
-`en validación`. La implementación está presente en la rama `feat/phase-01`, pero esta matriz no declara la fase completada hasta ejecutar los gates finales, la revisión independiente y la aceptación humana TUI.
+`completada`. La implementación fue fusionada mediante PR #2 y la corrección de resultados tras notificación mediante PR #3. La revisión independiente y la aceptación humana TUI fueron confirmadas por la persona responsable.
 
 ## Alcance operativo
 
@@ -52,14 +52,13 @@ Después de cerrar y reabrir Pi se reconstruyen consultas y esperas desde docume
 
 ## Gates ejecutados
 
-- `npm run check`: verde.
-- `npm test`: verde, 81/81 pruebas.
-- `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models __pi_agents_phase01_smoke_no_match__`: código 0; no se invocó ningún modelo.
-- `npm pack --dry-run --json`: paquete sin SQLite, backups, configuración local ni `node_modules`.
+- PR #2: `npm run check` y `npm test` verdes, 81/81 pruebas.
+- PR #2: smoke Pi offline y `npm pack --dry-run --json` sin estado local.
+- PR #3: regresión de resultado tras notificación, 2/2 pruebas dirigidas, sintaxis y 78/78 pruebas restantes verdes.
+- Revisión independiente y aceptación humana TUI: confirmadas por la persona responsable.
 
-## Gates pendientes
+## Limitación ambiental
 
-- Revisión independiente del branch.
-- Validación humana TUI de listado, espera, resultado, aprobación, rechazo y migración.
+El checkout principal no pudo repetir el type-check después de PR #3 porque su `node_modules` no contiene `typescript/tsc`; no se instalaron dependencias para ocultar esa condición. La evidencia de type-check verde corresponde al gate ejecutado en PR #2, y la corrección de PR #3 pasó su regresión, sintaxis y pruebas restantes.
 
-La evidencia se actualiza únicamente con comandos realmente ejecutados; la aceptación humana no se infiere de las pruebas unitarias.
+La evidencia automatizada se distingue de la aceptación humana y no se infiere una a partir de la otra.

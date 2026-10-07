@@ -79,8 +79,8 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | Fase | Estado actual | Resultado principal | Depende de | Próxima acción |
 | ---: | --- | --- | --- | --- |
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
-| 01 | `en validación` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Ejecutar gates finales, revisión independiente y aceptación humana TUI. |
-| 02 | `bloqueada` | Cancelación, pausa, reanudación y retry durables | 01 | Confirmar semántica de aborto y declarar pausa activa no soportada si la API pública no cambia. |
+| 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
+| 02 | `lista para planificar` | Cancelación, pausa, reanudación y retry durables | 01 | Crear y revisar el plan de implementación, manteniendo la pausa activa como no soportada. |
 | 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
@@ -165,15 +165,9 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - gates automatizados: `npm run check`, `npm test` (81/81), smoke Pi offline y `npm pack --dry-run --json` verdes;
 - matriz de aceptación: [`docs/PHASE-01-ACCEPTANCE.md`](../docs/PHASE-01-ACCEPTANCE.md).
 
-### Bloqueos restantes
-
-- revisión independiente del branch;
-- validación humana TUI de listado, espera, resultado, aprobación, rechazo y migración;
-- smoke offline de Pi y `npm pack --dry-run --json` en el gate final.
-
 ### Gate de salida
 
-Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, carreras de wait, revisión, consumo, truncado y migración; además se registran revisión independiente y aceptación humana.
+Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, carreras de wait, revisión, consumo, truncado y migración. La revisión independiente y la aceptación humana TUI fueron confirmadas. La limitación ambiental de no poder repetir `tsc` en el checkout principal está documentada en [`docs/PHASE-01-ACCEPTANCE.md`](../docs/PHASE-01-ACCEPTANCE.md); no se instalaron dependencias para ocultarla.
 
 ## Fase 02 — Control durable del ciclo de vida
 
@@ -184,7 +178,8 @@ Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](02-
 - fase 01 completada;
 - ledger de mutaciones operativo;
 - tabla de transiciones aprobada;
-- spike contra APIs públicas de aborto y pausa concluido.
+- spike contra APIs públicas de aborto y pausa concluido;
+- spec de fase 02 aprobada para planificación.
 
 ### Entregables
 
