@@ -55,6 +55,27 @@ test('bloquea tool pending/rejected pero permite peek humano y no consume', asyn
   } finally { await current.fixture.close(); }
 });
 
+test('ledger antiguo no expone body ni bypass tras rechazo humano', async () => {
+  const current = await setup();
+  try {
+    const approved = await current.reviewService.decideReview('job-review', { requestId: 'review-old', status: 'approved', actor: { kind: 'human', id: 'u' } });
+    assert.equal(approved.success, true);
+    const first = await current.resultService.consumeResult('job-review', { requestId: 'consume-old', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' });
+    assert.equal(first.success, true);
+    const rejected = await current.reviewService.decideReview('job-review', { requestId: 'review-reject-old', status: 'rejected', actor: { kind: 'human', id: 'u' } });
+    assert.equal(rejected.success, true);
+    const beforeReplay = { review: await current.fixture.repository.review('job-review'), index: await current.fixture.repository.index(), consumption: await current.fixture.repository.consumption('job-review'), ledger: await current.fixture.repository.receipt('consume-old') };
+    const replay = await current.resultService.consumeResult('job-review', { requestId: 'consume-old', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' });
+    assert.equal(replay.success, false);
+    assert.equal(replay.error.code, 'RESULT_REJECTED');
+    assert.equal(Object.hasOwn(replay, 'value'), false);
+    assert.deepEqual(await current.fixture.repository.review('job-review'), beforeReplay.review);
+    assert.deepEqual(await current.fixture.repository.index(), beforeReplay.index);
+    assert.deepEqual(await current.fixture.repository.consumption('job-review'), beforeReplay.consumption);
+    assert.deepEqual(await current.fixture.repository.receipt('consume-old'), beforeReplay.ledger);
+  } finally { await current.fixture.close(); }
+});
+
 test('aprueba y consume con replay idempotente y consumidores distintos', async () => {
   const current = await setup();
   try {

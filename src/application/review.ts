@@ -8,9 +8,14 @@ export type ReviewService = {
 };
 
 function validDecision(decision: ReviewDecision | ParentReviewDecision): boolean {
-  return Boolean(decision && typeof decision === 'object' && typeof decision.requestId === 'string' && decision.requestId
-    && (decision.status === 'approved' || decision.status === 'rejected')
-    && (decision.reason === undefined || (typeof decision.reason === 'string' && decision.reason.length <= 2048)));
+  if (!decision || typeof decision !== 'object' || typeof decision.requestId !== 'string' || !decision.requestId
+    || (decision.status !== 'approved' && decision.status !== 'rejected')
+    || (decision.reason !== undefined && (typeof decision.reason !== 'string' || decision.reason.length > 2048))) return false;
+  if (!('actor' in decision)) return true;
+  const actor = decision.actor;
+  return Boolean(actor && typeof actor === 'object' && !Array.isArray(actor)
+    && (actor.kind === 'human' || actor.kind === 'model' || actor.kind === 'extension')
+    && (actor.id === undefined || typeof actor.id === 'string'));
 }
 
 export function createReviewService(repository: JobRepository, clock: Clock): ReviewService {
