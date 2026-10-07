@@ -72,6 +72,19 @@ Checkout: `.worktrees/phase-02`, rama `feat/phase-02`, código en `d97118247e5a0
 - `npm pack --dry-run --json`: código 0, 37 archivos; no incluye SQLite, backups ni configuración local.
 - La instalación y los gates no modificaron archivos versionados. Esta actualización documental registra la evidencia nueva sin borrar las limitaciones de las ejecuciones anteriores.
 
+## Regresión detectada tras fusionar PR #4
+
+En `main` (`3353895`), la revalidación produjo **96/98 pruebas verdes** y dos fallos de registro de tools. La integración `5bda621` había eliminado el registro de `pi_agents_control`, una prueba de comandos de control y la expectativa de la sexta tool en `tests/pi-adapters.test.mjs`. El type-check seguía verde: no detecta la ausencia de un registro runtime.
+
+La rama `fix/phase02-control-merge` restaura esos tres cambios exactamente como estaban en `d971182`, sin modificar la política de autorización ni añadir comportamiento nuevo. Se observaron las pruebas de registro fallar antes de restaurar la tool. Después de la restauración:
+
+- `npm run check`: código 0, contra Pi host `1.0.4`.
+- `npm test`: **99/99 pasan**, sin fallos ni pruebas omitidas.
+- Smoke offline de carga: código 0, sin invocar modelo.
+- `git diff --check`: sin errores.
+
+Esta evidencia corresponde a la rama de corrección, no a `main` antes de integrarla. La aceptación TUI humana final sigue pendiente.
+
 ## Gates pendientes
 
 1. Realizar smoke TUI humano desde un directorio no relacionado: cancelación confirmada, pausa queued, resume, retry y migración.
