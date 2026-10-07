@@ -195,6 +195,38 @@ test('retry replay parental coteja destino y no muta snapshots', async () => {
   } finally { await fixture.close(); }
 });
 
+test('replay parental positivo conserva recibo y no muta snapshots', async () => {
+  const authority = Object.freeze({ sessionId: 's1', isActive: () => true });
+  const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'positive-retry' });
+  try {
+    const input = legacyInput('tarea');
+    await fixture.seedJob({ id: 'source', ...input, status: 'completed', createdAt: 1, updatedAt: 1, notified: true, createdBy: { kind: 'model', id: 'call:source' }, parentSessionId: 's1' }, { status: 'completed', finalResponse: 'ok', durationMs: 1, model: input.model });
+    let now = 2;
+    const service = createControlService(fixture.repository, () => now);
+    const request = { requestId: 'retry:positive', action: 'retry', actor: { kind: 'model', id: 'call:retry' } };
+    const first = await service.retry('source', request, authority);
+    assert.equal(first.success, true);
+    assert.equal(first.value.replayed, false);
+    assert.equal(first.value.jobId, 'positive-retry');
+    assert.equal(first.value.retryJobId, 'positive-retry');
+    const snapshot = async () => ({
+      source: await fixture.repository.get('source'),
+      target: await fixture.repository.get('positive-retry'),
+      index: await fixture.repository.index(),
+      ledger: await fixture.repository.receipt(request.requestId),
+      review: await fixture.repository.review('positive-retry'),
+    });
+    const before = await snapshot();
+    assert.equal(before.target.parentSessionId, 's1');
+    assert.equal(before.ledger.parentSessionId, 's1');
+    now = 3;
+    const replay = await service.retry('source', request, authority);
+    assert.equal(replay.success, true);
+    assert.deepEqual(replay.value, { ...first.value, replayed: true });
+    assert.deepEqual(await snapshot(), before);
+  } finally { await fixture.close(); }
+});
+
 test('referencia copiada y contexto genérico no escriben ownership', async () => {
   const fixture = await makeStoreFixture({ parentAuthority: authority, createId: () => 'job-1' });
   try {
