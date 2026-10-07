@@ -34,7 +34,7 @@ export function canConfirmMigration(ctx: Pick<ExtensionContext, "mode" | "hasUI"
 export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
   type State = { sessionId: string; runtime: SessionRuntime; models: ModelRuntime; context: ExtensionContext };
   let state: State | undefined; let lifecycle = Promise.resolve(); let agents: ReturnType<typeof discoverAgents>["agents"] = [];
-  const report = (error: unknown) => { try { pi.appendEntry(OUTPUT, { title: "pi-agents", text: error instanceof Error ? error.message : String(error), level: "error" }); } catch {} };
+  const report = (error: unknown) => { try { pi.appendEntry(OUTPUT, { title: "subagents", text: error instanceof Error ? error.message : String(error), level: "error" }); } catch {} };
   const completion = (ctx: ExtensionContext) => agents = discoverAgents({ cwd: ctx.cwd, agentDir: bindings.getAgentDir(), projectTrusted: ctx.isProjectTrusted() }).agents;
   const notify = async (job: JobRecord, result: JobResult, current: State) => {
     if (state !== current) return;
@@ -54,7 +54,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
       if (!(error instanceof DomainError) || error.error.code !== "MIGRATION_REQUIRED" || !canConfirmMigration(ctx)) throw error;
       const migration = await createMaintenanceService(BACKGROUND_CONTEXT).migrate({ dbPath: database, clock: Date.now, confirm: async info => {
         if (ctx.sessionManager.getSessionId() !== id) return undefined;
-        const accepted = await ctx.ui.confirm("Migrar almacenamiento de pi-agents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
+        const accepted = await ctx.ui.confirm("Migrar almacenamiento de subagents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
         if (!accepted || ctx.sessionManager.getSessionId() !== id) return undefined;
         return { requestId: `migration:${id}:${Date.now()}`, actor: { kind: "human", id: "tui" }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: Date.now() };
       } });
@@ -92,7 +92,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request);
     return toolReply(outcome, formatControl);
   } } as any));
-  pi.registerCommand("pi-agents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
+  pi.registerCommand("subagents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
     try {
       const command = parsePiAgentsCommand(args); const current = await ensure(ctx); const requestId = `command:${ctx.sessionManager.getSessionId()}:${Date.now()}`;
       if (command.action === "start") { const outcome = await start(ctx, command.agent, command.task, requestId, { kind: "human" }); if (!outcome.success) throw new Error(outcome.error.message); pi.appendEntry(OUTPUT, { title: `Subagente encolado · ${outcome.value.jobId}`, text: `${outcome.value.agent}`, level: "info", jobId: outcome.value.jobId }); return; }

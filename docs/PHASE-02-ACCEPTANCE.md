@@ -29,10 +29,10 @@ Estado: **en validación**. La implementación está en `feat/phase-02`; falta l
 ## Comandos y herramientas
 
 ```text
-/pi-agents cancel <id> [--reason <texto>] [--yes]
-/pi-agents pause <id> [--reason <texto>] [--yes]
-/pi-agents resume <id> [--reason <texto>] [--yes]
-/pi-agents retry <id> [--reason <texto>] [--yes]
+/subagents cancel <id> [--reason <texto>] [--yes]
+/subagents pause <id> [--reason <texto>] [--yes]
+/subagents resume <id> [--reason <texto>] [--yes]
+/subagents retry <id> [--reason <texto>] [--yes]
 pi_agents_control({ id, action, request_id, reason? })
 ```
 

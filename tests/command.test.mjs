@@ -39,6 +39,10 @@ test('analiza controles con razón, confirmación explícita y límites', () => 
   assert.throws(() => parsePiAgentsCommand(`cancel job-1 --reason ${'x'.repeat(2049)}`), CommandSyntaxError);
 });
 
+test('usa /subagents en la ayuda de sintaxis', () => {
+  assert.throws(() => parsePiAgentsCommand(''), /Uso: \/subagents/);
+});
+
 test('rechaza comillas abiertas y conserva escapes en comillas dobles', () => {
   assert.deepEqual(tokenizeCommandLine('agent "usa \\"npm test\\""'), ['agent', 'usa "npm test"']);
   assert.throws(() => tokenizeCommandLine('agent "incompleta'), /comilla sin cerrar/);

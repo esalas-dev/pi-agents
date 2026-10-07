@@ -15,12 +15,12 @@ Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedule
 - Cerrar una vista no cancela operaciones.
 - El estado se vuelve a leer después de cada acción.
 - La vista diferencia éxito técnico, gate, revisión y promoción.
-- No se usa `/agents` para evitar colisión con upstream. Comando raíz: `/pi-agents`.
+- No se usa `/agents` para evitar colisión con upstream. Comando raíz: `/subagents`.
 
 ## Navegación
 
 ```text
-/pi-agents
+/subagents
 ├─ Trabajos
 │  ├─ Activos
 │  ├─ En cola/pausados
@@ -115,7 +115,7 @@ Después de validar la interfaz principal puede añadirse un widget compacto enc
 Subagentes: 2 activos · 3 en cola · 1 revisión · 1 workflow esperando aprobación
 ```
 
-Predeterminado: apagado o resumen de una línea. No se implementan inicialmente animaciones por job ni conversaciones en vivo. El widget abre `/pi-agents` y no captura flechas del editor de forma invasiva.
+Predeterminado: apagado o resumen de una línea. No se implementan inicialmente animaciones por job ni conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
 
 ## Recursos y recuperación
 
@@ -168,8 +168,8 @@ Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista e
 ## Headless y compatibilidad
 
 - La extensión sigue funcionando en `--print`, JSON y RPC sin UI interactiva.
-- `/pi-agents` existente conserva subcomandos.
-- `/pi-agents` abre panel solo cuando existe TUI; en headless devuelve ayuda textual o error estable.
+- `/subagents` existente conserva subcomandos.
+- `/subagents` abre panel solo cuando existe TUI; en headless devuelve ayuda textual o error estable.
 - Deshabilitar UI no deshabilita ejecución, consultas ni RPC.
 
 ## Configuración propuesta

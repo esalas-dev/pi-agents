@@ -121,12 +121,12 @@ Tools modelo no pueden usar `cancel_members: true` salvo política explícita.
 ### Comandos
 
 ```text
-/pi-agents group create --condition all [--name <texto>]
-/pi-agents group add <group-id> <job-id>
-/pi-agents group seal <group-id>
-/pi-agents group status <group-id>
-/pi-agents group join <group-id> [--timeout <s>]
-/pi-agents group cancel <group-id> [--cancel-members]
+/subagents group create --condition all [--name <texto>]
+/subagents group add <group-id> <job-id>
+/subagents group seal <group-id>
+/subagents group status <group-id>
+/subagents group join <group-id> [--timeout <s>]
+/subagents group cancel <group-id> [--cancel-members]
 ```
 
 ### Tool

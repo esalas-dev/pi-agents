@@ -111,12 +111,12 @@ El contenido completo permanece en SQLite; no se creará un archivo temporal sal
 ### Comandos
 
 ```text
-/pi-agents status <id>
-/pi-agents result <id>
-/pi-agents list [--status <estado>] [--limit <n>]
-/pi-agents wait <id> [--timeout <segundos>]
-/pi-agents approve <id> [--reason <texto>]
-/pi-agents reject <id> [--reason <texto>]
+/subagents status <id>
+/subagents result <id>
+/subagents list [--status <estado>] [--limit <n>]
+/subagents wait <id> [--timeout <segundos>]
+/subagents approve <id> [--reason <texto>]
+/subagents reject <id> [--reason <texto>]
 ```
 
 `result` es una vista humana y no añade contenido al contexto del modelo.
