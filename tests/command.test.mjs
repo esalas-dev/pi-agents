@@ -29,6 +29,16 @@ test('analiza espera y decisiones humanas con razón', () => {
   assert.throws(() => parsePiAgentsCommand('approve job-1 --unknown x'), CommandSyntaxError);
 });
 
+test('analiza controles con razón, confirmación explícita y límites', () => {
+  assert.deepEqual(parsePiAgentsCommand('cancel job-1 --reason "ya no hace falta" --yes'), { action: 'cancel', id: 'job-1', reason: 'ya no hace falta', yes: true });
+  assert.deepEqual(parsePiAgentsCommand('pause job-1'), { action: 'pause', id: 'job-1', yes: false });
+  assert.deepEqual(parsePiAgentsCommand('resume job-1 --yes'), { action: 'resume', id: 'job-1', yes: true });
+  assert.deepEqual(parsePiAgentsCommand('retry job-1'), { action: 'retry', id: 'job-1', yes: false });
+  assert.throws(() => parsePiAgentsCommand('cancel job-1 --reason'), CommandSyntaxError);
+  assert.throws(() => parsePiAgentsCommand('cancel job-1 --reason ""'), CommandSyntaxError);
+  assert.throws(() => parsePiAgentsCommand(`cancel job-1 --reason ${'x'.repeat(2049)}`), CommandSyntaxError);
+});
+
 test('usa /subagents en la ayuda de sintaxis', () => {
   assert.throws(() => parsePiAgentsCommand(''), /Uso: \/subagents/);
 });
