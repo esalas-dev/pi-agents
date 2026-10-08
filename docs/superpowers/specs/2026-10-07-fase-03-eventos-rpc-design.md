@@ -6,7 +6,7 @@
 
 Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad.
 
-Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 02 cerrada por aprobación humana y PR #4/#5 fusionados. Entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4`, Pi Durable `1.0.1`. No se promete compatibilidad histórica ni con todas las versiones posteriores.
+Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 02 cerrada por aprobación humana y PR #4/#5 fusionados. Entorno comprobado: macOS arm64, Node `26.10.0`, host Pi detectado actualmente `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. La resolución valida la versión instalada y la alineación de sus peers; no se promete compatibilidad histórica ni con todas las versiones posteriores.
 
 ## 1. Intención y alcance acordados
 

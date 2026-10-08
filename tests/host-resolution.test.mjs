@@ -7,12 +7,13 @@ import { resolveHost, generateHostConfig } from '../scripts/host-types.mjs';
 
 test('resuelve declaraciones públicas del host real y subpaths de pi-ai', async () => {
   const host = await resolveHost();
-  assert.equal(host.version, '1.0.4');
+  assert.ok(host.version);
+  assert.equal(host.packages['@earendil-works/pi-coding-agent'].version, host.version);
+  for (const name of ['@earendil-works/pi-ai', '@earendil-works/pi-tui', '@earendil-works/pi-agent-core']) assert.equal(host.packages[name].version, host.version);
   assert.ok(isAbsolute(host.root));
   await access(host.declarations['@earendil-works/pi-coding-agent']);
   await access(host.declarations['@earendil-works/pi-ai/models']);
   await access(host.declarations['@earendil-works/pi-ai/providers/*'].replace('*', 'faux'));
-  assert.equal(host.packages['@earendil-works/pi-ai'].version, '1.0.4');
   // Source-only exports are not silently made into fabricated declarations.
   assert.equal(host.declarations['@earendil-works/pi-coding-agent/client'], undefined);
 });

@@ -6,7 +6,7 @@
 
 **Architecture:** Adaptador fino sobre `pi.events` y `JobsService`, ledger existente y outbox transaccional por sesión. Un propietario de lifecycle controla generaciones, endpoints, esperas y un emisor ordenado; SQLite mantiene la autoridad. Las tareas son secuenciales porque almacenamiento, control y transporte comparten estas interfaces.
 
-**Tech Stack:** TypeScript estricto, Node `26.10.0`, Pi `1.0.4`, Pi Durable `1.0.1`, SQLite y `node:test`; sin dependencias nuevas.
+**Tech Stack:** TypeScript estricto, Node `26.10.0`, host Pi detectado (actualmente `1.1.0`), Pi Durable `1.0.1`, SQLite y `node:test`; sin dependencias nuevas.
 
 **Spec:** [`../specs/2026-10-07-fase-03-eventos-rpc-design.md`](../specs/2026-10-07-fase-03-eventos-rpc-design.md), aprobada humanamente sobre `e0d0a99`; precisión de límites de IDs aprobada durante esta planificación.
 
@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- Entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4`, Pi Durable `1.0.1`; no prometer compatibilidad histórica ni universal posterior.
+- Entorno comprobado: macOS arm64, Node `26.10.0`, host Pi detectado (actualmente `1.1.0`), Pi Durable `1.0.1`; la prueba valida la alineación del host y sus peers sin fijar una versión Pi, sin prometer compatibilidad histórica ni universal posterior.
 - Namespace exclusivamente `pi-durable-subagents:*`; no registrar `subagents:*`.
 - RPC `protocolVersion: 1`; actor siempre `{ kind: "extension", id: callerId }`; callerId declarativo, no autenticado.
 - `review` RPC siempre devuelve `RPC_REVIEW_FORBIDDEN`; no allowlist, aprobación RPC ni migración RPC.

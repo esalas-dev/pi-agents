@@ -5,8 +5,8 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 ## Requisitos
 
 - Node.js `>=26.10.0`.
-- Pi **1.0.4** es el host objetivo del type-check y del smoke de carga actual. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
-- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`. No se afirma compatibilidad probada de todas las versiones superiores.
+- El type-check y el smoke de carga descubren el host Pi instalado; actualmente es Pi **1.1.0**. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
+- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`, Pi `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. No se afirma compatibilidad probada de todas las versiones superiores.
 - Agentes Markdown en `~/.pi/agent/agents/` o en el `.pi/agents/` más cercano del proyecto.
 - Un modelo configurado en Pi.
 
@@ -157,7 +157,7 @@ npm test
 
 `npm run check` ejecuta TypeScript estricto sin emisión y comprueba la sintaxis de todos los `.ts` productivos. Descubre el Pi de `PATH`; para otra instalación, define `PI_AGENTS_PI_PACKAGE_ROOT` con la raíz de su paquete. Las rutas locales se generan en `.cache/pi-agents/tsconfig.host.json`, ignorado por Git; no modifican la resolución runtime. El chequeo de sintaxis utiliza `stripTypeScriptTypes`, API pública experimental de Node que emite una advertencia informativa.
 
-Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo usan el host Pi `1.0.4` y sus peers públicos alineados; las versiones históricas no forman parte de la compatibilidad prometida.
+Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo descubren el host Pi mediante `PATH` o `PI_AGENTS_PI_PACKAGE_ROOT` y verifican que sus peers públicos estén alineados con la versión detectada; la evidencia actual corresponde a Pi `1.1.0`. Las versiones históricas no forman parte de la compatibilidad prometida.
 
 Los `peerDependencies` son suministrados por Pi y no deben añadirse como dependencias runtime directas. Las dependencias transitivas de Pi Durable se inventarían por separado; no se asume que coinciden con las del host. Las pruebas cubren:
 
