@@ -54,10 +54,7 @@ export function createOutboxRepository(session: Session, context: Context): Outb
         const meta = await tx.doc(OutboxMetaDoc);
         const event = await tx.doc(OutboxEventDocFamily, eventKey(sequence), null as never) as { envelope: JobEventV1; emittedAt?: number } | undefined;
         if (!event || event.envelope.eventId !== eventId) throw storageError();
-        if (sequence < meta.nextToEmit) {
-          if (meta.recent.some(item => item.sequence === sequence && item.eventId === eventId)) return;
-          throw storageError();
-        }
+        if (sequence < meta.nextToEmit) return;
         if (sequence !== meta.nextToEmit) throw storageError();
         const page = await tx.doc(OutboxPageDocFamily, pageKey(sequence), null as never) as { sequences: number[] } | undefined;
         if (!page?.sequences.includes(sequence)) throw storageError();
