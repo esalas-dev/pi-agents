@@ -12,6 +12,7 @@ import type { Clock, CreateId } from "../domain/requests.ts";
 import { DomainError } from "../domain/errors.ts";
 import { JobsIndexDoc, StorageMetaDoc } from "../infrastructure/durable/documents.ts";
 import { OutboxMetaDoc } from "../infrastructure/durable/outbox-documents.ts";
+import { createOutboxRepository, type OutboxRepository } from "../infrastructure/durable/outbox.ts";
 import { createJobRepository } from "../infrastructure/durable/repository.ts";
 import { inspectStorage } from "../infrastructure/storage/inspect.ts";
 import { acquireLease, type Lease } from "../infrastructure/storage/lease.ts";
@@ -26,7 +27,7 @@ import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
 
 export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; close(): Promise<void> };
+export type SessionRuntime = { jobs: JobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; close(): Promise<void> };
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
   const report = options.onReport ?? (() => {}); const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
@@ -42,6 +43,19 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const registry = createRegistry(); registry.install(CodingTools);
     const tools = new Map((CodingTools.tools ?? []).map(tool => [tool.name, tool as ToolRegistration]));
     harness = await Harness.open(await openNodeSqliteStorage(lease.dbPath), { models: options.models, registry, settings: { extensions: [CodingTools] }, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? options.defaultCwd }), onReport: report }, options.context);
+    const outbox = createOutboxRepository(harness, options.context);
+    const wakeListeners = new Set<() => void>();
+    const unsubscribeCommits = harness.subscribeCommits(() => {
+      queueMicrotask(() => {
+        for (const listener of [...wakeListeners]) {
+          try { listener(); } catch (error) { report(error); }
+        }
+      });
+    });
+    const subscribeOutboxWake = (listener: () => void): (() => void) => {
+      wakeListeners.add(listener);
+      return () => wakeListeners.delete(listener);
+    };
     const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), options.sessionId);
     const execution = createExecution(harness, options.context, tools, clock);
     let coordinator: ReturnType<typeof createCoordinator>;
@@ -55,6 +69,6 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
     await coordinator.recover();
     let closed = false;
-    return { jobs, async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await coordinator.drain(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
+    return { jobs, outbox, subscribeOutboxWake, async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await coordinator.drain(); unsubscribeCommits(); wakeListeners.clear(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
   } catch (error) { try { await harness?.close(options.context); } finally { await lease?.release(); } throw error; }
 }
