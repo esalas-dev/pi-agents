@@ -9,6 +9,8 @@ import type { StartRequest } from "../../domain/requests.ts";
 import { resolveInput } from "./resolve.ts";
 import { formatControl, formatList, formatResult, formatReview, formatStatus, formatWait, briefSummary, truncateToolResult } from "./display.ts";
 import { discoverAgents } from "../../agents.ts";
+import { createOutboxEmitter } from "../../runtime/outbox-emitter.ts";
+import { registerRpcServer } from "./rpc.ts";
 
 const NOTICE = "pi-agents-notice"; const OUTPUT = "pi-agents-output";
 const display = (value: unknown): value is { title: string; text: string; level: "info" | "success" | "error"; jobId?: string } => Boolean(value && typeof value === "object" && typeof (value as any).title === "string" && typeof (value as any).text === "string");
@@ -48,7 +50,38 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
         if (!current.generation.isActive()) break;
         if (view.success && view.value.result) await notify(job, view.value.result, current);
       }
-      return async () => { if (state === current) state = undefined; };
+      const rpc = registerRpcServer({
+        bus: pi.events,
+        state: current,
+        resolve: intent => resolveInput(current.context, current.models, intent, bindings),
+        confirmActiveCancellation: async id => {
+          if (state !== current || !current.generation.isActive() || !canConfirmMigration(current.context)) return false;
+          const accepted = await current.context.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${id}?`);
+          return accepted && state === current && current.generation.isActive();
+        },
+      });
+      const emitter = createOutboxEmitter({
+        outbox: current.runtime.outbox, bus: pi.events,
+        isActive: () => state === current && current.generation.isActive(), clock: Date.now,
+        subscribeWake: listener => current.runtime.subscribeOutboxWake(listener), report,
+      });
+      try {
+        pi.events.emit("pi-durable-subagents:ready", rpc.discovery());
+        emitter.start();
+      } catch (error) {
+        rpc.seal();
+        await rpc.close();
+        await emitter.stop();
+        throw error;
+      }
+      let disposed = false;
+      return async () => {
+        if (disposed) return;
+        disposed = true;
+        if (state === current) state = undefined;
+        rpc.seal();
+        try { await rpc.close(); } finally { await emitter.stop(); }
+      };
     } catch (error) { if (state === current) state = undefined; throw error; }
   } });
   const ensure = (ctx: ExtensionContext) => lifecycle.ensure(ctx);

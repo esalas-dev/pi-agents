@@ -8,12 +8,13 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createSession } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { registerPiAgents, canConfirmMigration } from '../src/adapters/pi/register.ts';
+import { makeEventBus } from './helpers/rpc.mjs';
 import { formatControl } from '../src/adapters/pi/display.ts';
 import { JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
 
 function fakePi() {
   const tools = []; const commands = []; const handlers = []; const entries = [];
-  return { tools, commands, handlers, entries, on(name, handler) { handlers.push({ name, handler }); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry(type, data) { entries.push({ type, data }); } };
+  return { events: makeEventBus(), tools, commands, handlers, entries, on(name, handler) { handlers.push({ name, handler }); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry(type, data) { entries.push({ type, data }); } };
 }
 
 test('el comando result rechaza un cancelled aunque tenga cuerpo durable', async () => {
