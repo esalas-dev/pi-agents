@@ -10,6 +10,7 @@ import type { ReviewService } from "./review.ts";
 import type { QueryService } from "./query.ts";
 
 export type JobsService = {
+  seal(): void;
   start(request: StartRequest, resolve: ResolveInput): Promise<Outcome<AdmissionReceipt>>;
   control(id: string, request: ControlRequest, admission?: ControlAdmission): Promise<Outcome<ControlReceipt>>;
   retry(id: string, request: RetryRequest): Promise<Outcome<RetryReceipt>>;
@@ -26,13 +27,21 @@ export type JobsService = {
 };
 
 export function createJobsService(repository: JobRepository, startService: StartService, waitService?: WaitService, resultService?: ResultService, reviewService?: ReviewService, queryService?: QueryService, controlService?: { control(id: string, request: ControlRequest, admission?: ControlAdmission): Promise<Outcome<ControlReceipt>>; retry(id: string, request: RetryRequest): Promise<Outcome<RetryReceipt>> }): JobsService {
+  let sealed = false;
+  const closing = () => failure(new DomainError("RUNTIME_CLOSING"));
   return {
-    start: (request, resolve) => startService.start(request, resolve),
+    seal() { if (!sealed) { sealed = true; startService.seal(); repository.seal(); } },
+    async start(request, resolve) {
+      if (sealed) return closing();
+      return startService.start(request, resolve);
+    },
     async control(id, request, admission) {
+      if (sealed) return closing();
       if (!controlService) return failure(new DomainError("STORAGE_ERROR"));
       return controlService.control(id, request, admission);
     },
     async retry(id, request) {
+      if (sealed) return closing();
       if (!controlService) return failure(new DomainError("STORAGE_ERROR"));
       return controlService.retry(id, request);
     },
@@ -60,18 +69,22 @@ export function createJobsService(repository: JobRepository, startService: Start
       return waitService.waitForJob(id, options);
     },
     async getResult(id, access) {
+      if (sealed && access.operation === "consume") return closing();
       if (!resultService) return failure(new DomainError("STORAGE_ERROR"));
       return resultService.getResult(id, access);
     },
     async consumeResult(id, request) {
+      if (sealed) return closing();
       if (!resultService) return failure(new DomainError("STORAGE_ERROR"));
       return resultService.consumeResult(id, request);
     },
     async decideReview(id, decision) {
+      if (sealed) return closing();
       if (!reviewService) return failure(new DomainError("STORAGE_ERROR"));
       return reviewService.decideReview(id, decision);
     },
     async markNotified(id) {
+      if (sealed) return closing();
       if (!(await repository.get(id))) return failure(new DomainError("JOB_NOT_FOUND"));
       await repository.markNotified(id);
       return { success: true, value: undefined };

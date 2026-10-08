@@ -27,7 +27,7 @@ import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
 
 export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; close(): Promise<void> };
+export type SessionRuntime = { jobs: JobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; seal(): void; close(): Promise<void> };
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
   const report = options.onReport ?? (() => {}); const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
@@ -68,7 +68,17 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const jobs = createJobsService(repository, start, wait, result, review, query, control);
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
     await coordinator.recover();
-    let closed = false;
-    return { jobs, outbox, subscribeOutboxWake, async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await coordinator.drain(); unsubscribeCommits(); wakeListeners.clear(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
+    let closePromise: Promise<void> | undefined;
+    let sealed = false;
+    const seal = () => { if (sealed) return; sealed = true; jobs.seal(); coordinator.stop(); };
+    return { jobs, outbox, subscribeOutboxWake, seal, close() {
+      seal();
+      closePromise ??= (async () => {
+        unsubscribeCommits(); wakeListeners.clear();
+        try { await harness?.close(options.context); }
+        finally { harness = undefined; await lease?.release(); lease = undefined; }
+      })();
+      return closePromise;
+    } };
   } catch (error) { try { await harness?.close(options.context); } finally { await lease?.release(); } throw error; }
 }

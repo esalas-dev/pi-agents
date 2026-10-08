@@ -12,6 +12,7 @@ import type { JobEventV1 } from "../../public/job-events.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
+  seal(): void;
   get(id: string): Promise<JobRecord | undefined>;
   index(): Promise<JobsIndex | undefined>;
   review(id: string): Promise<JobReviewDocument | undefined>;
@@ -55,6 +56,11 @@ function storedJob(job: JobRecord): JobRecord {
 function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
 export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId, sessionId: string): JobRepository {
+  let sealed = false;
+  const commit = <T>(writes: (tx: Tx) => Promise<T>, commitContext: Context = context): Promise<T> => {
+    if (sealed) throw new DomainError("RUNTIME_CLOSING");
+    return session.commit(writes, commitContext);
+  };
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
   const emitEvent = (tx: Tx, job: JobRecord, type: Parameters<typeof appendEvent>[1]["type"], at: number, extra: Partial<JobEventV1["data"]> = {}) => appendEvent(tx, { sessionId, jobId: job.id, type, occurredAt: at, data: { status: publicStatus(job), agent: job.agent.name, hasResult: Boolean(job.resultMeta), ...extra } });
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
@@ -79,6 +85,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     await writeIndexFor(tx, job, false, Boolean(result));
   };
   return {
+    seal() { sealed = true; },
     async receipt(requestId) {
       const key = createHash("sha256").update(requestId).digest("hex");
       const cell = await session.snapshot(RequestLedgerDocFamily, key, context) as { record: RequestRecord | null } | undefined;
@@ -87,7 +94,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     async admit(request, input) {
       const key = createHash("sha256").update(request.requestId).digest("hex");
       let receipt: AdmissionReceipt | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const cell = await tx.doc(RequestLedgerDocFamily, key, null);
         const existing = cell.record as RequestRecord | null;
         if (existing) {
@@ -120,7 +127,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async decideReview(id, decision, at) {
       let receipt: ReviewReceipt | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
@@ -149,7 +156,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     async applyControl(id, request, at, admission) {
       assertControlRequest(request);
       let receipt: ControlReceipt | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const rawJob = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         const job = rawJob ? plain(rawJob) : undefined;
         if (!job) throw new DomainError("JOB_NOT_FOUND");
@@ -211,7 +218,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     async retry(id, request, at) {
       assertControlRequest(request);
       let receipt: RetryReceipt | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const rawOriginal = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         const original = rawOriginal ? plain(rawOriginal) : undefined;
         if (!original) throw new DomainError("JOB_NOT_FOUND");
@@ -246,7 +253,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async consume(id, request, at) {
       let receipt: ConsumeReceipt | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         const payloadHash = createHash("sha256").update(canonicalJson({ version: 1, operation: "consume", jobId: id, actor: request.actor, consumer: request.consumer })).digest("hex");
@@ -278,7 +285,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       return receipt;
     },
     async readAuthorizedResult(id, access) {
-      return await session.commit(async tx => {
+      return await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
         if (!job) throw new DomainError("JOB_NOT_FOUND");
         const index = await tx.doc(JobsIndexDoc);
@@ -318,7 +325,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       return jobs.filter((job): job is JobRecord => Boolean(job)).map(job => structuredClone(job));
     },
     async markNotified(id) {
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || !job.id) return;
         if (!job.notified) { job.notified = true; job.updatedAt = clock(); }
@@ -327,7 +334,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async finishCancelled(id, detail, at) {
       const result: JobResult = { finalResponse: "", durationMs: 0, model: { provider: "unknown", modelId: "unknown" }, status: "interrupted", error: detail };
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || job.status !== "cancelling") return;
         result.model = plain(job.model);
@@ -340,7 +347,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async finish(id, result, at) {
       assertResult(result);
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || terminalStatuses.has(job.status)) return;
         job.status = result.status; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, ...(result.error === undefined ? {} : { error: result.error }) };
@@ -351,7 +358,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       }, context);
     },
     async markRunning(id, submissionId, at) {
-      await session.commit(async tx => {
+      await commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || job.status !== "provisioning") return;
         job.status = "running"; job.submissionId = submissionId; job.startedAt ??= at; job.updatedAt = at;
@@ -362,7 +369,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     async create(job, result) {
       assertJob(job);
       if (job.status !== "queued") throw new DomainError("STORAGE_INCONSISTENT");
-      await session.commit(async tx => {
+      await commit(async tx => {
         const existing = await tx.doc(JobDocFamily, job.id, { id: job.id } as unknown as JsonValue) as JobRecord;
         if (existing.status !== undefined) throw new DomainError("STORAGE_INCONSISTENT");
         await commitJob(tx, job, result);
@@ -371,7 +378,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async claimNext(maxConcurrency, createConversation) {
       let claimed: JobRecord | undefined;
-      await session.commit(async tx => {
+      await commit(async tx => {
         const index = await tx.doc(JobsIndexDoc);
         const active = Object.values(index.summaries).filter(item => activeStatuses.has(item.status)).length;
         if (active >= maxConcurrency) return;
