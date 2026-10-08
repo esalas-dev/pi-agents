@@ -6,7 +6,7 @@ Fecha: 2026-10-07. **Diseño conversacional y especificación escrita aprobados 
 
 Origen documental: `docs/parent-review-design`, worktree `.worktrees/parent-review`, sobre el bootstrap revisado `98a19223ce582e424ad534e1eebb008033ecc674`. La continuación autorizada se realiza en `.worktrees/parent-review-dev`, rama `feat/parent-review-dev`; el source instalado `.worktrees/parent-review` permanece en `efe1615`, sin modificaciones de producto.
 
-**Enmienda de P3 — pendiente de revisión escrita:** tras reproducir el bloqueo de cierre del SDK, el usuario eligió implementar la retirada en dos fases y conservar una observación para futuras versiones de Pi Durable. Esta enmienda sustituye únicamente el contrato de lifecycle indicado en §3.1 y precisa PR-09; no acepta el candidato P3 ni sus otros findings, no cambia permisos de review y no autoriza instalación/promoción. La aprobación conversacional permite preparar esta revisión escrita; después corresponde actualizar el plan.
+**Enmienda de P3 — aprobada por revisión escrita en `e1fcfec`:** tras reproducir el bloqueo de cierre del SDK, el usuario eligió implementar la retirada en dos fases y conservar una observación para futuras versiones de Pi Durable. Esta enmienda sustituye únicamente el contrato de lifecycle indicado en §3.1 y precisa PR-09; no acepta el candidato P3 ni sus otros findings, no cambia permisos de review y no autoriza instalación/promoción. La revisión escrita fue aprobada con «listo, continua»; corresponde revisar el plan actualizado antes de implementar.
 
 ## 1. Objetivo y alternativas
 
@@ -157,4 +157,4 @@ TDD RED/GREEN real de policy/ownership/ledger/adapter y covering tests persisten
 
 ## 8. Próximo gate
 
-La especificación original y el plan fueron aprobados; P1/P2 están aceptadas técnicamente y P3 sigue sin aceptar. Próximo gate para esta enmienda: revisión humana de §3.1 y PR-09, seguida de actualización y revisión del plan P3/P4 antes de implementar el contrato modificado. Mantener la ejecución aislada por subagentes y las revisiones independientes. Esta enmienda no modifica autoridad instalada ni resuelve el gate pendiente del job legacy T1.
+La especificación original y el plan fueron aprobados; P1/P2 están aceptadas técnicamente y P3 sigue sin aceptar. §3.1 y PR-09 de la enmienda escrita ya están aprobados. Próximo gate: revisión humana del plan P3/P4 actualizado antes de implementar el contrato modificado. Mantener la ejecución aislada por subagentes y las revisiones independientes. Esta enmienda no modifica autoridad instalada ni resuelve el gate pendiente del job legacy T1.
