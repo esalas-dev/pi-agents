@@ -4,7 +4,7 @@
 
 **Diseño conversacional y documento escrito aprobados humanamente.** Fecha: 2026-10-07 UTC. El usuario aprobó explícitamente el documento versionado en `e0d0a99`. Esta aprobación habilita la elaboración del plan, no la implementación, instalación de dependencias ni migraciones reales. El plan requerirá revisión y elección humana del método de ejecución.
 
-Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad.
+Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad. La enmienda solicitada el 2026-10-08 a la especificación 01 habilita lectura/entrega al padre verificado; no modifica el contrato de resultados expuestos por RPC.
 
 Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 02 cerrada por aprobación humana y PR #4/#5 fusionados. Entorno comprobado: macOS arm64, Node `26.10.0`, host Pi detectado actualmente `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. La resolución valida la versión instalada y la alineación de sus peers; no se promete compatibilidad histórica ni con todas las versiones posteriores.
 
@@ -111,7 +111,7 @@ Todos los sobres se validan en runtime. IDs son strings no vacíos; `requestId`,
 
 `status`, `list` y `wait` proyectan por allowlist: ID, estado público, nombre de agente, modelo, instantes, posición de cola, duración, disponibilidad de resultado, estado de revisión y resumen de consumo. No retornan `JobRecord`, prompts, definición completa del agente, `filePath`, cwd, tarea, errores internos, actores o historial de control. `provisioning` sigue proyectado como `running` en vistas públicas; el evento específico identifica el paso interno sin cambiar esa compatibilidad.
 
-`result` aplica el acceso restringido de fase 01, también durante un replay: no devuelve cuerpos `pending` o `rejected`. Retorna texto UTF-8 acotado, `totalBytes`, SHA-256 del texto completo e indicador `truncated`, con metadatos públicos de job/resultado. El sobre JSON serializado completo debe caber en 65536 bytes: se reserva espacio para metadatos y escaping antes de truncar en frontera UTF-8. No se incluyen el cuerpo completo en otro campo, una ruta de archivo ni mensajes internos de error. La disponibilidad de resultados de jobs cancelados debe comprobarse con el contrato de dominio; no se fabrica un resultado cuando el servicio responde `RESULT_NOT_READY`.
+`result` por RPC aplica el acceso restringido de fase 01, también durante un replay: no devuelve cuerpos `pending` o `rejected`. La excepción de lectura para el padre solo corresponde a su tool interna y a la ruta interna de entrega, con relación de creación verificada; un RPC `callerId` declarativo no acredita parentesco ni hereda esa excepción. RPC retorna texto UTF-8 acotado, `totalBytes`, SHA-256 del texto completo e indicador `truncated`, con metadatos públicos de job/resultado. El sobre JSON serializado completo debe caber en 65536 bytes: se reserva espacio para metadatos y escaping antes de truncar en frontera UTF-8. No se incluyen el cuerpo completo en otro campo, una ruta de archivo ni mensajes internos de error. La disponibilidad de resultados de jobs cancelados debe comprobarse con el contrato de dominio; no se fabrica un resultado cuando el servicio responde `RESULT_NOT_READY`.
 
 ### 3.4 Descubrimiento y capacidades
 
@@ -249,7 +249,7 @@ Una reapertura después de cada ventana de backup/migración debe demostrar ause
 | AC-03-05 | Caída después de emisión y antes de confirmación duplica con mismo eventId; reapertura drena pendientes en orden |
 | AC-03-06 | Pendientes cruzan varias páginas; ventana reciente conserva como máximo 1000 referencias sin borrar pendientes ni prometer GC física |
 | AC-03-07 | Status/list/wait no materializan cuerpos de resultados ni exponen snapshots internos; result cabe en 65536 bytes incluyendo JSON y escaping |
-| AC-03-08 | Result pending/rejected no se expone ni mediante replay; consumo repetido no incrementa contador ni crea otro evento |
+| AC-03-08 | Result RPC pending/rejected no se expone ni mediante replay; la excepción de lectura del padre no autoriza RPC; consumo repetido no incrementa contador ni crea otro evento |
 | AC-03-09 | Actor forjado, control no autorizado y review RPC se rechazan; spoofing de callerId no se presenta como resuelto |
 | AC-03-10 | Cancel activa requiere consentimiento TUI; carrera queued→running y timeout/rechazo de confirmación no la evitan; pausa activa sigue no soportada |
 | AC-03-11 | Deadlines, correlaciones y respuestas tardías no producen doble respuesta; timeout no revierte commit ni cancela job |
