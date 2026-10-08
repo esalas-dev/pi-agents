@@ -382,7 +382,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       await session.commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || job.status !== "cancelling") return;
-        result.model = structuredClone(job.model);
+        result.model = plain(job.model);
         job.status = "cancelled"; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, error: detail };
         job.finishedAt = at; job.updatedAt = at; delete job.control;
         const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));

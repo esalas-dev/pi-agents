@@ -8,6 +8,11 @@ export function createCoordinator(options: { repository: JobRepository; executio
   const monitors = new Map<string, Promise<void>>(); const pending = new Set<Promise<void>>(); let stopped = false; let tail = Promise.resolve(); let generation = 0;
   const report = (error: unknown) => { try { options.report(error); } catch {} };
   const active = (g: number) => !stopped && g === generation;
+  const track = (task: Promise<void>) => {
+    pending.add(task);
+    void task.then(() => pending.delete(task), () => pending.delete(task));
+    return task;
+  };
   const fail = async (job: JobRecord, error: unknown, g: number) => {
     if (!active(g)) return;
     try { await options.repository.finish(job.id, { finalResponse: "", durationMs: 0, model: job.model, status: "failed", error: error instanceof Error ? error.message : String(error) }, options.clock()); }
@@ -17,15 +22,19 @@ export function createCoordinator(options: { repository: JobRepository; executio
     if (monitors.has(job.id)) return;
     const g = generation;
     const promise = (async () => {
+      let admitted = false;
       try {
         const result = await options.execution.wait(job);
         if (!active(g)) return;
-        await options.repository.finish(job.id, result, options.clock());
-        if (!active(g)) return;
-        const current = await options.repository.get(job.id);
-        if (!active(g)) return;
-        if (current && options.onSettled) { try { await options.onSettled(current, result); } catch (error) { report(error); } }
-      } catch (error) { if (active(g)) await fail(job, error, g); else report(error); }
+        admitted = true;
+        await track((async () => {
+          await options.repository.finish(job.id, result, options.clock());
+          if (!active(g)) return;
+          const current = await options.repository.get(job.id);
+          if (!active(g)) return;
+          if (current && options.onSettled) { try { await options.onSettled(current, result); } catch (error) { report(error); } }
+        })());
+      } catch (error) { if (active(g)) await track(fail(job, error, g)); else if (admitted) report(error); }
       finally { monitors.delete(job.id); if (active(g)) wake(); }
     })();
     monitors.set(job.id, promise);
@@ -39,8 +48,8 @@ export function createCoordinator(options: { repository: JobRepository; executio
       if (running) monitor(running);
     } catch (error) { if (active(g)) await fail(job, error, g); else report(error); }
   };
-  const startContinuation = (job: JobRecord) => { const task = continueJob(job); pending.add(task); void task.finally(() => pending.delete(task)); };
-  const reconcileControls = async () => {
+  const startContinuation = (job: JobRecord) => { void track(continueJob(job)); };
+  const reconcile = async () => {
     const g = generation;
     for (const job of await options.repository.active()) {
       if (!active(g)) return;
@@ -56,6 +65,7 @@ export function createCoordinator(options: { repository: JobRepository; executio
       }
     }
   };
+  const reconcileControls = () => track(reconcile());
   const pump = async () => {
     if (stopped) return;
     await reconcileControls();
