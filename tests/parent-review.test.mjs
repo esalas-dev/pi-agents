@@ -17,13 +17,18 @@ async function setup(status = 'completed', review = { status: 'pending' }, paren
 }
 const parentDecision = (requestId, status = 'approved', reason) => ({ requestId, status, ...(reason === undefined ? {} : { reason }) });
 
- test('padre propio aprueba y rechaza con actor model derivado', async () => {
-  const current = await setup(); try {
+test('padre propio aprueba y rechaza con actor model derivado', async () => {
+  const current = await setup();
+  try {
     const approved = await current.service.decideReview('child', parentDecision('p1'), authority);
-    assert.equal(approved.success, true); assert.deepEqual(approved.value.decidedByActor, { kind: 'model', id: 'parent:s1' });
+    assert.equal(approved.success, true);
+    assert.deepEqual(approved.value.decidedByActor, { kind: 'model', id: 'parent:s1' });
     const rejected = await current.service.decideReview('child', parentDecision('p2', 'rejected', 'no'), authority);
-    assert.equal(rejected.success, true); assert.equal(rejected.value.status, 'rejected');
-  } finally { await current.fixture.close(); }
+    assert.equal(rejected.success, true);
+    assert.equal(rejected.value.status, 'rejected');
+  } finally {
+    await current.fixture.close();
+  }
 });
 
 test('failed con resultado no implica éxito técnico', async () => {
