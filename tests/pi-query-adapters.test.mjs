@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatToolResultResponse, registerPiAgents } from '../src/adapters/pi/register.ts';
+import { makeEventBus } from './helpers/rpc.mjs';
 
 function fakePi() {
   const tools = []; const commands = []; const handlers = new Map();
-  return { tools, commands, handlers, on(name, handler) { handlers.set(name, handler); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry() {} };
+  return { events: makeEventBus(), tools, commands, handlers, on(name, handler) { handlers.set(name, handler); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry() {} };
 }
 
 const context = sessionId => ({ cwd: '/tmp', mode: 'tui', hasUI: true, isProjectTrusted: () => false, sessionManager: { getSessionId: () => sessionId }, modelRegistry: { getAll: () => [], getProvider: () => undefined }, ui: { confirm: async () => false, notify() {} } });
@@ -24,6 +25,8 @@ test('una espera abortada al cambiar de generación no cancela el trabajo', { ti
     getAgentDir: () => '/tmp', createModels: async () => ({ registerNativeProvider() {} }), resolveModel: () => ({}), text: value => value,
     Type: { Object: fields => ({ fields }), String: () => ({ type: 'string' }) }, version: 'test',
     openRuntime: async () => ({
+      outbox: { pending: async () => [], markEmitted: async () => {} },
+      subscribeOutboxWake: () => () => {},
       jobs: {
         unnotified: async () => ({ success: true, value: [] }),
         waitForJob: (_id, { signal }) => {

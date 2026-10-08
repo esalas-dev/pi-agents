@@ -10,10 +10,11 @@ import { createV3Database } from './helpers/v3.mjs';
 import { createLegacyFixture } from './helpers/legacy.mjs';
 import { inspectStorage } from '../src/infrastructure/storage/inspect.ts';
 import { acquireLease } from '../src/infrastructure/storage/lease.ts';
+import { makeEventBus } from './helpers/rpc.mjs';
 
 function fakePi() {
   const tools = []; const commands = []; const handlers = []; const entries = [];
-  return { tools, commands, handlers, entries, on(name, handler) { handlers.push({ name, handler }); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry(type, data) { entries.push({ type, data }); } };
+  return { events: makeEventBus(), tools, commands, handlers, entries, on(name, handler) { handlers.push({ name, handler }); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry(type, data) { entries.push({ type, data }); } };
 }
 
 test('bloquea runtime en esquema 3 hasta migración explícita a esquema 5', async () => {
