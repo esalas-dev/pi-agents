@@ -10,7 +10,7 @@
 
 **Spec:** [`../specs/2026-10-08-comunicacion-padre-hijos-design.md`](../specs/2026-10-08-comunicacion-padre-hijos-design.md), aprobada por el usuario el 2026-10-08. Refina [`01-consulta-listado-espera.md`](../../../specs/01-consulta-listado-espera.md). Los cambios de fase 03 no se vuelven a especificar aquí.
 
-**Estado:** Plan propuesto; requiere revisión y aprobación humana. **No ejecutar ninguna tarea hasta que T4 de fase 03 haya sido cerrada y aceptada mediante su gate independiente y el usuario apruebe este plan.** La autorización del documento de diseño no aprueba este plan ni autoriza implementación, migración real, publicación o promoción.
+**Estado:** Plan aprobado por el usuario el 2026-10-08. **No ejecutar ninguna tarea hasta que T4 de fase 03 haya sido cerrada y aceptada mediante su gate independiente.** La aprobación de este plan no autoriza implementación, migración real, publicación o promoción.
 
 ## Global Constraints
 
