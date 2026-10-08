@@ -113,6 +113,46 @@ test('la admisión de un actor model crea revisión pending', async () => {
   } finally { await fixture.close(); }
 });
 
+test('replay de consume vuelve a comprobar review vigente sin incrementar consumo', async () => {
+  for (const nextStatus of ['rejected', 'pending']) {
+    const current = await setup();
+    try {
+      await current.reviewService.decideReview('job-review', { requestId: `review-approved-${nextStatus}`, status: 'approved', actor: { kind: 'human', id: 'u' } });
+      const request = { requestId: `consume-replay-${nextStatus}`, actor: { kind: 'model', id: 'm' }, consumer: 'model:m' };
+      const first = await current.resultService.consumeResult('job-review', request);
+      assert.equal(first.success, true);
+      await current.reviewService.decideReview('job-review', { requestId: `review-${nextStatus}`, status: nextStatus, actor: { kind: 'human', id: 'u' } });
+      const replay = await current.resultService.consumeResult('job-review', request);
+      assert.equal(replay.success, false);
+      assert.equal(replay.error.code, nextStatus === 'rejected' ? 'RESULT_REJECTED' : 'RESULT_REVIEW_REQUIRED');
+      assert.equal((await current.fixture.repository.consumption('job-review')).count, 1);
+      assert.equal((await current.fixture.outbox.pending(20)).filter(event => event.type === 'job.consumed').length, 1);
+    } finally { await current.fixture.close(); }
+  }
+});
+
+test('peek carga resultado autorizado sin consultar repository.result', async () => {
+  const current = await setup({ status: 'approved' });
+  try {
+    const repository = { ...current.fixture.repository, result: async () => { throw new Error('unrestricted result read'); } };
+    const service = createResultService(repository, current.query);
+    const peek = await service.getResult('job-review', { mode: 'tool', operation: 'peek', actor: { kind: 'model', id: 'm' } });
+    assert.equal(peek.success, true);
+    assert.equal(peek.value.result.finalResponse, 'resultado completo');
+  } finally { await current.fixture.close(); }
+});
+
+test('resultado cancelled conserva RESULT_NOT_READY', async () => {
+  const current = await setup({ status: 'not_required' });
+  try {
+    await current.fixture.seedJob(job('cancelled', { status: 'cancelled', finishedAt: 1010 }), { ...result, status: 'interrupted' });
+    const service = createResultService(current.fixture.repository, createQueryService(current.fixture.repository));
+    const outcome = await service.getResult('cancelled', { mode: 'human', operation: 'peek', actor: { kind: 'human', id: 'u' } });
+    assert.equal(outcome.success, false);
+    assert.equal(outcome.error.code, 'RESULT_NOT_READY');
+  } finally { await current.fixture.close(); }
+});
+
 test('resultado ausente o no terminal no se puede recuperar', async () => {
   const fixture = await makeStoreFixture();
   try {

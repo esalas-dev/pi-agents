@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
-import type { ConsumptionState, JobRecord, JobResult, ReviewState } from "../../domain/jobs.ts";
+import type { ConsumptionState, JobRecord, JobResult, ResultAccess, ResultView, ReviewState } from "../../domain/jobs.ts";
 import { assertJob, assertResult, publicStatus } from "../../domain/jobs.ts";
-import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
+import type { AdmissionReceipt, Clock, ControlAdmission, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
@@ -17,9 +17,10 @@ export type JobRepository = {
   review(id: string): Promise<JobReviewDocument | undefined>;
   consumption(id: string): Promise<ConsumptionState | undefined>;
   decideReview(id: string, decision: { requestId: string; status: "approved" | "rejected"; actor: { kind: "human"; id?: string }; reason?: string }, at: number): Promise<ReviewReceipt>;
-  applyControl(id: string, request: ControlRequest, at: number): Promise<ControlReceipt>;
+  applyControl(id: string, request: ControlRequest, at: number, admission?: ControlAdmission): Promise<ControlReceipt>;
   retry(id: string, request: RetryRequest, at: number): Promise<RetryReceipt>;
   consume(id: string, request: ConsumeRequest, at: number): Promise<ConsumeReceipt>;
+  readAuthorizedResult(id: string, access: ResultAccess): Promise<ResultView>;
   result(id: string): Promise<JobResult | undefined>;
   queuedPosition(id: string): Promise<number | undefined>;
   active(): Promise<JobRecord[]>;
@@ -144,7 +145,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
     },
-    async applyControl(id, request, at) {
+    async applyControl(id, request, at, admission) {
       assertControlRequest(request);
       let receipt: ControlReceipt | undefined;
       await session.commit(async tx => {
@@ -161,6 +162,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
           return;
         }
         if (request.action === "retry") throw new DomainError("RETRY_NOT_ALLOWED");
+        if (request.action === "cancel" && admission?.requireActiveConfirmation && !admission.activeCancellationConfirmed) throw new DomainError("ACTIVE_CANCEL_CONFIRMATION_REQUIRED");
         const index = await tx.doc(JobsIndexDoc);
         const previousStatus = job.status;
         let result: JobResult | undefined;
@@ -250,11 +252,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const key = createHash("sha256").update(request.requestId).digest("hex");
         const cell = await tx.doc(RequestLedgerDocFamily, key, null);
         const existing = cell.record as RequestRecord | null;
-        if (existing) {
-          if (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash) throw new DomainError("REQUEST_ID_CONFLICT");
-          receipt = plain(existing.receipt) as ConsumeReceipt;
-          return;
-        }
+        if (existing && (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash)) throw new DomainError("REQUEST_ID_CONFLICT");
         const index = await tx.doc(JobsIndexDoc);
         if (!index.summaries[id]?.hasResult || !terminalStatuses.has(job.status)) throw new DomainError("RESULT_NOT_READY");
         const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
@@ -262,6 +260,10 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (review.status === "rejected") throw new DomainError("RESULT_REJECTED");
         const body = await tx.doc(JobResultDocFamily, id, null as unknown as JsonValue) as JobResult | undefined;
         if (!body || typeof body.finalResponse !== "string") throw new DomainError("RESULT_NOT_READY");
+        if (existing) {
+          receipt = plain(existing.receipt) as ConsumeReceipt;
+          return;
+        }
         const consumption = await tx.doc(JobConsumptionDocFamily, id, { count: 0, requestIds: [] });
         consumption.count += 1; consumption.firstConsumedAt ??= at; consumption.lastConsumedAt = at; consumption.lastConsumer = request.consumer;
         consumption.requestIds = [...consumption.requestIds.filter(candidate => candidate !== request.requestId), request.requestId].slice(-32);
@@ -273,6 +275,21 @@ export function createJobRepository(session: Session, context: Context, clock: C
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
+    },
+    async readAuthorizedResult(id, access) {
+      return await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue) as JobRecord | undefined;
+        if (!job) throw new DomainError("JOB_NOT_FOUND");
+        const index = await tx.doc(JobsIndexDoc);
+        if (!index.summaries[id]?.hasResult || !["completed", "failed", "interrupted"].includes(job.status)) throw new DomainError("RESULT_NOT_READY");
+        const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
+        if (access.mode === "tool" && review.status === "pending") throw new DomainError("RESULT_REVIEW_REQUIRED");
+        if (access.mode === "tool" && review.status === "rejected") throw new DomainError("RESULT_REJECTED");
+        const result = await tx.doc(JobResultDocFamily, id, null as unknown as JsonValue) as JobResult | undefined;
+        if (!result || typeof result.finalResponse !== "string") throw new DomainError("RESULT_NOT_READY");
+        const position = index.order.indexOf(id);
+        return { job: plain(job), queuePosition: position < 0 ? undefined : position + 1, result: plain(result) };
+      }, context);
     },
     async result(id) {
       const job = await readJob(id);

@@ -6,7 +6,7 @@ import { assertWaitOptions, type JobQueryView, type WaitOptions } from '../domai
 import { DomainError, failure, type Outcome } from '../domain/errors.ts';
 import type { QueryService } from './query.ts';
 
-const terminal = new Set(['completed', 'failed', 'interrupted']);
+const terminal = new Set(['completed', 'failed', 'interrupted', 'cancelled']);
 
 function satisfies(view: JobQueryView, until: WaitOptions['until']): boolean {
   return until === undefined || until === 'terminal' ? terminal.has(view.status) : view.status === until;

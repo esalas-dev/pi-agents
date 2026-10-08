@@ -83,13 +83,15 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     if (!params.request_id) return { content: [{ type: "text", text: "control requiere request_id." }], isError: true };
     const current = await ensure(ctx); const status = await current.runtime.jobs.status(params.id);
     if (!status.success) return toolReply(status, value => value);
-    const active = ["provisioning", "running", "cancelling"].includes(status.value.job.status);
-    if (params.action === "cancel" && active) {
-      if (!canConfirmMigration(ctx)) return { content: [{ type: "text", text: "La cancelación activa requiere la TUI con UI activa." }], isError: true };
-      if (!await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${params.id}?`)) return { content: [{ type: "text", text: "Cancelación no autorizada." }], isError: true };
+    let activeCancellationConfirmed = params.action !== "cancel";
+    if (params.action === "cancel") {
+      if (!canConfirmMigration(ctx)) return { content: [{ type: "text", text: "La cancelación requiere la TUI con UI activa." }], isError: true };
+      if (!await ctx.ui.confirm("Cancelar trabajo", `¿Cancelar ${params.id}?`)) return { content: [{ type: "text", text: "Cancelación no autorizada." }], isError: true };
+      activeCancellationConfirmed = true;
     }
     const request = { requestId: params.request_id, action: params.action, actor: { kind: "model", id: toolCallId }, ...(params.reason === undefined ? {} : { reason: params.reason }) } as any;
-    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request);
+    const admission = { requireActiveConfirmation: true, activeCancellationConfirmed };
+    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request, admission);
     return toolReply(outcome, formatControl);
   } } as any));
   pi.registerCommand("subagents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
@@ -101,13 +103,15 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
       if (command.action === "wait") { const waited = await current.runtime.jobs.waitForJob(command.id, { until: command.until as any, timeoutSeconds: command.timeoutSeconds }); if (!waited.success) throw new Error(waited.error.message); pi.appendEntry(OUTPUT, { title: `Espera · ${command.id}`, text: formatWait(waited.value), level: "info", jobId: command.id }); return; }
       if (["cancel", "pause", "resume", "retry"].includes(command.action)) {
         const status = await current.runtime.jobs.status(command.id); if (!status.success) throw new Error(status.error.message);
-        const active = ["provisioning", "running", "cancelling"].includes(status.value.job.status);
-        if (command.action === "cancel" && active) {
-          if (!canConfirmMigration(ctx)) throw new Error("La cancelación activa requiere la TUI con UI activa.");
-          if (!command.yes && !await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${command.id}?`)) throw new Error("Cancelación no autorizada.");
+        let activeCancellationConfirmed = command.action !== "cancel";
+        if (command.action === "cancel") {
+          if (!canConfirmMigration(ctx)) throw new Error("La cancelación requiere la TUI con UI activa.");
+          if (!command.yes && !await ctx.ui.confirm("Cancelar trabajo", `¿Cancelar ${command.id}?`)) throw new Error("Cancelación no autorizada.");
+          activeCancellationConfirmed = true;
         }
         const request = { requestId, action: command.action, actor: { kind: "human", id: "tui" }, ...(command.reason === undefined ? {} : { reason: command.reason }) } as any;
-        const outcome = command.action === "retry" ? await current.runtime.jobs.retry(command.id, request) : await current.runtime.jobs.control(command.id, request);
+        const admission = { requireActiveConfirmation: true, activeCancellationConfirmed };
+        const outcome = command.action === "retry" ? await current.runtime.jobs.retry(command.id, request) : await current.runtime.jobs.control(command.id, request, admission);
         if (!outcome.success) throw new Error(outcome.error.message); pi.appendEntry(OUTPUT, { title: `Control · ${command.id}`, text: formatControl(outcome.value), level: "info", jobId: command.id }); return;
       }
       if (!canConfirmMigration(ctx)) throw new Error("La revisión requiere la TUI con UI activa.");
