@@ -11,7 +11,7 @@ import { openSessionRuntime } from '../src/runtime/session.ts';
 const waitFor = async (check, timeout = 10_000) => { const deadline = Date.now() + timeout; while (Date.now() < deadline) { const value = await check(); if (value) return value; await new Promise(resolve => setTimeout(resolve, 10)); } throw new Error('timeout'); };
 const input = task => ({ task, cwd: process.cwd(), agent: { name: 'test-agent', description: 'test', systemPrompt: 'Answer briefly.', source: 'personal', filePath: '/tmp/test-agent.md', tools: [] }, model: { provider: 'faux', modelId: 'faux-1' }, thinkingLevel: 'off' });
 const request = (id, task) => ({ requestId: id, actor: { kind: 'model', id }, intent: { agent: 'test-agent', task, cwd: process.cwd() } });
-const options = (storagePath, models, createId, maxConcurrency = 1) => ({ storagePath, models, context: BACKGROUND_CONTEXT, defaultCwd: process.cwd(), maxConcurrency, createId });
+const options = (storagePath, models, createId, maxConcurrency = 1) => ({ storagePath, models, context: BACKGROUND_CONTEXT, defaultCwd: process.cwd(), sessionId: `test-${storagePath}`, maxConcurrency, createId });
 
  test('ejecuta, persiste y recupera un resultado durable', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-jobs-')); const database = join(directory, 'jobs.sqlite'); const models = createModels(); const faux = fauxProvider(); faux.setResponses([fauxAssistantMessage([fauxText('resultado durable')])]); models.setProvider(faux.provider); let runtime;

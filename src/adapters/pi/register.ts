@@ -47,18 +47,22 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     const models = await bindings.createModels({ authPath: path.join(bindings.getAgentDir(), "auth.json"), modelsPath: path.join(bindings.getAgentDir(), "models.json"), refreshOnCreate: false });
     for (const providerId of new Set(ctx.modelRegistry.getAll().map(model => model.provider))) { const provider = ctx.modelRegistry.getProvider(providerId); if (provider) models.registerNativeProvider(provider); }
     const database = statePath(id, bindings.getAgentDir());
-    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id) await notify(job, result, current); } };
+    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, sessionId: id, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id) await notify(job, result, current); } };
     let runtime: SessionRuntime;
     try { runtime = await openSessionRuntime(runtimeOptions); }
     catch (error) {
       if (!(error instanceof DomainError) || error.error.code !== "MIGRATION_REQUIRED" || !canConfirmMigration(ctx)) throw error;
-      const migration = await createMaintenanceService(BACKGROUND_CONTEXT).migrate({ dbPath: database, clock: Date.now, confirm: async info => {
-        if (ctx.sessionManager.getSessionId() !== id) return undefined;
-        const accepted = await ctx.ui.confirm("Migrar almacenamiento de subagents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
-        if (!accepted || ctx.sessionManager.getSessionId() !== id) return undefined;
-        return { requestId: `migration:${id}:${Date.now()}`, actor: { kind: "human", id: "tui" }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: Date.now() };
-      } });
-      if (!migration.success) throw new DomainError(migration.error.code);
+      const maintenance = createMaintenanceService(BACKGROUND_CONTEXT);
+      while (true) {
+        const migration = await maintenance.migrate({ dbPath: database, clock: Date.now, confirm: async info => {
+          if (ctx.sessionManager.getSessionId() !== id) return undefined;
+          const accepted = await ctx.ui.confirm("Migrar almacenamiento de subagents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
+          if (!accepted || ctx.sessionManager.getSessionId() !== id) return undefined;
+          return { requestId: `migration:${id}:${Date.now()}`, actor: { kind: "human", id: "tui" }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: Date.now() };
+        } });
+        if (!migration.success) throw new DomainError(migration.error.code);
+        if (migration.value.schemaVersion === 5) break;
+      }
       runtime = await openSessionRuntime(runtimeOptions);
     }
     state = { sessionId: id, runtime, models, context: ctx }; completion(ctx);
@@ -83,31 +87,35 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     if (!params.request_id) return { content: [{ type: "text", text: "control requiere request_id." }], isError: true };
     const current = await ensure(ctx); const status = await current.runtime.jobs.status(params.id);
     if (!status.success) return toolReply(status, value => value);
-    const active = ["provisioning", "running", "cancelling"].includes(status.value.job.status);
-    if (params.action === "cancel" && active) {
-      if (!canConfirmMigration(ctx)) return { content: [{ type: "text", text: "La cancelación activa requiere la TUI con UI activa." }], isError: true };
-      if (!await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${params.id}?`)) return { content: [{ type: "text", text: "Cancelación no autorizada." }], isError: true };
+    let activeCancellationConfirmed = params.action !== "cancel";
+    if (params.action === "cancel") {
+      if (!canConfirmMigration(ctx)) return { content: [{ type: "text", text: "La cancelación requiere la TUI con UI activa." }], isError: true };
+      if (!await ctx.ui.confirm("Cancelar trabajo", `¿Cancelar ${params.id}?`)) return { content: [{ type: "text", text: "Cancelación no autorizada." }], isError: true };
+      activeCancellationConfirmed = true;
     }
     const request = { requestId: params.request_id, action: params.action, actor: { kind: "model", id: toolCallId }, ...(params.reason === undefined ? {} : { reason: params.reason }) } as any;
-    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request);
+    const admission = { requireActiveConfirmation: true, activeCancellationConfirmed };
+    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request, admission);
     return toolReply(outcome, formatControl);
   } } as any));
   pi.registerCommand("subagents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
     try {
       const command = parsePiAgentsCommand(args); const current = await ensure(ctx); const requestId = `command:${ctx.sessionManager.getSessionId()}:${Date.now()}`;
       if (command.action === "start") { const outcome = await start(ctx, command.agent, command.task, requestId, { kind: "human" }); if (!outcome.success) throw new Error(outcome.error.message); pi.appendEntry(OUTPUT, { title: `Subagente encolado · ${outcome.value.jobId}`, text: `${outcome.value.agent}`, level: "info", jobId: outcome.value.jobId }); return; }
-      if (command.action === "status" || command.action === "result") { const view = command.action === "status" ? await current.runtime.jobs.status(command.id) : await current.runtime.jobs.result(command.id); if (!view.success) throw new Error(view.error.message); pi.appendEntry(OUTPUT, { title: `${command.action === "status" ? "Estado" : "Resultado"} · ${command.id}`, text: command.action === "status" ? formatStatus(view.value) : formatResult(view.value), level: "info", jobId: command.id }); return; }
+      if (command.action === "status" || command.action === "result") { const view = command.action === "status" ? await current.runtime.jobs.status(command.id) : await current.runtime.jobs.getResult(command.id, { mode: "human", operation: "peek", actor: { kind: "human", id: "tui" } }); if (!view.success) throw new Error(view.error.message); pi.appendEntry(OUTPUT, { title: `${command.action === "status" ? "Estado" : "Resultado"} · ${command.id}`, text: command.action === "status" ? formatStatus(view.value) : formatResult(view.value), level: "info", jobId: command.id }); return; }
       if (command.action === "list") { const page = await current.runtime.jobs.listJobs({ statuses: command.statuses as any, limit: command.limit, cursor: command.cursor, pendingReview: command.pendingReview }); if (!page.success) throw new Error(page.error.message); pi.appendEntry(OUTPUT, { title: "Trabajos", text: formatList(page.value), level: "info" }); return; }
       if (command.action === "wait") { const waited = await current.runtime.jobs.waitForJob(command.id, { until: command.until as any, timeoutSeconds: command.timeoutSeconds }); if (!waited.success) throw new Error(waited.error.message); pi.appendEntry(OUTPUT, { title: `Espera · ${command.id}`, text: formatWait(waited.value), level: "info", jobId: command.id }); return; }
       if (["cancel", "pause", "resume", "retry"].includes(command.action)) {
         const status = await current.runtime.jobs.status(command.id); if (!status.success) throw new Error(status.error.message);
-        const active = ["provisioning", "running", "cancelling"].includes(status.value.job.status);
-        if (command.action === "cancel" && active) {
-          if (!canConfirmMigration(ctx)) throw new Error("La cancelación activa requiere la TUI con UI activa.");
-          if (!command.yes && !await ctx.ui.confirm("Cancelar trabajo activo", `¿Cancelar ${command.id}?`)) throw new Error("Cancelación no autorizada.");
+        let activeCancellationConfirmed = command.action !== "cancel";
+        if (command.action === "cancel") {
+          if (!canConfirmMigration(ctx)) throw new Error("La cancelación requiere la TUI con UI activa.");
+          if (!command.yes && !await ctx.ui.confirm("Cancelar trabajo", `¿Cancelar ${command.id}?`)) throw new Error("Cancelación no autorizada.");
+          activeCancellationConfirmed = true;
         }
         const request = { requestId, action: command.action, actor: { kind: "human", id: "tui" }, ...(command.reason === undefined ? {} : { reason: command.reason }) } as any;
-        const outcome = command.action === "retry" ? await current.runtime.jobs.retry(command.id, request) : await current.runtime.jobs.control(command.id, request);
+        const admission = { requireActiveConfirmation: true, activeCancellationConfirmed };
+        const outcome = command.action === "retry" ? await current.runtime.jobs.retry(command.id, request) : await current.runtime.jobs.control(command.id, request, admission);
         if (!outcome.success) throw new Error(outcome.error.message); pi.appendEntry(OUTPUT, { title: `Control · ${command.id}`, text: formatControl(outcome.value), level: "info", jobId: command.id }); return;
       }
       if (!canConfirmMigration(ctx)) throw new Error("La revisión requiere la TUI con UI activa.");

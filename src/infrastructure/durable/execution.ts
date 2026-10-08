@@ -1,5 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import { AssistantEntry, configure, type ConversationId, type Harness, type SubmissionId, type ToolRegistration, type Tx } from "@earendil-works/pi-durable";
+import { CodingTools } from "@earendil-works/pi-durable/tools";
 import type { Clock } from "../../domain/requests.ts";
 import type { JobModel, JobRecord, JobResult } from "../../domain/jobs.ts";
 
@@ -14,7 +15,7 @@ export function createExecution(harness: Harness, context: Context, tools: Reado
     async create(tx, job) {
       const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
       const selected = job.agent.tools.map(name => tools.get(name)).filter((tool): tool is ToolRegistration => Boolean(tool));
-      await configure(tx, conversation.id, { model: job.model, thinkingLevel: job.thinkingLevel, extensions: [], tools: selected, instructions: job.agent.systemPrompt, cwd: job.cwd });
+      await configure(tx, conversation.id, { model: job.model, thinkingLevel: job.thinkingLevel, extensions: [CodingTools], tools: selected, instructions: job.agent.systemPrompt, cwd: job.cwd });
       return conversation.id;
     },
     async submit(job) {
