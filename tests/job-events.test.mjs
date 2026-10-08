@@ -59,9 +59,14 @@ test('finishCancelled persists one exact cancelled event and ignores repeat', as
     const stored = await f.repository.get(job.id);
     assert.equal(stored.status, 'cancelled');
     assert.equal((await f.repository.result(job.id)).error, 'aborted');
-    assert.deepEqual((await f.outbox.pending(10)).map(event => event.data), [{ status: 'cancelled', agent: 'agent', hasResult: true }]);
+    const expected = { status: 'cancelled', agent: 'agent', hasResult: true };
+    const pendingAfterFirst = await f.outbox.pending(10);
+    assert.equal(pendingAfterFirst.length, 1);
+    assert.deepEqual(pendingAfterFirst.map(event => event.sequence), [1]);
+    assert.deepEqual(pendingAfterFirst.map(event => event.type), ['job.cancelled']);
+    assert.deepEqual(pendingAfterFirst.map(event => event.data), [expected]);
     await f.repository.finishCancelled(job.id, 'again', 4);
-    assert.equal((await f.outbox.pending(10)).length, 1);
+    assert.deepEqual(await f.outbox.pending(10), pendingAfterFirst);
   } finally { await f.close(); }
 });
 
@@ -72,15 +77,20 @@ test('cancel queued appends exact event, records ledger, replays, and rejects re
     const request = control('queued-cancel-1', 'cancel');
     await f.repository.applyControl('queued-cancel', request, 2);
     const expected = { status: 'cancelled', agent: 'agent', hasResult: true };
-    assert.deepEqual((await f.outbox.pending(10)).map(event => event.data), [expected]);
+    const pendingBeforeReplay = await f.outbox.pending(10);
+    assert.equal(pendingBeforeReplay.length, 1);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.sequence), [1]);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.type), ['job.cancelled']);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.data), [expected]);
     const firstLedger = await ledger(f, request.requestId);
     assert.equal(firstLedger.record.operation, 'control');
     assert.equal((await f.repository.applyControl('queued-cancel', request, 3)).replayed, true);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReplay);
     assert.deepEqual(await ledger(f, request.requestId), firstLedger);
     const rejected = control('queued-cancel-2', 'cancel');
     await assert.rejects(f.repository.applyControl('queued-cancel', rejected, 4));
     assert.equal(await ledger(f, rejected.requestId), undefined);
-    assert.equal((await f.outbox.pending(10)).length, 1);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReplay);
   } finally { await f.close(); }
 });
 
@@ -91,16 +101,23 @@ test('cancel paused appends exact event, records ledger, replays, and rejects re
     await f.repository.applyControl('paused-cancel', control('pause-1', 'pause'), 2);
     const request = control('paused-cancel-1', 'cancel');
     await f.repository.applyControl('paused-cancel', request, 3);
-    assert.deepEqual((await f.outbox.pending(10)).map(event => event.type), ['job.paused', 'job.cancelled']);
-    assert.deepEqual((await f.outbox.pending(10))[1].data, { status: 'cancelled', agent: 'agent', hasResult: true });
+    const pendingBeforeReplay = await f.outbox.pending(10);
+    assert.equal(pendingBeforeReplay.length, 2);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.sequence), [1, 2]);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.type), ['job.paused', 'job.cancelled']);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.data), [
+      { status: 'paused', agent: 'agent', hasResult: false },
+      { status: 'cancelled', agent: 'agent', hasResult: true },
+    ]);
     const firstLedger = await ledger(f, request.requestId);
     assert.equal(firstLedger.record.operation, 'control');
     assert.equal((await f.repository.applyControl('paused-cancel', request, 4)).replayed, true);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReplay);
     assert.deepEqual(await ledger(f, request.requestId), firstLedger);
     const rejected = control('paused-cancel-2', 'cancel');
     await assert.rejects(f.repository.applyControl('paused-cancel', rejected, 5));
     assert.equal(await ledger(f, rejected.requestId), undefined);
-    assert.equal((await f.outbox.pending(10)).length, 2);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReplay);
   } finally { await f.close(); }
 });
 
@@ -113,11 +130,15 @@ test('cancel active appends only the baseline request event and replays without 
     const event = (await f.outbox.pending(10))[0];
     assert.equal(event.type, 'job.cancel-requested');
     assert.deepEqual(event.data, { status: 'cancelling', agent: 'agent', hasResult: false });
+    const pendingBeforeReplay = await f.outbox.pending(10);
+    assert.equal(pendingBeforeReplay.length, 1);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.sequence), [1]);
+    assert.deepEqual(pendingBeforeReplay.map(event => event.type), ['job.cancel-requested']);
     const firstLedger = await ledger(f, request.requestId);
     assert.equal(firstLedger.record.operation, 'control');
     assert.equal((await f.repository.applyControl('active-cancel', request, 3)).replayed, true);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReplay);
     assert.deepEqual(await ledger(f, request.requestId), firstLedger);
-    assert.equal((await f.outbox.pending(10)).length, 1);
   } finally { await f.close(); }
 });
 
@@ -126,17 +147,27 @@ test('failed and interrupted finishes append exact events once and markNotified 
   try {
     await f.seedJob(storedJob('failed-job', 'running', { conversationId: 11, submissionId: 12 }));
     await f.repository.finish('failed-job', storedResult('failed'), 2);
-    assert.deepEqual((await f.outbox.pending(10)).map(event => event.data), [{ status: 'failed', agent: 'agent', hasResult: true }]);
+    const pendingAfterFailed = await f.outbox.pending(10);
+    assert.equal(pendingAfterFailed.length, 1);
+    assert.deepEqual(pendingAfterFailed.map(event => event.sequence), [1]);
+    assert.deepEqual(pendingAfterFailed.map(event => event.type), ['job.failed']);
+    assert.deepEqual(pendingAfterFailed.map(event => event.data), [{ status: 'failed', agent: 'agent', hasResult: true }]);
     await f.repository.finish('failed-job', storedResult('failed'), 3);
     await f.repository.markNotified('failed-job');
-    assert.equal((await f.outbox.pending(10)).length, 1);
+    assert.deepEqual(await f.outbox.pending(10), pendingAfterFailed);
 
     await f.seedJob(storedJob('interrupted-job', 'running', { conversationId: 13, submissionId: 14 }));
     await f.repository.finish('interrupted-job', storedResult('interrupted'), 4);
-    assert.deepEqual((await f.outbox.pending(10)).map(event => event.type), ['job.failed', 'job.interrupted']);
-    assert.deepEqual((await f.outbox.pending(10))[1].data, { status: 'interrupted', agent: 'agent', hasResult: true });
+    const pendingAfterInterrupted = await f.outbox.pending(10);
+    assert.equal(pendingAfterInterrupted.length, 2);
+    assert.deepEqual(pendingAfterInterrupted.map(event => event.sequence), [1, 2]);
+    assert.deepEqual(pendingAfterInterrupted.map(event => event.type), ['job.failed', 'job.interrupted']);
+    assert.deepEqual(pendingAfterInterrupted.map(event => event.data), [
+      { status: 'failed', agent: 'agent', hasResult: true },
+      { status: 'interrupted', agent: 'agent', hasResult: true },
+    ]);
     await f.repository.finish('interrupted-job', storedResult('interrupted'), 5);
-    assert.equal((await f.outbox.pending(10)).length, 2);
+    assert.deepEqual(await f.outbox.pending(10), pendingAfterInterrupted);
   } finally { await f.close(); }
 });
 
@@ -169,33 +200,51 @@ test('retry appends one exact queued event and review/consume replay without app
     const decision = { requestId: 'review-1', status: 'approved', actor: { kind: 'human', id: 'tui' } };
     const firstReview = await f.repository.decideReview('review-job', decision, 11);
     const reviewLedger = await ledger(f, decision.requestId);
-    assert.deepEqual((await f.outbox.pending(10)).at(-1).data, { status: 'completed', agent: 'agent', hasResult: true, reviewStatus: 'approved' });
+    const pendingBeforeReviewReplay = await f.outbox.pending(10);
+    assert.equal(pendingBeforeReviewReplay.length, 2);
+    assert.deepEqual(pendingBeforeReviewReplay.map(event => event.sequence), [1, 2]);
+    assert.deepEqual(pendingBeforeReviewReplay.map(event => event.type), ['job.queued', 'job.reviewed']);
+    assert.deepEqual(pendingBeforeReviewReplay.at(-1).data, { status: 'completed', agent: 'agent', hasResult: true, reviewStatus: 'approved' });
     assert.deepEqual(await f.repository.decideReview('review-job', decision, 12), firstReview);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeReviewReplay);
     assert.deepEqual(await ledger(f, decision.requestId), reviewLedger);
 
     const consume = { requestId: 'consume-1', actor: { kind: 'extension', id: 'caller' }, consumer: 'caller' };
     const firstConsume = await f.repository.consume('review-job', consume, 13);
     const consumeLedger = await ledger(f, consume.requestId);
     assert.equal(firstConsume.count, 1);
-    assert.equal((await f.repository.consume('review-job', consume, 14)).count, 1);
+    const pendingBeforeConsumeReplay = await f.outbox.pending(10);
+    assert.equal(pendingBeforeConsumeReplay.length, 3);
+    assert.deepEqual(pendingBeforeConsumeReplay.map(event => event.sequence), [1, 2, 3]);
+    assert.deepEqual(pendingBeforeConsumeReplay.map(event => event.type), ['job.queued', 'job.reviewed', 'job.consumed']);
+    assert.deepEqual(pendingBeforeConsumeReplay.at(-1).data, { status: 'completed', agent: 'agent', hasResult: true, consumptionCount: 1 });
+    assert.deepEqual(await f.repository.consume('review-job', consume, 14), firstConsume);
+    assert.deepEqual(await f.outbox.pending(10), pendingBeforeConsumeReplay);
     assert.deepEqual(await ledger(f, consume.requestId), consumeLedger);
-    assert.deepEqual((await f.outbox.pending(10)).at(-1).data, { status: 'completed', agent: 'agent', hasResult: true, consumptionCount: 1 });
   } finally { await f.close(); }
 });
 
-test('admit atomically appends one exact queued event and replays the same ledger', async () => {
+test('admit atomically appends one exact queued event and races fresh duplicate requests', async () => {
   const f = await makeStoreFixture({ createId: () => 'job-1' });
   try {
     const req = { requestId: 'start-1', actor: { kind: 'extension', id: 'caller' }, payloadHash: 'hash-1' };
-    const first = await f.repository.admit(req, input());
-    const firstLedger = await ledger(f, req.requestId);
-    const [second] = await Promise.all([f.repository.admit(req, input()), f.repository.admit(req, input())]);
+    const firstAdmission = f.repository.admit(req, input());
+    const secondAdmission = f.repository.admit(req, input());
+    const [first, second] = await Promise.all([firstAdmission, secondAdmission]);
     assert.deepEqual(first, second);
+    const firstLedger = await ledger(f, req.requestId);
+    const pendingAfterRace = await f.outbox.pending(10);
+    assert.equal(pendingAfterRace.length, 1);
+    assert.deepEqual(pendingAfterRace, [{
+      protocolVersion: 1,
+      eventId: 'evt_' + createHash('sha256').update(JSON.stringify(['test-session', 1])).digest('hex'),
+      sequence: 1, sessionId: 'test-session', jobId: 'job-1', type: 'job.queued', occurredAt: 2000,
+      data: { status: 'queued', agent: 'agent', hasResult: false },
+    }]);
+    assert.equal(JSON.stringify(pendingAfterRace).includes('SECRET_SENTINEL'), false);
+    const replay = await f.repository.admit(req, input());
+    assert.deepEqual(replay, first);
     assert.deepEqual(await ledger(f, req.requestId), firstLedger);
-    const pending = await f.outbox.pending(10);
-    assert.equal(pending.length, 1);
-    assert.equal(pending[0].type, 'job.queued');
-    assert.deepEqual(pending[0].data, { status: 'queued', agent: 'agent', hasResult: false });
-    assert.equal(JSON.stringify(pending).includes('SECRET_SENTINEL'), false);
+    assert.deepEqual(await f.outbox.pending(10), pendingAfterRace);
   } finally { await f.close(); }
 });
