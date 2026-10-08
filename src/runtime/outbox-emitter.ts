@@ -15,9 +15,7 @@ type OutboxEmitterOptions = {
   report: (error: unknown) => void;
 };
 
-function sanitize(error: unknown): { name: string; message: string } {
-  if (error instanceof Error) return { name: error.name, message: error.message };
-  if (typeof error === "string") return { name: "Error", message: error };
+function sanitize(_error: unknown): { name: string; message: string } {
   return { name: "Error", message: "Outbox delivery failed." };
 }
 
@@ -31,6 +29,7 @@ export function createOutboxEmitter(options: OutboxEmitterOptions): {
   let unsubscribe: (() => void) | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let drainPromise: Promise<void> | undefined;
+  let wakePending = false;
   let stopPromise: Promise<void> | undefined;
 
   const report = (error: unknown): void => {
@@ -74,7 +73,7 @@ export function createOutboxEmitter(options: OutboxEmitterOptions): {
           scheduleRetry();
           return;
         }
-        if ((index + 1) % BATCH_SIZE === 0 && index + 1 < pending.length && !stopping) {
+        if ((index + 1) % BATCH_SIZE === 0 && !stopping) {
           await new Promise<void>(resolve => setImmediate(resolve));
         }
       }
@@ -82,8 +81,19 @@ export function createOutboxEmitter(options: OutboxEmitterOptions): {
   };
 
   function wake(): void {
-    if (!started || stopping || drainPromise !== undefined) return;
-    drainPromise = drain().catch(report).finally(() => { drainPromise = undefined; });
+    if (!started || stopping) return;
+    if (drainPromise !== undefined || retryTimer !== undefined) {
+      wakePending = true;
+      return;
+    }
+    wakePending = false;
+    drainPromise = drain().catch(report).finally(() => {
+      drainPromise = undefined;
+      if (wakePending && !stopping && retryTimer === undefined) {
+        wakePending = false;
+        wake();
+      }
+    });
   }
 
   function start(): void {

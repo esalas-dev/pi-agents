@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createModels } from '@earendil-works/pi-ai/models';
+import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 import { makeStoreFixture } from './helpers/store.mjs';
 import { appendEvent } from '../src/infrastructure/durable/outbox.ts';
 import { OutboxMetaDoc } from '../src/infrastructure/durable/outbox-documents.ts';
 import { eventChannel } from '../src/public/job-events.ts';
 import { createOutboxEmitter } from '../src/runtime/outbox-emitter.ts';
-import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
+import { openSessionRuntime } from '../src/runtime/session.ts';
 
 const input = (sequence = 0) => ({
   sessionId: 'emitter-session', jobId: 'job-1', type: 'job.queued', occurredAt: 1000 + sequence,
@@ -64,13 +69,15 @@ test('emits before confirming and preserves ordered delivery across confirmation
   const f = await makeStoreFixture({ sessionId: 'emitter-session' });
   try {
     await append(f, 2);
-    const firstBus = controlledBus();
+    const timeline = [];
+    const firstBus = controlledBus({ onEmit: (_, envelope) => timeline.push(`emit:${envelope.sequence}`) });
     const reports = [];
     let failConfirmation = true;
     const firstEmitter = createOutboxEmitter(options(f, firstBus, {
       outbox: {
         pending: limit => f.outbox.pending(limit),
         markEmitted: async (...args) => {
+          timeline.push(`mark:${args[1]}`);
           if (failConfirmation) { failConfirmation = false; throw new Error('confirmation failed'); }
           return f.outbox.markEmitted(...args);
         },
@@ -80,6 +87,7 @@ test('emits before confirming and preserves ordered delivery across confirmation
     firstEmitter.start();
     await eventually(() => firstBus.deliveries.length === 1 && reports.length === 1);
     await firstEmitter.stop();
+    assert.deepEqual(timeline.slice(0, 2), ['emit:1', 'mark:1']);
     await new Promise(resolve => setTimeout(resolve, 1050));
     assert.equal(firstBus.deliveries.length, 1);
     assert.deepEqual((await f.outbox.pending(10)).map(event => event.sequence), [1, 2]);
@@ -133,8 +141,26 @@ test('does not confirm a synchronous emit failure', async () => {
     await eventually(() => reports.length === 1);
     await emitter.stop();
     assert.deepEqual((await f.outbox.pending(10)).map(event => event.sequence), [1, 2]);
-    assert.equal(reports[0].message, 'emit failed');
+    assert.deepEqual(reports[0], { name: 'Error', message: 'Outbox delivery failed.' });
     assert.equal(reports[0].eventId, undefined);
+  } finally { await f.close(); }
+});
+
+test('does not forward an event canary from a synchronous emit error', async () => {
+  const f = await makeStoreFixture({ sessionId: 'emitter-session' });
+  try {
+    await append(f, 1);
+    const reports = [];
+    const canary = 'outbox-envelope-canary-7f3d';
+    const bus = controlledBus({ onEmit: (_, envelope) => { throw new Error(JSON.stringify({ canary, envelope })); } });
+    const emitter = createOutboxEmitter(options(f, bus, { report: error => reports.push(error) }));
+    emitter.start();
+    await eventually(() => reports.length === 1);
+    await emitter.stop();
+    const serialized = JSON.stringify(reports);
+    assert.equal(serialized.includes(canary), false);
+    assert.equal(serialized.includes('evt_'), false);
+    assert.deepEqual(reports[0], { name: 'Error', message: 'Outbox delivery failed.' });
   } finally { await f.close(); }
 });
 
@@ -149,6 +175,70 @@ test('does not interpret asynchronously rejecting listeners as nack', async () =
     await eventually(async () => (await f.outbox.pending(10)).length === 0);
     await emitter.stop();
     assert.equal(bus.deliveries.length, 1);
+  } finally { await f.close(); }
+});
+
+test('yields with setImmediate between batches across a page boundary', async () => {
+  const f = await makeStoreFixture({ sessionId: 'emitter-session' });
+  const originalSetImmediate = globalThis.setImmediate;
+  let immediateCount = 0;
+  let afterPageCount;
+  let atNextPageCount;
+  let resolveNextPage;
+  const nextPage = new Promise(resolve => { resolveNextPage = resolve; });
+  globalThis.setImmediate = ((callback, ...args) => {
+    immediateCount++;
+    return originalSetImmediate(callback, ...args);
+  });
+  try {
+    await append(f, 257);
+    const bus = controlledBus({ onEmit: (_, envelope) => {
+      if (envelope.sequence === 256) afterPageCount = immediateCount;
+      if (envelope.sequence === 257) { atNextPageCount = immediateCount; resolveNextPage(); }
+    } });
+    const emitter = createOutboxEmitter(options(f, bus));
+    emitter.start();
+    await nextPage;
+    await emitter.stop();
+    assert.ok(atNextPageCount > afterPageCount, `expected setImmediate between 256 and 257, got ${afterPageCount} then ${atNextPageCount}`);
+  } finally {
+    globalThis.setImmediate = originalSetImmediate;
+    await f.close();
+  }
+});
+
+test('replays a wake received while the empty snapshot is still open', async () => {
+  const f = await makeStoreFixture({ sessionId: 'emitter-session' });
+  try {
+    let releaseEmpty;
+    let firstPending = true;
+    let activePending = 0;
+    let maxActivePending = 0;
+    const outbox = {
+      pending: async limit => {
+        activePending++;
+        maxActivePending = Math.max(maxActivePending, activePending);
+        try {
+          if (firstPending) {
+            firstPending = false;
+            return await new Promise(resolve => { releaseEmpty = resolve; });
+          }
+          return f.outbox.pending(limit);
+        } finally { activePending--; }
+      },
+      markEmitted: (...args) => f.outbox.markEmitted(...args),
+    };
+    const bus = controlledBus();
+    const emitter = createOutboxEmitter(options(f, bus, { outbox }));
+    emitter.start();
+    await eventually(() => typeof releaseEmpty === 'function');
+    await append(f, 1);
+    emitter.wake();
+    releaseEmpty([]);
+    await eventually(async () => (await f.outbox.pending(1)).length === 0);
+    await emitter.stop();
+    assert.equal(bus.deliveries.length, 1);
+    assert.equal(maxActivePending, 1);
   } finally { await f.close(); }
 });
 
@@ -234,6 +324,44 @@ test('stop waits for an admitted confirmation but not for consumers', async () =
     await stopping;
     assert.deepEqual(await f.outbox.pending(10), []);
   } finally { await f.close(); }
+});
+
+test('uses the real SessionRuntime commit wake subscription and unsubscribes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-agents-emitter-runtime-'));
+  const database = join(directory, 'jobs.sqlite');
+  let runtime;
+  try {
+    runtime = await openSessionRuntime({
+      storagePath: database,
+      models: createModels(),
+      context,
+      defaultCwd: process.cwd(),
+      sessionId: `emitter-runtime-${database}`,
+      maxConcurrency: 1,
+      createId: (() => { let next = 0; return () => `psa_emitter_${++next}`; })(),
+    });
+    let wakes = 0;
+    const unsubscribe = runtime.subscribeOutboxWake(() => { wakes++; });
+    const resolveInput = async intent => ({
+      task: intent.task,
+      cwd: intent.cwd,
+      agent: { name: 'test-agent', description: 'test', systemPrompt: 'Answer briefly.', source: 'personal', filePath: '/tmp/test-agent.md', tools: [] },
+      model: { provider: 'faux', modelId: 'faux-1' },
+      thinkingLevel: 'off',
+    });
+    const first = await runtime.jobs.start({ requestId: 'emitter-runtime:1', actor: { kind: 'model' }, intent: { agent: 'test-agent', task: 'first', cwd: process.cwd() } }, resolveInput);
+    assert.equal(first.success, true);
+    await eventually(() => wakes > 0);
+    const wakesAfterFirstCommit = wakes;
+    unsubscribe();
+    const second = await runtime.jobs.start({ requestId: 'emitter-runtime:2', actor: { kind: 'model' }, intent: { agent: 'test-agent', task: 'second', cwd: process.cwd() } }, resolveInput);
+    assert.equal(second.success, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(wakes, wakesAfterFirstCommit);
+  } finally {
+    await runtime?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 assert.equal(eventChannel('job.queued'), 'pi-durable-subagents:job:queued');
