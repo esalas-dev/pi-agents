@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { makeStoreFixture } from './helpers/store.mjs';
 import { createQueryService } from '../src/application/query.ts';
 import { createResultService } from '../src/application/result.ts';
 import { createReviewService } from '../src/application/review.ts';
+import { RequestLedgerDocFamily } from '../src/infrastructure/durable/documents.ts';
 
 const job = (id, overrides = {}) => ({
   id,
@@ -150,6 +153,29 @@ test('resultado cancelled conserva RESULT_NOT_READY', async () => {
     const outcome = await service.getResult('cancelled', { mode: 'human', operation: 'peek', actor: { kind: 'human', id: 'u' } });
     assert.equal(outcome.success, false);
     assert.equal(outcome.error.code, 'RESULT_NOT_READY');
+  } finally { await current.fixture.close(); }
+});
+
+test('cancelled con resultado aprobado no consume ni emite evento al rechazar', async () => {
+  const current = await setup({ status: 'not_required' });
+  try {
+    await current.fixture.seedJob(job('cancelled-consume', { status: 'cancelled', finishedAt: 1010 }), { ...result, status: 'interrupted' });
+    await seedReview(current.fixture, 'cancelled-consume', { status: 'approved' });
+    const service = createResultService(current.fixture.repository, createQueryService(current.fixture.repository));
+    const access = { mode: 'human', operation: 'consume', actor: { kind: 'human', id: 'u' }, requestId: 'cancelled-via-get' };
+    const viaGet = await service.getResult('cancelled-consume', access);
+    assert.equal(viaGet.success, false);
+    assert.equal(viaGet.error.code, 'RESULT_NOT_READY');
+    const viaDirect = await service.consumeResult('cancelled-consume', { requestId: 'cancelled-direct', actor: { kind: 'human', id: 'u' }, consumer: 'human:u' });
+    assert.equal(viaDirect.success, false);
+    assert.equal(viaDirect.error.code, 'RESULT_NOT_READY');
+    assert.equal(await current.fixture.repository.consumption('cancelled-consume'), undefined);
+    const pending = await current.fixture.outbox.pending(100);
+    assert.equal(pending.filter(event => event.type === 'job.consumed' && event.jobId === 'cancelled-consume').length, 0);
+    for (const requestId of ['cancelled-via-get', 'cancelled-direct']) {
+      const key = createHash('sha256').update(requestId).digest('hex');
+      assert.equal(await current.fixture.session.snapshot(RequestLedgerDocFamily, key, BACKGROUND_CONTEXT), undefined);
+    }
   } finally { await current.fixture.close(); }
 });
 

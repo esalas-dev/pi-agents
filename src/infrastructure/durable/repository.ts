@@ -37,6 +37,7 @@ export type JobRepository = {
 
 const activeStatuses = new Set(["provisioning", "running", "cancelling"]);
 const terminalStatuses = new Set(["completed", "failed", "interrupted", "cancelled"]);
+const resultStatuses = new Set(["completed", "failed", "interrupted"]);
 
 function initialReviewStatus(job: Pick<JobRecord, "createdBy">): "pending" | "not_required" {
   return job.createdBy?.kind === "model" || job.createdBy?.kind === "extension" ? "pending" : "not_required";
@@ -254,7 +255,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const existing = cell.record as RequestRecord | null;
         if (existing && (existing.requestId !== request.requestId || existing.operation !== "consume" || existing.payloadHash !== payloadHash)) throw new DomainError("REQUEST_ID_CONFLICT");
         const index = await tx.doc(JobsIndexDoc);
-        if (!index.summaries[id]?.hasResult || !terminalStatuses.has(job.status)) throw new DomainError("RESULT_NOT_READY");
+        if (!index.summaries[id]?.hasResult || !resultStatuses.has(job.status)) throw new DomainError("RESULT_NOT_READY");
         const review = await tx.doc(JobReviewDocFamily, id, { status: "not_required" });
         if (review.status === "pending") throw new DomainError("RESULT_REVIEW_REQUIRED");
         if (review.status === "rejected") throw new DomainError("RESULT_REJECTED");
