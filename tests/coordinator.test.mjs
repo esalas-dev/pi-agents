@@ -31,7 +31,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 test('recover provisioning reenvía la solicitud durable y running espera resultado', async () => {
   const f = await makeStoreFixture(); let submissions = 0; const execution = { create: async () => 1, submit: async job => { submissions++; return job.id === 'prov' ? 55 : 56; }, wait: async job => result(job) };
   try {
-    await f.repository.create(input('prov', 'provisioning')); await f.repository.create({ ...input('run', 'provisioning'), conversationId: 2 }); await f.repository.markRunning('run', 56, 1);
+    await f.seedJob(input('prov', 'provisioning')); await f.seedJob({ ...input('run', 'provisioning'), conversationId: 2 }); await f.repository.markRunning('run', 56, 1);
     const c = createCoordinator({ repository: f.repository, execution, maxConcurrency: 2, clock: () => 2, report: () => {} }); await c.recover(); await c.drain();
     assert.equal(submissions, 1); assert.equal((await f.repository.get('prov')).status, 'completed'); assert.equal((await f.repository.get('run')).status, 'completed'); c.stop();
   } finally { await f.close(); }

@@ -8,6 +8,7 @@ import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
 import { appendEvent } from "./outbox.ts";
+import type { JobEventV1 } from "../../public/job-events.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
@@ -53,7 +54,7 @@ function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
 export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId, sessionId: string): JobRepository {
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
-  const emitEvent = (tx: Tx, job: JobRecord, type: Parameters<typeof appendEvent>[1]["type"], at: number, extra: Record<string, unknown> = {}) => appendEvent(tx, { sessionId, jobId: job.id, type, occurredAt: at, data: { status: publicStatus(job), agent: job.agent.name, hasResult: Boolean(job.resultMeta), ...extra } as never });
+  const emitEvent = (tx: Tx, job: JobRecord, type: Parameters<typeof appendEvent>[1]["type"], at: number, extra: Partial<JobEventV1["data"]> = {}) => appendEvent(tx, { sessionId, jobId: job.id, type, occurredAt: at, data: { status: publicStatus(job), agent: job.agent.name, hasResult: Boolean(job.resultMeta), ...extra } });
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
   const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult?: boolean) => {
     const index = await tx.doc(JobsIndexDoc);
@@ -137,7 +138,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const decided: ReviewReceipt = { jobId: id, requestId: decision.requestId, status: decision.status, decidedAt: at, ...(decision.actor.id === undefined ? {} : { decidedBy: decision.actor.id }), ...(decision.reason === undefined ? {} : { reason: decision.reason }) };
         const record: RequestRecord = { requestId: decision.requestId, operation: "review", actor: structuredClone(decision.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
         cell.record = record;
-        if (previousReviewStatus !== decision.status) await emitEvent(tx, job, "job.reviewed", at, { reviewStatus: decision.status });
+        if (previousReviewStatus !== decision.status) await emitEvent(tx, job, "job.reviewed", at, { reviewStatus: decision.status, hasResult: Boolean(index.summaries[id]?.hasResult) });
         receipt = decided;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
@@ -267,7 +268,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const consumed: ConsumeReceipt = { jobId: id, requestId: request.requestId, consumedAt: at, consumedBy: request.consumer, count: consumption.count, result: plain(body) };
         const record: RequestRecord = { requestId: request.requestId, operation: "consume", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: consumed as unknown as JsonValue };
         cell.record = record;
-        await emitEvent(tx, job, "job.consumed", at, { consumptionCount: consumption.count });
+        await emitEvent(tx, job, "job.consumed", at, { consumptionCount: consumption.count, hasResult: true });
         receipt = consumed;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
@@ -311,7 +312,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       await session.commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || job.status !== "cancelling") return;
-        result.model = structuredClone(job.model);
+        result.model = plain(job.model);
         job.status = "cancelled"; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, error: detail };
         job.finishedAt = at; job.updatedAt = at; delete job.control;
         const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));
@@ -342,7 +343,13 @@ export function createJobRepository(session: Session, context: Context, clock: C
     },
     async create(job, result) {
       assertJob(job);
-      await session.commit(async tx => { await commitJob(tx, job, result); if (job.status === "queued") await emitEvent(tx, job, "job.queued", job.createdAt); }, context);
+      if (job.status !== "queued") throw new DomainError("STORAGE_INCONSISTENT");
+      await session.commit(async tx => {
+        const existing = await tx.doc(JobDocFamily, job.id, { id: job.id } as unknown as JsonValue) as JobRecord;
+        if (existing.status !== undefined) throw new DomainError("STORAGE_INCONSISTENT");
+        await commitJob(tx, job, result);
+        await emitEvent(tx, job, "job.queued", job.createdAt);
+      }, context);
     },
     async claimNext(maxConcurrency, createConversation) {
       let claimed: JobRecord | undefined;
