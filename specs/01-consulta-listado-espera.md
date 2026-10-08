@@ -4,7 +4,7 @@
 
 Diseño aprobado por el usuario después de completar la fase 00. Primera fase funcional; depende del esquema 2 validado en la [fase 00 — Preparación arquitectónica](00-preparacion-arquitectonica.md). Usa su almacenamiento separado, actores, ledger y servicios compartidos; no parte directamente del monolito v1. La implementación queda bloqueada hasta aprobar el plan de ejecución.
 
-**Enmienda solicitada el 2026-10-08:** el padre verificado debe recibir los resultados de sus subagentes sin un gate humano por lectura. Este es el comportamiento objetivo de una implementación futura; el runtime actual conserva su gate hasta que el cambio se implemente, revise y acepte. El [diseño de comunicación padre-hijos](../docs/superpowers/specs/2026-10-08-comunicacion-padre-hijos-design.md), pendiente de revisión escrita, concreta la entrega, la identidad por sesión y la lectura por tramos.
+**Enmienda aprobada el 2026-10-08:** el padre verificado debe recibir los resultados de sus subagentes sin un gate humano por lectura. Este es el comportamiento objetivo de una implementación futura; el runtime actual conserva su gate hasta que el cambio se implemente, revise y acepte. El [diseño de comunicación padre-hijos](../docs/superpowers/specs/2026-10-08-comunicacion-padre-hijos-design.md), aprobado por el usuario, concreta la entrega, la identidad por sesión y la lectura por tramos.
 
 ## Objetivo
 

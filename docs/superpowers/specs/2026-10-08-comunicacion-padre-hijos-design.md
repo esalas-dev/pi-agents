@@ -2,7 +2,7 @@
 
 ## Estado y autoridad
 
-**Diseño conversacional aprobado; documento escrito pendiente de revisión humana.** Fecha: 2026-10-08. Este documento no autoriza implementación, migraciones reales, instalación ni promoción. El plan de implementación se redactará después de aprobar este documento; su ejecución queda además condicionada al cierre independiente de T4 de fase 03.
+**Diseño conversacional y documento escrito aprobados por el usuario el 2026-10-08.** Este documento no autoriza implementación, migraciones reales, instalación ni promoción. El [plan de implementación](../plans/2026-10-08-comunicacion-padre-hijos.md) se presenta por separado y requiere aprobación humana; cualquier ejecución queda condicionada además al cierre independiente de T4 de fase 03.
 
 Base inspeccionada: worktree `.worktrees/phase-03`, rama `feat/phase-03`, HEAD `95a424a`. Se conservan el plan, los informes y el ledger de T4. No se acepta T4 por este diseño ni se inicia T5.
 
