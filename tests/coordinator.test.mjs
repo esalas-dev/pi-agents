@@ -64,6 +64,33 @@ test('el driver habilita CodingTools y respeta la selección de herramientas del
   } finally { await harness?.close(context); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('stop durante submit no marca running después de la frontera de cierre', async () => {
+  const f = await makeStoreFixture(); const gate = deferred(); let submitCalls = 0;
+  const execution = { create: async () => 1, submit: async () => { submitCalls++; return gate.promise; }, wait: async job => result(job) };
+  try {
+    await f.seedJob(input('pending', 'provisioning'));
+    const c = createCoordinator({ repository: f.repository, execution, maxConcurrency: 1, clock: () => 2, report: () => {} });
+    await c.recover();
+    for (let i = 0; i < 100 && !submitCalls; i++) await new Promise(resolve => setTimeout(resolve, 1));
+    assert.equal(submitCalls, 1);
+    c.stop(); gate.resolve(55); await c.drain();
+    assert.equal((await f.repository.get('pending')).status, 'provisioning');
+  } finally { await f.close(); }
+});
+
+test('stop durante wait no finaliza ni notifica un job de una generación sellada', async () => {
+  const f = await makeStoreFixture(); const gate = deferred(); let settled = 0;
+  const execution = { create: async () => 1, submit: async () => 1, wait: async () => gate.promise };
+  try {
+    await f.seedJob(input('running', 'provisioning')); await f.repository.markRunning('running', 1, 2);
+    const c = createCoordinator({ repository: f.repository, execution, maxConcurrency: 1, clock: () => 3, onSettled: async () => { settled++; }, report: () => {} });
+    await c.recover();
+    c.stop(); gate.resolve(result(input('running', 'running'))); await c.drain();
+    assert.equal((await f.repository.get('running')).status, 'running');
+    assert.equal(settled, 0);
+  } finally { await f.close(); }
+});
+
 test('fallo de creación revierte claim sin perder el job', async () => {
   const f = await makeStoreFixture(); const errors = []; const execution = { create: async () => { throw new Error('config'); }, submit: async () => 1, wait: async job => result(job) };
   try {

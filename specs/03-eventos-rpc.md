@@ -2,7 +2,7 @@
 
 ## Estado y dependencias
 
-Diseño conversacional y documento escrito aprobados humanamente el 2026-10-07. Lista para planificar; no implementada. Depende de consulta y control (01–02), completadas.
+Diseño conversacional y documento escrito aprobados humanamente el 2026-10-07. Implementación parcial local: T1–T7; T8/T9 siguen pendientes. Depende de consulta y control (01–02), completadas.
 
 El diseño completo está en [`2026-10-07-fase-03-eventos-rpc-design.md`](../docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md). Ese documento es el diseño normativo aprobado y sustituye los puntos incompatibles de las secciones históricas siguientes, que se conservan como antecedente, no como un segundo contrato normativo. En particular: outbox transaccional obligatorio, ledger durable sin caducidad, `correlationId` por intento, `review` RPC siempre prohibido y ausencia de `pause-requested`.
 
@@ -174,6 +174,8 @@ La expiración de RPC no revierte una operación ya persistida; el caller debe r
 - En `session_shutdown` se dejan de aceptar solicitudes antes de cerrar el Harness.
 - `ready` se emite solo cuando la sesión puede responder.
 - Un cambio de sesión invalida el `sessionId` anterior y devuelve `SESSION_MISMATCH`.
+
+**Límite de T7, validación pendiente:** con `@earendil-works/pi-durable` 1.0.1, `Harness.close()` espera `TaskScheduler.join()`; un modelo bloqueado puede retrasar el cierre y la liberación del lease. La prueba de integración se omite solo para 1.0.1 y se ejecuta al cambiar la versión fijada. Antes de considerar validado el cierre no bloqueante, comprobar en la nueva versión que cierre pronto y que el job `running` siga recuperable. T7 no cancela el job al cerrar.
 
 ## Seguridad
 
