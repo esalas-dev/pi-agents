@@ -10,6 +10,6 @@ test('bloquea runtime en esquema 3 hasta migración explícita a esquema 4', asy
   const directory = await mkdtemp(join('/tmp', 'pi-agents-session-v3-'));
   try {
     const database = await createV3Database(directory);
-    await assert.rejects(() => openSessionRuntime({ storagePath: database, models: {}, context, defaultCwd: process.cwd(), maxConcurrency: 1 }), error => error?.error?.code === 'MIGRATION_REQUIRED');
+    await assert.rejects(() => openSessionRuntime({ storagePath: database, models: {}, context, defaultCwd: process.cwd(), sessionId: `test-${database}`, maxConcurrency: 1 }), error => error?.error?.code === 'MIGRATION_REQUIRED');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

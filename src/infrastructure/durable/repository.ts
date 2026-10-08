@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import type { Session, Tx } from "@earendil-works/pi-durable";
 import type { ConsumptionState, JobRecord, JobResult, ReviewState } from "../../domain/jobs.ts";
-import { assertJob, assertResult } from "../../domain/jobs.ts";
+import { assertJob, assertResult, publicStatus } from "../../domain/jobs.ts";
 import type { AdmissionReceipt, Clock, CreateId, ConsumeReceipt, ConsumeRequest, ControlReceipt, ControlRequest, RequestRecord, RetryReceipt, RetryRequest, ReviewReceipt, StartRequest } from "../../domain/requests.ts";
 import { assertControlRequest, canonicalJson } from "../../domain/requests.ts";
 import { DomainError } from "../../domain/errors.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc, type JobsIndex, type JobReviewDocument } from "./documents.ts";
+import { appendEvent } from "./outbox.ts";
 
 export type CreateConversation = (tx: Tx, job: JobRecord) => Promise<number>;
 export type JobRepository = {
@@ -50,8 +51,9 @@ function storedJob(job: JobRecord): JobRecord {
 
 function plain<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
-export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId): JobRepository {
+export function createJobRepository(session: Session, context: Context, clock: Clock, createId: CreateId, sessionId: string): JobRepository {
   const readIndex = async () => await session.snapshot(JobsIndexDoc, context);
+  const emitEvent = (tx: Tx, job: JobRecord, type: Parameters<typeof appendEvent>[1]["type"], at: number, extra: Record<string, unknown> = {}) => appendEvent(tx, { sessionId, jobId: job.id, type, occurredAt: at, data: { status: publicStatus(job), agent: job.agent.name, hasResult: Boolean(job.resultMeta), ...extra } as never });
   const readJob = async (id: string) => await session.snapshot(JobDocFamily, id, context) as JobRecord | undefined;
   const writeIndexFor = async (tx: Tx, job: JobRecord, remove = false, hasResult?: boolean) => {
     const index = await tx.doc(JobsIndexDoc);
@@ -97,6 +99,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         const admitted: RequestRecord = { requestId: request.requestId, operation: "start", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash: request.payloadHash, admittedAt: now, response: { jobId: id, status: "queued", agent: job.agent.name } };
         cell.record = admitted;
         await commitJob(tx, job);
+        await emitEvent(tx, job, "job.queued", now);
         const review = await tx.doc(JobReviewDocFamily, id, { status: initialReviewStatus(job) });
         review.status = initialReviewStatus(job);
         receipt = structuredClone(admitted.response);
@@ -127,12 +130,15 @@ export function createJobRepository(session: Session, context: Context, clock: C
           receipt = plain(existing.receipt) as ReviewReceipt;
           return;
         }
+        const previousReviewStatus = review.status;
         review.status = decision.status; review.decidedAt = at; review.decidedBy = decision.actor.id; review.reason = decision.reason;
         const index = await tx.doc(JobsIndexDoc);
         if (index.summaries[id]) index.summaries[id].reviewStatus = decision.status;
         const decided: ReviewReceipt = { jobId: id, requestId: decision.requestId, status: decision.status, decidedAt: at, ...(decision.actor.id === undefined ? {} : { decidedBy: decision.actor.id }), ...(decision.reason === undefined ? {} : { reason: decision.reason }) };
         const record: RequestRecord = { requestId: decision.requestId, operation: "review", actor: structuredClone(decision.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
-        cell.record = record; receipt = decided;
+        cell.record = record;
+        if (previousReviewStatus !== decision.status) await emitEvent(tx, job, "job.reviewed", at, { reviewStatus: decision.status });
+        receipt = decided;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
@@ -190,7 +196,10 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (job.status !== "queued") index.order = index.order.filter(candidate => candidate !== id);
         const decided: ControlReceipt = { jobId: id, requestId: request.requestId, action: request.action, previousStatus, status: job.status, replayed: false, appliedAt: at };
         const record: RequestRecord = { requestId: request.requestId, operation: "control", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: decided as unknown as JsonValue };
-        cell.record = record; receipt = decided;
+        cell.record = record;
+        const type = request.action === "pause" ? "job.paused" : request.action === "resume" ? "job.resumed" : (previousStatus === "queued" || previousStatus === "paused") ? "job.cancelled" : "job.cancel-requested";
+        await emitEvent(tx, job, type, at);
+        receipt = decided;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
@@ -220,6 +229,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         };
         const next: RetryReceipt = { jobId: retryJob.id, requestId: request.requestId, action: "retry", previousStatus: original.status, status: "queued", replayed: false, appliedAt: at, retryJobId: retryJob.id, retryOf: original.id, attemptNumber: retryJob.attemptNumber };
         await commitJob(tx, retryJob);
+        await emitEvent(tx, retryJob, "job.queued", at, { retryOf: original.id });
         const history = await tx.doc(JobControlDocFamily, id, { events: [] });
         history.events = [...(history.events ?? []), { action: "retry" as const, requestId: request.requestId, actor: plain(request.actor), requestedAt: at, appliedAt: at, previousStatus: original.status, nextStatus: original.status, result: retryJob.id }].slice(-128);
         const review = await tx.doc(JobReviewDocFamily, retryJob.id, { status: initialReviewStatus(retryJob) });
@@ -256,7 +266,9 @@ export function createJobRepository(session: Session, context: Context, clock: C
         consumption.requestIds = [...consumption.requestIds.filter(candidate => candidate !== request.requestId), request.requestId].slice(-32);
         const consumed: ConsumeReceipt = { jobId: id, requestId: request.requestId, consumedAt: at, consumedBy: request.consumer, count: consumption.count, result: plain(body) };
         const record: RequestRecord = { requestId: request.requestId, operation: "consume", actor: structuredClone(request.actor), canonicalVersion: 1, payloadHash, admittedAt: at, response: { jobId: id, status: "queued", agent: job.agent.name }, receipt: consumed as unknown as JsonValue };
-        cell.record = record; receipt = consumed;
+        cell.record = record;
+        await emitEvent(tx, job, "job.consumed", at, { consumptionCount: consumption.count });
+        receipt = consumed;
       }, context);
       if (!receipt) throw new DomainError("STORAGE_ERROR");
       return receipt;
@@ -304,6 +316,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         job.finishedAt = at; job.updatedAt = at; delete job.control;
         const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));
         await writeIndexFor(tx, job, false, true);
+        await emitEvent(tx, job, "job.cancelled", at);
       }, context);
     },
     async finish(id, result, at) {
@@ -315,6 +328,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         job.finishedAt = at; job.updatedAt = at;
         const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));
         await writeIndexFor(tx, job, false, true);
+        await emitEvent(tx, job, `job.${result.status}`, at);
       }, context);
     },
     async markRunning(id, submissionId, at) {
@@ -323,11 +337,12 @@ export function createJobRepository(session: Session, context: Context, clock: C
         if (!job || job.status !== "provisioning") return;
         job.status = "running"; job.submissionId = submissionId; job.startedAt ??= at; job.updatedAt = at;
         await writeIndexFor(tx, job);
+        await emitEvent(tx, job, "job.started", at);
       }, context);
     },
     async create(job, result) {
       assertJob(job);
-      await session.commit(async tx => { await commitJob(tx, job, result); }, context);
+      await session.commit(async tx => { await commitJob(tx, job, result); if (job.status === "queued") await emitEvent(tx, job, "job.queued", job.createdAt); }, context);
     },
     async claimNext(maxConcurrency, createConversation) {
       let claimed: JobRecord | undefined;
@@ -342,6 +357,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
         job.status = "provisioning"; job.updatedAt = clock();
         job.conversationId = await createConversation(tx, job);
         await writeIndexFor(tx, job);
+        await emitEvent(tx, job, "job.provisioning", job.updatedAt);
         claimed = plain(job);
       }, context);
       return claimed;

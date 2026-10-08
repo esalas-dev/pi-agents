@@ -24,7 +24,7 @@ import { createResultService } from "../application/result.ts";
 import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
 
-export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
+export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
 export type SessionRuntime = { jobs: JobsService; close(): Promise<void> };
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
@@ -41,7 +41,7 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const registry = createRegistry(); registry.install(CodingTools);
     const tools = new Map((CodingTools.tools ?? []).map(tool => [tool.name, tool as ToolRegistration]));
     harness = await Harness.open(await openNodeSqliteStorage(lease.dbPath), { models: options.models, registry, settings: { extensions: [CodingTools] }, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? options.defaultCwd }), onReport: report }, options.context);
-    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`));
+    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), options.sessionId);
     const execution = createExecution(harness, options.context, tools, clock);
     let coordinator: ReturnType<typeof createCoordinator>;
     const query = createQueryService(repository);

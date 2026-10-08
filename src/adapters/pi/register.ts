@@ -47,7 +47,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     const models = await bindings.createModels({ authPath: path.join(bindings.getAgentDir(), "auth.json"), modelsPath: path.join(bindings.getAgentDir(), "models.json"), refreshOnCreate: false });
     for (const providerId of new Set(ctx.modelRegistry.getAll().map(model => model.provider))) { const provider = ctx.modelRegistry.getProvider(providerId); if (provider) models.registerNativeProvider(provider); }
     const database = statePath(id, bindings.getAgentDir());
-    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id) await notify(job, result, current); } };
+    const runtimeOptions = { storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, sessionId: id, maxConcurrency: Math.max(1, Math.min(MAX_CONCURRENCY, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)), onReport: report, onSettled: async (job: JobRecord, result: JobResult) => { const current = state; if (current?.sessionId === id) await notify(job, result, current); } };
     let runtime: SessionRuntime;
     try { runtime = await openSessionRuntime(runtimeOptions); }
     catch (error) {

@@ -12,7 +12,7 @@ import { createLegacyFixture } from './helpers/legacy.mjs';
 import { legacyInput } from './helpers/legacy.mjs';
 
 const hasCode = code => error => error?.error?.code === code;
-const options = (storagePath, models = createModels()) => ({ storagePath, models, context, defaultCwd: process.cwd(), maxConcurrency: 1, now: () => 10, createId: () => 'psa_runtime' });
+const options = (storagePath, models = createModels()) => ({ storagePath, models, context, defaultCwd: process.cwd(), sessionId: `test-${storagePath}`, maxConcurrency: 1, now: () => 10, createId: () => 'psa_runtime' });
 const request = { requestId: 'runtime:1', actor: { kind: 'model' }, intent: { agent: 'test-agent', task: 'hazlo', cwd: process.cwd() } };
 
  test('base legacy exige mantenimiento antes de abrir Harness', async () => {

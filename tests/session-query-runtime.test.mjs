@@ -11,7 +11,7 @@ import { openSessionRuntime } from '../src/runtime/session.ts';
 import { JobConsumptionDocFamily, JobDocFamily, JobReviewDocFamily, JobResultDocFamily, JobsIndexDoc, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
 
 const hasCode = code => error => error?.error?.code === code;
-const options = storagePath => ({ storagePath, models: createModels(), context, defaultCwd: process.cwd(), maxConcurrency: 1 });
+const options = storagePath => ({ storagePath, models: createModels(), context, defaultCwd: process.cwd(), sessionId: `test-${storagePath}`, maxConcurrency: 1 });
 const job = { id: 'persisted', status: 'completed', task: 'done', cwd: '/tmp', createdAt: 1, updatedAt: 2, finishedAt: 2, agent: { name: 'a', description: 'A', systemPrompt: 'p', source: 'personal', filePath: '/tmp/a', tools: [] }, model: { provider: 'faux', modelId: 'faux-1' }, thinkingLevel: 'off', notified: false, resultMeta: { durationMs: 1, model: { provider: 'faux', modelId: 'faux-1' }, status: 'completed' } };
 const result = { finalResponse: 'persisted result', durationMs: 1, model: { provider: 'faux', modelId: 'faux-1' }, status: 'completed' };
 
