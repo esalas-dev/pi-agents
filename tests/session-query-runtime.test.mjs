@@ -9,6 +9,7 @@ import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite
 import { createModels } from '@earendil-works/pi-ai/models';
 import { openSessionRuntime } from '../src/runtime/session.ts';
 import { JobConsumptionDocFamily, JobDocFamily, JobReviewDocFamily, JobResultDocFamily, JobsIndexDoc, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
+import { OutboxMetaDoc } from '../src/infrastructure/durable/outbox-documents.ts';
 
 const hasCode = code => error => error?.error?.code === code;
 const options = storagePath => ({ storagePath, models: createModels(), context, defaultCwd: process.cwd(), sessionId: `test-${storagePath}`, maxConcurrency: 1 });
@@ -20,7 +21,7 @@ async function seed(database, version) {
   await session.commit(async tx => {
     const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = version;
     const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = version;
-    if (version === 4) {
+    if (version === 4 || version === 5) {
       const stored = await tx.doc(JobDocFamily, job.id, job); Object.assign(stored, job);
       const body = await tx.doc(JobResultDocFamily, job.id, result); Object.assign(body, result);
       const review = await tx.doc(JobReviewDocFamily, job.id, { status: 'approved' }); Object.assign(review, { status: 'approved', decidedBy: 'alice', decidedAt: 3 });
@@ -37,10 +38,25 @@ test('base esquema 2 exige migración antes de abrir Harness y proveedor', async
   finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('runtime schema 4 compone consulta, control, resultado y revisión tras reapertura', async () => {
+test('runtime schema 4 exige migración humana antes de abrir', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-v4-required-')); const database = join(directory, 'jobs.sqlite');
+  try { await seed(database, 4); await assert.rejects(openSessionRuntime(options(database)), hasCode('MIGRATION_REQUIRED')); }
+  finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('runtime vacío crea schema 5 y outbox vacío', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-empty-v5-')); const database = join(directory, 'jobs.sqlite'); let runtime;
+  try { runtime = await openSessionRuntime(options(database)); await runtime.close(); runtime = undefined;
+    const session = createSession(await openNodeSqliteStorage(database));
+    try { assert.equal((await session.snapshot(StorageMetaDoc, context)).storageSchemaVersion, 5); assert.equal((await session.snapshot(JobsIndexDoc, context)).storageSchemaVersion, 5); assert.deepEqual(await session.snapshot(OutboxMetaDoc, context), { nextSequence: 1, nextToEmit: 1, recent: [] }); }
+    finally { await session.close(context); }
+  } finally { await runtime?.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('runtime schema 5 compone consulta, control, resultado y revisión tras reapertura', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-v4-')); const database = join(directory, 'jobs.sqlite'); let runtime;
   try {
-    await seed(database, 4); runtime = await openSessionRuntime(options(database));
+    await seed(database, 5); runtime = await openSessionRuntime(options(database));
     const view = await runtime.jobs.getJob('persisted'); assert.equal(view.success, true); assert.equal(view.value.reviewStatus, 'approved'); assert.equal((await runtime.jobs.listJobs({})).value.items[0].id, 'persisted');
     const resultView = await runtime.jobs.getResult('persisted', { mode: 'human', operation: 'peek', actor: { kind: 'human', id: 'alice' } }); assert.equal(resultView.success, true); assert.equal(resultView.value.result.finalResponse, 'persisted result');
     await runtime.close(); await runtime.close(); runtime = await openSessionRuntime(options(database)); assert.equal((await runtime.jobs.getJob('persisted')).value.consumption.count, 1);

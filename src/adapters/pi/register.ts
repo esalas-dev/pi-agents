@@ -52,13 +52,17 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: PiBindings): void {
     try { runtime = await openSessionRuntime(runtimeOptions); }
     catch (error) {
       if (!(error instanceof DomainError) || error.error.code !== "MIGRATION_REQUIRED" || !canConfirmMigration(ctx)) throw error;
-      const migration = await createMaintenanceService(BACKGROUND_CONTEXT).migrate({ dbPath: database, clock: Date.now, confirm: async info => {
-        if (ctx.sessionManager.getSessionId() !== id) return undefined;
-        const accepted = await ctx.ui.confirm("Migrar almacenamiento de subagents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
-        if (!accepted || ctx.sessionManager.getSessionId() !== id) return undefined;
-        return { requestId: `migration:${id}:${Date.now()}`, actor: { kind: "human", id: "tui" }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: Date.now() };
-      } });
-      if (!migration.success) throw new DomainError(migration.error.code);
+      const maintenance = createMaintenanceService(BACKGROUND_CONTEXT);
+      while (true) {
+        const migration = await maintenance.migrate({ dbPath: database, clock: Date.now, confirm: async info => {
+          if (ctx.sessionManager.getSessionId() !== id) return undefined;
+          const accepted = await ctx.ui.confirm("Migrar almacenamiento de subagents", `Se migrarán ${info.jobs} trabajos y se creará un backup.`);
+          if (!accepted || ctx.sessionManager.getSessionId() !== id) return undefined;
+          return { requestId: `migration:${id}:${Date.now()}`, actor: { kind: "human", id: "tui" }, dbPath: info.dbPath, sourceHash: info.sourceHash, approvedAt: Date.now() };
+        } });
+        if (!migration.success) throw new DomainError(migration.error.code);
+        if (migration.value.schemaVersion === 5) break;
+      }
       runtime = await openSessionRuntime(runtimeOptions);
     }
     state = { sessionId: id, runtime, models, context: ctx }; completion(ctx);

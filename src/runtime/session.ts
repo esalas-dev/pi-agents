@@ -11,6 +11,7 @@ import type { JobRecord, JobResult } from "../domain/jobs.ts";
 import type { Clock, CreateId } from "../domain/requests.ts";
 import { DomainError } from "../domain/errors.ts";
 import { JobsIndexDoc, StorageMetaDoc } from "../infrastructure/durable/documents.ts";
+import { OutboxMetaDoc } from "../infrastructure/durable/outbox-documents.ts";
 import { createJobRepository } from "../infrastructure/durable/repository.ts";
 import { inspectStorage } from "../infrastructure/storage/inspect.ts";
 import { acquireLease, type Lease } from "../infrastructure/storage/lease.ts";
@@ -32,10 +33,10 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
   try {
     await mkdir(path.dirname(options.storagePath), { recursive: true, mode: 0o700 });
     lease = await acquireLease(options.storagePath); const inspection = await inspectStorage(lease, options.context);
-    if (inspection.kind === "legacy-v1" || (inspection.kind === "current" && inspection.schemaVersion !== 4)) throw new DomainError("MIGRATION_REQUIRED");
+    if (inspection.kind === "legacy-v1" || (inspection.kind === "current" && inspection.schemaVersion !== 5)) throw new DomainError("MIGRATION_REQUIRED");
     if (inspection.kind === "empty") {
       const storage = await openNodeSqliteStorage(lease.dbPath); const session = createSession(storage);
-      try { await session.commit(async tx => { const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = 4; const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = 4; }, options.context); }
+      try { await session.commit(async tx => { const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = 5; const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = 5; await tx.doc(OutboxMetaDoc); }, options.context); }
       finally { await session.close(options.context); }
     }
     const registry = createRegistry(); registry.install(CodingTools);

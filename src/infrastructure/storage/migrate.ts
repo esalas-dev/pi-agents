@@ -6,10 +6,30 @@ import { DomainError } from "../../domain/errors.ts";
 import { canonicalJson, type MigrationApproval } from "../../domain/requests.ts";
 import type { JobRecord, JobResult } from "../../domain/jobs.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, StorageMetaDoc } from "../durable/documents.ts";
+import { OutboxMetaDoc } from "../durable/outbox-documents.ts";
+import { schema4Source } from "./schema4-source.ts";
 import { LegacyJobsDoc, type JobsStateV1 } from "../durable/legacy-v1.ts";
 import type { BackupReceipt } from "./backup.ts";
 import { verifyBackup } from "./backup.ts";
 import type { Lease } from "./lease.ts";
+
+export async function migrateV4ToV5(lease: Lease, approval: MigrationApproval, backup: BackupReceipt, context: Context): Promise<{ schemaVersion: 5; migratedJobs: number }> {
+  if (approval.actor.kind !== "human" || approval.dbPath !== lease.dbPath) throw new DomainError("INVALID_REQUEST");
+  await verifyBackup(backup);
+  const storage = await openNodeSqliteStorage(lease.dbPath); const session = createSession(storage);
+  try {
+    const source = await schema4Source(session, storage, context);
+    if (source.sourceHash !== approval.sourceHash) throw new DomainError("STORAGE_INCONSISTENT");
+    await session.commit(async tx => {
+      const meta = await tx.doc(StorageMetaDoc); const index = await tx.doc(JobsIndexDoc); const outbox = await tx.doc(OutboxMetaDoc);
+      meta.storageSchemaVersion = 5; meta.source = "migrated"; meta.migrationRequestId = approval.requestId;
+      meta.migratedAt = approval.approvedAt; meta.migrationActor = { kind: "human", ...(approval.actor.id ? { id: approval.actor.id } : {}) };
+      meta.sourceHash = source.sourceHash; meta.backupPath = backup.path; meta.backupHash = backup.sha256;
+      index.storageSchemaVersion = 5; outbox.nextSequence = 1; outbox.nextToEmit = 1; outbox.recent = [];
+    }, context);
+    return { schemaVersion: 5, migratedJobs: source.jobs };
+  } finally { await session.close(context); }
+}
 
 export async function migrateV2ToV3(lease: Lease, approval: MigrationApproval, backup: BackupReceipt, context: Context): Promise<{ schemaVersion: 3; migratedJobs: number }> {
   if (approval.actor.kind !== "human" || approval.dbPath !== lease.dbPath) throw new DomainError("INVALID_REQUEST");
