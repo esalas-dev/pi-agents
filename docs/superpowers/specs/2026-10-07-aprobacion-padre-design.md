@@ -157,4 +157,4 @@ TDD RED/GREEN real de policy/ownership/ledger/adapter y covering tests persisten
 
 ## 8. Próximo gate
 
-La especificación original y el plan fueron aprobados; P1/P2 están aceptadas técnicamente y P3 sigue sin aceptar. §3.1 y PR-09 de la enmienda escrita ya están aprobados. Próximo gate: revisión humana del plan P3/P4 actualizado antes de implementar el contrato modificado. Mantener la ejecución aislada por subagentes y las revisiones independientes. Esta enmienda no modifica autoridad instalada ni resuelve el gate pendiente del job legacy T1.
+La especificación, §3.1/PR-09 y el plan actualizado fueron aprobados. P1/P2 aceptadas técnicamente; P3 corregida en `fc87a0b`. Por petición posterior del usuario, continuar P3/P4 sin subagentes y con autorrevisión final, cuya menor independencia se declara; no se modifica el requisito de revisión independiente antes de simplificar una futura versión SDK. Evidencia/gates actuales: `docs/PARENT-REVIEW-ACCEPTANCE.md`. Próximo gate externo: autorización de carga y validación real PR-11, después integración PR-12 separada. Nada de esto modifica autoridad instalada ni resuelve el gate pendiente del job legacy T1.

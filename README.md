@@ -98,9 +98,22 @@ La extensión registra `pi_agents` para iniciar trabajos y las tools de consulta
 - `pi_agents_list({ statuses?, agent?, limit?, cursor?, pending_review? })`;
 - `pi_agents_wait({ id, until?, timeout_seconds? })`;
 - `pi_agents_result({ id, consume?, request_id? })`;
-- `pi_agents_control({ id, action, request_id, reason? })`, con acciones `pause`, `resume`, `cancel` y `retry`.
+- `pi_agents_control({ id, action, request_id, reason? })`, con acciones `pause`, `resume`, `cancel` y `retry`;
+- `pi_agents_review({ id, status, request_id, reason? })`, con status `approved` o `rejected`, únicamente para hijos propios del padre nativo activo.
 
-La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no aprueban resultados ni devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
+La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
+
+### Revisión parental nativa
+
+```json
+{"id":"psa_…","status":"approved","request_id":"review:1","reason":"Autorizar lectura del informe"}
+```
+
+La identidad procede del runtime y del vínculo persistido al iniciar el trabajo; no se admite `actor`, `parent` ni `callerRole` en parámetros. `reason` es opcional, máximo 2048 unidades UTF-16. El padre sigue siendo **model**, nunca human. Puede revisar solamente resultados terminales recuperables de sus propios hijos; aprobar un reporte fallido no convierte el trabajo en éxito ni autoriza merge, migración o promoción.
+
+Una decisión humana por `/subagents approve/reject` tiene precedencia, incluso al confirmar el mismo status: el padre no la puede reemplazar ni restaurar permiso mediante replay. Completar un trabajo no lo aprueba automáticamente. Los trabajos históricos sin vínculo requieren revisión humana; no se adoptan por nombres, perfiles o replay. Workers solo reciben CodingTools, no herramientas parentales ni delegación recursiva. No hay revisión RPC operativa en esta versión; fase03 sigue siendo una integración pendiente.
+
+La implementación está verificada offline, **no instalada/cargada ni validada en TUI real por estas pruebas**. Bootstrap de resultados legacy sigue usando aprobación humana. Véase [aceptación parental y gates](docs/PARENT-REVIEW-ACCEPTANCE.md). No se ofrece downgrade con escritura ni sandbox frente a plugins/filesystem hostiles.
 
 ## Persistencia y recuperación
 
@@ -110,7 +123,9 @@ Cada sesión principal tiene su propio almacenamiento:
 ~/.pi/agent/pi-agents/sessions/<session-id>.sqlite
 ```
 
-La separación por sesión evita mezclar resultados y reduce conflictos entre procesos Pi distintos. Al cambiar de sesión o cerrar Pi, el Harness Durable se cierra ordenadamente. Al volver a abrir esa sesión:
+La separación por sesión evita mezclar resultados y reduce conflictos entre procesos Pi distintos. Al cambiar de sesión o cerrar Pi se usa retirada en dos fases: `retire()` invalida autoridad, sella admisión, cancela únicamente observación y drena writes admitidos; comienza el cierre SDK en segundo plano sin esperar al proveedor. `close()` espera el cierre completo y libera el lease solamente tras éxito.
+
+Pi Durable 1.0.1 puede esperar indefinidamente a un proveedor que ignore la señal. Mientras tanto, otra base puede operar, pero la misma base —incluido reload— devuelve `STORAGE_BUSY`; reintentar manualmente después del cierre real. Un fallo de cierre se reporta y retiene el lease. No hay cancelación durable implícita, cola de reintentos, timeout para liberar lease ni eliminación automática de locks. Salir del proceso no garantiza completar cleanup. Al volver a abrir esa sesión:
 
 - trabajos en cola siguen en cola;
 - conversaciones y envíos conservan su identidad;
@@ -147,6 +162,12 @@ La carpeta de estado puede contener instrucciones, respuestas, rutas, argumentos
 - Un mismo archivo SQLite debe pertenecer a un solo proceso. La separación por ID de sesión reduce el riesgo, pero no permite abrir deliberadamente la misma sesión principal en dos procesos concurrentes.
 - Pi Durable es experimental. Antes de actualizarlo hay que revisar su changelog, recompilar conceptualmente los contratos y repetir las pruebas de recuperación.
 
+### Reevaluar futuras versiones de Pi Durable
+
+Antes de actualizar desde **1.0.1**, inspeccionar las APIs públicas de `Harness.close`, scheduler/Session y cancelación del waiter de Chord. El probe local original observó close pendiente a 1000 ms y `STORAGE_BUSY` hasta liberar el proveedor: es diagnóstico, no un workaround de producción.
+
+Repetir las pruebas persistentes de proveedor que ignora señal, ambas fases compartidas, writes/observadores tardíos, fallo SDK, lease y reapertura, comprobando que no se sintetiza cancelación durable. Simplificar la retirada solo después de demostrar cierre seguro y revisión independiente; no actualizar ni parchear la dependencia automáticamente. Contrato: [§3.1](docs/superpowers/specs/2026-10-07-aprobacion-padre-design.md).
+
 ## Desarrollo y pruebas
 
 ```sh
@@ -170,7 +191,8 @@ Los `peerDependencies` son suministrados por Pi y no deben añadirse como depend
 - adaptadores Pi, autoridad TUI-only, consulta/listado/espera, revisión/consumo y smoke de carga;
 - límite de concurrencia;
 - cierre y reapertura durante una generación;
-- controles de cola, retry enlazado, abortos públicos, reconciliación y migración 3→4.
+- controles de cola, retry enlazado, abortos públicos, reconciliación y migración 3→4;
+- ownership parental, precedencia humana, replay con permiso vigente, workers reales y retirada/cierre con SDK y SQLite reales bajo proveedores faux.
 
 Para verificar que Pi puede cargar el paquete sin invocar un modelo:
 
