@@ -117,7 +117,9 @@ Después de validar la interfaz principal puede añadirse un widget compacto enc
 Subagentes: 2 activos · 3 en cola · 1 revisión · 1 workflow esperando aprobación
 ```
 
-Predeterminado: apagado o resumen de una línea. No se implementan inicialmente animaciones por job ni conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
+Predeterminado: apagado o resumen de una línea. Se incluye un spinner para jobs activos conforme a la [spec del widget](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md#animación-de-ejecución): frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. En modo resumen hay como máximo un spinner; en filas individuales, todas comparten el mismo frame. No representa porcentaje ni prueba de avance efectivo.
+
+Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. No se incluyen conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
 
 ## Recursos y recuperación
 
@@ -159,7 +161,8 @@ Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista e
 
 ## Accesibilidad y formato
 
-- Estado no depende solo de color; usa texto/símbolo.
+- Estado no depende solo de color ni de animación; usa texto/símbolo.
+- Permite movimiento reducido con símbolos estáticos, sin destellos ni saltos de layout.
 - Respeta keybindings de Pi cuando exista API pública.
 - Trunca con indicador y permite expandir.
 - No interpreta stdout como Markdown por defecto.
@@ -214,6 +217,7 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 8. Contenido con secuencias ANSI no puede alterar la TUI.
 9. Headless sigue operativo con UI deshabilitada.
 10. Workflows pendientes de aprobación son visibles y no avanzan solos.
+11. Animación comparte un reloj de 250 ms, no incrementa consultas y se detiene ante datos desactualizados, retirada o cierre; modo estático conserva información y no deja ticks tardíos.
 
 ## Pruebas
 
@@ -225,6 +229,7 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 - Confirmaciones y actor humano.
 - Modos TUI, print y RPC.
 - Pruebas de rendimiento basadas en operaciones, no tiempos frágiles.
+- Frames con reloj simulado, movimiento reducido, render agrupado, ausencia de consultas por tick y limpieza de animación en reload/cambio de sesión.
 - Integración de cada capacidad 01–09.
 
 ## Fuera de alcance inicial

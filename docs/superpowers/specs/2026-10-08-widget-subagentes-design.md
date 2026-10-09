@@ -2,7 +2,7 @@
 
 ## Estado y autoridad del documento
 
-**Propuesta escrita pendiente de revisión humana.** Fecha de redacción: 2026-10-08, fecha local del entorno. El usuario eligió visualizar dentro de Pi y solicitó una spec de la propuesta analizada. Esa solicitud autoriza redactar este documento, no implementar, instalar dependencias ni modificar almacenamiento.
+**Propuesta escrita pendiente de revisión humana.** Fecha de redacción: 2026-10-08, fecha local del entorno. El usuario eligió visualizar dentro de Pi y solicitó una spec de la propuesta analizada. Esa solicitud autoriza redactar este documento, no implementar, instalar dependencias ni modificar almacenamiento. Durante la revisión el usuario solicitó incluir animación; se incorpora un spinner desde la etapa A. El documento completo sigue pendiente de aprobación.
 
 Esta spec define una entrega acotada de observabilidad en dos etapas. No sustituye la interfaz operativa completa de [fase 10](../../../specs/10-interfaz-operativa.md), ni da por implementados los eventos y RPC de [fase 03](2026-10-07-fase-03-eventos-rpc-design.md).
 
@@ -34,6 +34,7 @@ La UI es una proyección reconstruible. Observar, ocultar o retirar el widget no
 
 - Widget compacto encima del editor, visible cuando hay jobs no terminales.
 - Nombre de agente, ID abreviado, estado público, duración activa y posición de cola disponible.
+- Spinner en filas activas, con reloj compartido y alternativa estática para movimiento reducido.
 - Consulta inicial y refresco periódico de servicios existentes.
 - Indicación de más trabajos y de datos desactualizados.
 - Conservación de comandos, tools y avisos de finalización actuales.
@@ -49,7 +50,7 @@ La etapa A es una entrega útil pero **no cumple el alcance de actividad de B**.
 
 ### Fuera de alcance
 
-Panel interactivo, nuevas acciones de control, configuración persistente, nuevos flags o subcomandos, listado global, historial en el widget, grupos, gates, worktrees, schedules, workflows, porcentaje estimado, animación por job, tokens/costes, streaming de respuestas o stdout, bus de progreso nuevo y monitor externo RPC.
+Panel interactivo, nuevas acciones de control, configuración persistente, nuevos flags o subcomandos, listado global, historial en el widget, grupos, gates, worktrees, schedules, workflows, porcentaje estimado, animaciones decorativas o temporizadores por job, tokens/costes, streaming de respuestas o stdout, bus de progreso nuevo y monitor externo RPC.
 
 No se añade una dependencia runtime, migración de SQLite ni cambio de los estados públicos para ninguna etapa.
 
@@ -61,12 +62,12 @@ Ejemplo de B, ilustrativo y no una función disponible:
 
 ```text
 Subagentes · 3 visibles
-● psa_7ab…  reviewer     ejecutándose  42 s  · herramienta: read
-● psa_92c…  implementer  ejecutándose  18 s  · generando respuesta
+| psa_7ab…  reviewer     ejecutándose  42 s  · herramienta: read
+| psa_92c…  implementer  ejecutándose  18 s  · generando respuesta
 ○ psa_318…  tester       en cola        —    · posición 1
 ```
 
-En A se omite la actividad; no se sustituye por una etiqueta que aparente observación real.
+Las barras de las filas activas representan un frame del spinner; el ejemplo es estático. En A se omite la actividad; no se sustituye por una etiqueta que aparente observación real.
 
 ### Selección
 
@@ -89,6 +90,19 @@ Los jobs terminales desaparecen tras la siguiente consulta exitosa; sus avisos y
 - Al no existir jobs pendientes, retirar el contenido del widget. La consulta periódica sigue permitiendo descubrir nuevos jobs de la sesión activa.
 
 Máximo 6 líneas: encabezado, 4 filas y una línea compartida para advertencias/continuación. En terminal estrecha se ocultan primero actividad y duración; se preservan símbolo/estado e identificación hasta donde permita el ancho. Si el ancho es insuficiente, usar un resumen de una línea y remitir a `/subagents list`.
+
+### Animación de ejecución
+
+Desde A, reemplazar el símbolo estático de cada fila `running` o `cancelling` por un spinner de una columna con frames `|`, `/`, `-`, `\`, en ese orden. La proyección pública de provisioning puede animarse como running. Mantener siempre el texto del estado: el movimiento solo indica un estado activo en la última consulta confirmada, no avance medido, actividad reciente ni confirmación de cancelación.
+
+- Un **único reloj de animación por widget**, compartido entre todas las filas, avanza un frame cada **250 ms**. No crear un loader o timer por job ni cambiar el loader principal de Pi.
+- Animar solo con widget montado, datos durables frescos y al menos una fila activa visible. En el resumen estrecho, como máximo un spinner con la misma condición. Queued y paused mantienen símbolos estáticos; terminales no se animan.
+- Ante datos desactualizados, widget retirado o ausencia de filas activas, detener el reloj y usar símbolos estáticos. Una consulta exitosa puede reanudarlo si vuelven a cumplirse las condiciones.
+- En B, la indisponibilidad de actividad no invalida un estado durable fresco: el spinner puede seguir, con «actividad no disponible» explícito. No se usa el spinner como sustituto de esa observación.
+- Los ticks solo actualizan el frame efímero e invalidan el componente; no consultan servicios, SQLite, transcript o modelos ni emiten eventos. Coalescer animación, consultas y actividad bajo el mismo presupuesto de solicitudes de render.
+- Todos los frames ocupan una columna, sin destellos, cambios de color por frame, saltos de layout ni captura de foco. El modo estático conserva toda la información textual.
+- Para movimiento reducido, **`PI_AGENTS_ANIMATION=0`** deshabilitará solo el movimiento y el reloj continuo de animación. Ausente u otro valor mantiene animación habilitada cuando corresponde. Es el único ajuste adicional, no persistente; no añade flags, comandos ni un sistema de configuración. El refresco de datos y de actividad continúa agrupado.
+- Al disponer, recargar o cambiar sesión, cancelar el reloj junto con los demás recursos. No quedan ticks ni solicitudes de render de una generación anterior; el ritmo vuelve a empezar al montar una instancia nueva.
 
 ## 4. Arquitectura y APIs públicas
 
@@ -131,7 +145,7 @@ Una lectura exitosa reemplaza las filas de A y reconcilia observaciones de B. No
 
 Conservar el instante de la última consulta exitosa. Ante fallo de cualquiera de las consultas, no aplicar una selección parcial: conservar la última selección conocida y marcar «Datos desactualizados». Durante una consulta que supera 5 s, mostrar la misma advertencia, sin lanzar otra consulta ni fingir que se canceló la lectura pendiente. Si aún no hubo lectura exitosa, mostrar «Estado no disponible».
 
-B puede refrescar actividad con mayor frecuencia, pero el componente recibe como máximo una publicación por **250 ms**, agrupando cambios. Ni un evento ni un cierre de conversación convierten por sí solos el job a terminal: siempre prevalece la siguiente consulta durable.
+Animación, cambios de selección y actividad de B comparten un límite de **una solicitud propia de render por 250 ms** (4 Hz). Agrupar las actualizaciones bajo ese único presupuesto; no sumar otro reloj de render por fuente. El primer montaje y la retirada se aplican de inmediato. En modo estático o sin filas animables no hay reloj continuo de animación; los cambios de datos usan coalescing bajo demanda. Este límite no restringe los renders que Pi necesite por otros componentes. Ni un frame, un evento ni un cierre de conversación convierten por sí solos el job a terminal: siempre prevalece la siguiente consulta durable.
 
 Los eventos de fase 03, cuando estén implementados y validados, podrán invalidar esta vista como optimización posterior. Esta spec no requiere su bus ni modifica su contrato ni duplica su outbox.
 
@@ -176,7 +190,7 @@ Si falta una API pública necesaria en el host objetivo, B queda bloqueada; A pu
 - Crear controlador después de la apertura válida del runtime desde `session_start` o el lifecycle común ya existente; apertura fallida no crea una vista lista.
 - Identificar cada apertura con una generación interna además de `sessionId`. Reabrir la misma sesión también invalida callbacks anteriores.
 - Antes de publicar, comprobar generación y que el widget pertenece a la TUI activa. Un resultado tardío de consulta/adquisición no puede reaparecer en otra sesión.
-- Al cambiar sesión, recargar o cerrar: sellar publicaciones, cancelar timers propios, retirar widget, detener observadores y drenar lecturas admitidas antes de liberar el runtime.
+- Al cambiar sesión, recargar o cerrar: sellar publicaciones, cancelar timers propios —incluido el reloj compartido de animación—, retirar widget, detener observadores y drenar lecturas admitidas antes de liberar el runtime.
 - Limpieza idempotente, incluido `dispose()` del componente. Separar cierre de observación de aborto de conversación; nunca llamar `conversation.abort()` para limpiar la UI.
 - La UI no prolonga la vida de la tool de inicio ni introduce esperas de finalización de jobs. Se conserva el cierre durable existente; no se promete un shutdown instantáneo.
 - En print, JSON y RPC no registrar el componente ni iniciar consultas/timers de widget. Herramientas, ejecución y servicios siguen operativos sin esta proyección.
@@ -226,12 +240,15 @@ No cambiar manifest, concurrencia, políticas de control, migraciones, ledger, o
 | AC-W-12 | B | Dos herramientas simultáneas, nombres repetidos y slots pending/running/done conservan llamadas correctas, sin contadores duplicados |
 | AC-W-13 | B | Reintento, deferred, compactación bloqueante/no bloqueante y generación cumplen precedencia; nunca fabrican porcentaje |
 | AC-W-14 | B | Falta/cierre de observador degrada solo actividad; recuperación usa snapshot y máximo un observador por job visible |
-| AC-W-15 | B | Máximo 4 observadores y publicaciones agrupadas cada 250 ms; render no consulta SQLite ni recorre transcript |
+| AC-W-15 | B | Máximo 4 observadores; actividad y animación comparten el presupuesto de render de 250 ms; render no consulta SQLite ni recorre transcript |
 | AC-W-16 | B | Estado durable terminal prevalece sobre actividad tardía; retirar UI/observadores no aborta ni cancela un job |
 | AC-W-17 | Ambas | npm run check y npm test verdes, smoke de carga y verificación TUI humana documentados para cada etapa entregada |
 | AC-W-18 | Ambas | Entorno objetivo comprobado y límites experimentales registrados; no se infiere compatibilidad de 1.0.4 desde inspección de 1.1.0 |
+| AC-W-19 | A | Frames de una columna en ciclo de 250 ms, un solo reloj para hasta 4 filas; ticks no aumentan consultas, observadores ni llamadas al modelo |
+| AC-W-20 | A | Queued/paused, datos desactualizados y widget vacío no animan; running/cancelling frescos sí; detener/reanudar no altera estados ni layout |
+| AC-W-21 | Ambas | PI_AGENTS_ANIMATION=0 mantiene información y refresco sin reloj continuo de animación; cleanup deja cero ticks tardíos y coalescing respeta 4 Hz |
 
-Pruebas con reloj/temporizadores y UI controlados para selección, coalescing, lentitud, errores y generaciones; integración Durable real para observación, recuperación y cierre sin aborto. Incluir más de 4 activos, cola paginada e índice grande con resultados voluminosos. Comprobar operaciones y recursos retenidos, no tiempos de rendimiento frágiles ni solo snapshots visuales.
+Pruebas con reloj/temporizadores y UI controlados para selección, coalescing, lentitud, errores y generaciones; integración Durable real para observación, recuperación y cierre sin aborto. Incluir más de 4 activos, cola paginada e índice grande con resultados voluminosos. Comprobar operaciones y recursos retenidos, no tiempos de rendimiento frágiles ni solo snapshots visuales. Para animación, avanzar el reloj simulado, comprobar los cuatro frames y comparar contadores de consultas antes/después de varios ticks. Probar movimiento reducido, transición a datos desactualizados, reanudación, retirada y callbacks tardíos tras dispose/reload.
 
 La aceptación humana usa Pi desde un cwd no relacionado, varios subagentes activos, una cola y un job completado; verifica que puede continuar escribiendo, consultar el resultado y cambiar/reabrir sesión sin mezclar filas. Debe registrar host/versiones y separar pruebas automatizadas de observación interactiva.
 
