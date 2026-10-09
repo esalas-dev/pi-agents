@@ -4,7 +4,7 @@
 
 Propuesta. Última fase; depende de 01–09. La UI consume contratos existentes y no introduce semántica de negocio nueva.
 
-La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su plan fueron aprobados humanamente el 2026-10-08; se implementan A y B bajo una excepción limitada registrada en roadmap e índice. El 2026-10-09 el usuario autorizó completar B antes de la aceptación TUI de A y decidir la aceptación de A+B conjuntamente. Esto no sustituye esta fase ni altera la dependencia 01–09 de la interfaz operativa completa.
+La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su plan fueron aprobados humanamente el 2026-10-08; se implementan A y B bajo una excepción limitada registrada en roadmap e índice. El 2026-10-09 el usuario autorizó completar B antes de la aceptación TUI de A y decidir la aceptación de A+B conjuntamente. El visto bueno humano al widget A+B se recibió después de su instalación y una prueba real de subagente; la ampliación de casos especiales se limitó por decisión humana a pruebas automatizadas. Véase [aprobación y matriz](../docs/WIDGET-ACCEPTANCE.md), con escenarios interactivos no observados y revisión independiente pendiente. Esto no sustituye esta fase ni altera la dependencia 01–09 de la interfaz operativa completa.
 
 ## Objetivo
 

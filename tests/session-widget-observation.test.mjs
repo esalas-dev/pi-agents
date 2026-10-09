@@ -67,13 +67,14 @@ const live = {
   generation: { attempt: 2, message: { secret: 'PRIVATE_GENERATION_SENTINEL' }, retry: { at: 1234, error: 'PRIVATE_RETRY_SENTINEL' }, deferred: { pollAt: 2345 } },
   tools: [
     { callId: 'call-read', name: 'read', status: 'running', output: 'PRIVATE_OUTPUT_SENTINEL', details: { secret: 'PRIVATE_DETAILS_SENTINEL' }, diagnostics: [{ message: 'PRIVATE_DIAGNOSTIC_SENTINEL' }] },
+    { callId: 'call-read-2', name: 'read', status: 'running', args: { path: 'PRIVATE_ARGS_SENTINEL' }, output: 'PRIVATE_SECOND_OUTPUT_SENTINEL' },
     { callId: 'call-pending', name: 'bash', status: 'pending', output: 'PRIVATE_PENDING_SENTINEL' },
     { callId: 'call-done', name: 'bash', status: 'done', output: 'PRIVATE_DONE_SENTINEL' },
   ],
   compactions: [{ blocking: true, attempt: 3, retry: { at: 3456, error: 'PRIVATE_COMPACTION_SENTINEL' } }],
 };
 const expected = {
-  tools: [{ callId: 'call-read', name: 'read' }],
+  tools: [{ callId: 'call-read', name: 'read' }, { callId: 'call-read-2', name: 'read' }],
   generation: { attempt: 2, retryAt: 1234, pollAt: 2345 },
   compactions: [{ blocking: true, attempt: 3, retryAt: 3456 }],
 };

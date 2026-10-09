@@ -31,6 +31,16 @@ pi remove /ruta/a/pi-durable-subagents
 
 La instalación debe ser personal, sin `--local`, si se desea disponer de la extensión en distintos proyectos.
 
+## Widget de subagentes A+B
+
+En TUI con UI real se muestra automáticamente sobre el editor al haber trabajos no terminales. Presenta hasta 4 filas: primero running/cancelling, después queued/paused, con estado público, duración activa, posición de cola disponible y aviso de más trabajos. Un éxito vacío lo retira; un fallo conserva la última vista marcada como desactualizada.
+
+A añade selección, duración y spinner de un reloj compartido de 250 ms. B observa LiveDoc para mostrar herramientas **running**, generación, reintento, espera del proveedor y compactación; si falla la observación conserva estado/duración y avisa que la actividad no está disponible. No muestra porcentajes, prompts, rutas, respuestas ni argumentos/salidas de herramientas. El widget no consume resultados, aprueba trabajos ni los cancela.
+
+`PI_AGENTS_ANIMATION=0` desactiva el movimiento, no el refresco. Print, JSON y RPC no montan este widget, incluso si RPC informa `hasUI`. La retirada limpia observadores y timers antes de retirar el runtime.
+
+El 2026-10-09 se recibió el visto bueno humano a A+B y se ejecutó un subagente real con lectura posterior a aprobación TUI. Los casos especiales se ampliaron **solo con pruebas automatizadas**, por elección humana: 60/60 focales y 321/321 de suite. Véase [aprobación, matriz y límites](docs/WIDGET-ACCEPTANCE.md): no acredita todos los escenarios interactivos, revisión independiente ni promoción de fase 10. El listado sigue recorriendo el índice; no promete coste constante.
+
 ## Formato de agentes
 
 ```markdown

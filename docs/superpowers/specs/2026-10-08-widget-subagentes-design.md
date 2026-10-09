@@ -12,6 +12,8 @@ Base inspeccionada durante la redacción: HEAD `e0d0a990038ab41e3826f5b4031e8a2f
 
 Consolidación autorizada el 2026-10-09: ambos borradores se reúnen sobre main `29905ee` en la ruta instalada `.worktrees/widget-subagentes`. El README de main ya usa detección del host (evidencia Pi 1.1.0), no el antiguo objetivo fijo. El observador se integra con sellado y retirada en dos fases; se conserva el lease hasta el cierre SDK real. Esto es integración local y validación automatizada, no aceptación TUI ni ampliación de compatibilidad; ver el [registro del plan](../plans/2026-10-08-widget-subagentes.md#consolidación-posterior-con-revisión-parental--2026-10-09).
 
+Actualización de aprobación y evidencia — 2026-10-09: A+B está implementado en `80d63d0`, instalado y con visto bueno humano al widget, confirmado junto con la aprobación del resultado de una prueba real. La ampliación posterior se autorizó **solo automatizada**: 60/60 focales, 321/321 suite y check verde. La [matriz AC-W y sus límites](../../WIDGET-ACCEPTANCE.md) distingue esa decisión de los escenarios TUI no observados; no acredita revisión independiente, compatibilidad adicional ni promoción de fase 10.
+
 ## 1. Intención y criterio de éxito
 
 Permitir que la persona que trabaja en la TUI principal de Pi vea qué subagentes de **esa sesión** siguen pendientes o ejecutándose, cuánto tiempo llevan en ejecución y, en la segunda etapa, qué actividad técnica se observa. La vista debe mantenerse actualizada sin ocupar el editor, lanzar otro modelo ni exigir consultas manuales repetidas.
@@ -60,7 +62,7 @@ Política de visibilidad común con fase 10: montar el widget automáticamente c
 
 ## 3. Presentación y selección de filas
 
-Ejemplo de B, ilustrativo y no una función disponible:
+Ejemplo esquemático de B, no captura de una prueba real:
 
 ```text
 Subagentes · 3 visibles
@@ -125,7 +127,7 @@ Etapa B: observador de LiveDoc ─► actividad técnica compacta
 | Controlador de widget | Refresco, selección, generación activa, errores y cierre | Consume servicios; nunca ejecuta transiciones |
 | Componente TUI | Formato por ancho/tema y líneas acotadas | Sin SQLite, herramientas, modelos ni foco de teclado |
 
-`src/runtime/session.ts` actualmente expone `jobs` y `close()`. B añadirá una capacidad interna acotada para observar actividad por ID de job y detener esa observación. No se entrega el Harness, `JobRecord`, contexto Chord ni `conversationId` al componente o a otras extensiones. Los nombres y archivos nuevos se decidirán en el plan, no se consideran existentes.
+`src/runtime/session.ts` expone `jobs`, `seal()`, `retire()`, `close()` y la capacidad interna B `watchJobActivity()` para observar actividad por ID de job y detener esa observación. No se entrega el Harness, `JobRecord`, contexto Chord ni `conversationId` al componente o a otras extensiones. Los nombres y archivos nuevos se decidirán en el plan, no se consideran existentes.
 
 ### Integración con Pi
 
@@ -254,7 +256,7 @@ Pruebas con reloj/temporizadores y UI controlados para selección, coalescing, l
 
 La aceptación humana usa Pi desde un cwd no relacionado, varios subagentes activos, una cola y un job completado; verifica que puede continuar escribiendo, consultar el resultado y cambiar/reabrir sesión sin mezclar filas. Debe registrar host/versiones y separar pruebas automatizadas de observación interactiva.
 
-Estos gates son **requisitos futuros**, no pruebas ya ejecutadas ni aceptación obtenida.
+La tabla define los requisitos, no prueba por sí misma su cumplimiento. El [registro actualizado](../../WIDGET-ACCEPTANCE.md) identifica evidencia automatizada por criterio, aprobación humana recibida y escenarios interactivos aún no observados.
 
 ## 11. Evidencia, limitaciones y handoff
 

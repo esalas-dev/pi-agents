@@ -10,6 +10,8 @@
 
 **Spec:** [`docs/superpowers/specs/2026-10-08-widget-subagentes-design.md`](../specs/2026-10-08-widget-subagentes-design.md)
 
+**Estado actualizado — 2026-10-09:** implementación A+B en `80d63d0`, instalada y con visto bueno humano. Prueba real completada y resultado leído tras aprobación TUI; ampliación de casos especiales limitada explícitamente a pruebas automatizadas: 60/60 focales, 321/321 suite y check verde. La [matriz de aceptación](../../WIDGET-ACCEPTANCE.md) registra alcance y límites. Las casillas de ejercicios manuales extensos no se completan mediante tests ni mediante el visto bueno genérico.
+
 ## Restricciones globales
 
 - Solo la excepción A+B está autorizada; el panel y la fase 10 completa siguen bloqueados por 01–09.
@@ -62,7 +64,7 @@ Esperado: falla porque el controlador/widget aún no existe.
 
 Crear `createSubagentsWidget` en `src/adapters/pi/subagents-widget.ts`; mantener modelo de vista acotado, dos consultas por conjunto, refresco serial y timer solo tras resolver la lectura previa. Integrar en `register.ts` con guardia TUI exacta y cleanup antes del runtime.
 
-- [ ] **Paso 4: Ejecutar gates automatizados de A**
+- [x] **Paso 4: Ejecutar gates automatizados de A**
 
 Ejecutar `node --test tests/pi-subagentes-widget.test.mjs tests/pi-adapters.test.mjs`, `npm run check`, `npm test` y el smoke de carga documentado en README: `PI_OFFLINE=1 pi --no-extensions --extension "$PWD/index.ts" --list-models __pi_agents_smoke_no_match__`.
 Resultado histórico del port contra `origin/main` `bfea4c7` (registrado al final): pruebas de A, check y suite pasan en Pi 1.1.0. El fallo previo de host-version está preservado como evidencia histórica, no como estado actual ni como prueba de compatibilidad 1.0.4. No marcar aceptación humana a partir de estos gates.
@@ -71,7 +73,7 @@ Resultado histórico del port contra `origin/main` `bfea4c7` (registrado al fina
 
 En Pi TUI instalado 1.1.0 desde cwd no relacionado: comprobar jobs activos/cola, retirar al vaciar tras lectura exitosa, mantener editor/foco y cambiar/reabrir sesión. Registrar host/versiones y resultado; no afirmar 1.0.4. Por instrucción humana del 2026-10-09, diferir la aceptación de A hasta la validación conjunta A+B tras Task 3; continuar con B sin pausa.
 
-- [ ] **Paso 6: Diferir documentación de aceptación hasta A+B**
+- [x] **Paso 6: Diferir documentación de aceptación hasta A+B**
 
 No presentar A como aceptada ni actualizar README/arquitectura con aceptación antes del gate conjunto A+B; tras aceptarlo, documentar ambas etapas y sus límites; ejecutar `git diff --check` y revisar que no atribuyan actividad de B.
 
@@ -137,9 +139,9 @@ Resultado histórico del port contra `origin/main` `bfea4c7`: pruebas de B, chec
 
 En Pi TUI desde cwd no relacionado, validar conjuntamente A+B: filas activas/cola, editor/foco, retiro/sesiones y, para B, al menos dos tools simultáneas, generación, espera/compactación cuando reproducible, contenido hostil/centinela y cleanup. Documentar cuáles señales fueron realmente observadas; no presentar escenarios no reproducidos como pruebas realizadas. Pi 1.0.4 sigue siendo un gate de compatibilidad separado.
 
-- [ ] **Paso 6: Documentar A+B aceptadas y revisar diff completo**
+- [x] **Paso 6: Documentar A+B aceptadas y revisar diff completo**
 
-Solo tras aceptación humana conjunta, actualizar README y arquitectura; revisar los AC-W-01…21 contra tests, ejecución y aceptación humana. Ejecutar `git diff --check`, `npm run check` y `npm test`; no incluir ni stagear cambios preexistentes ajenos.
+Tras recibir visto bueno humano conjunto, se actualizan README y arquitectura y se registra la matriz AC-W-01…21 con pruebas y límites observados. La decisión humana no sustituye escenarios manuales no ejercitados ni revisión independiente. Verificar `git diff --check`, `npm run check` y `npm test`; no incluir ni stagear cambios preexistentes ajenos.
 
 ---
 
@@ -161,4 +163,12 @@ La integración conserva la fábrica inyectable original, el controlador y las p
 
 Autorrevisión focal, no independiente: se corrigen con RED→GREEN dos defectos previos — slots pending presentados como tools en ejecución y handles terminados retenidos por el Set del runtime. Regresiones para snapshot/callbacks, sellado, adquisición/cierre admitidos y cierre de observación con proveedor faux bloqueado. Baseline integrado: 289/289 y check verde. La verificación final, pack y protección de root/settings se registran en evidencia local ignorada `.superpowers/widget-consolidation-20261009T173147Z/`.
 
-Las casillas anteriores conservan el historial del port; no acreditan aceptación de esta consolidación. Sin smoke Pi nuevo, TUI, proveedor real, migración de datos reales, instalación, reload ni publicación. Aceptación TUI conjunta A+B y revisión independiente siguen pendientes; no se documenta el widget como aceptado en README/arquitectura ni se promueve fase 10.
+Estado al crear el commit de consolidación `80d63d0` (histórico): sin smoke Pi nuevo, TUI, proveedor real, migración de datos reales, instalación, reload ni publicación; entonces seguían pendientes aceptación y revisión independiente. Este párrafo no describe los hechos posteriores.
+
+### Aprobación y ampliación automatizada — 2026-10-09
+
+Después se confirmó el registro personal desde la ruta conservada, se ejecutó `parent-review-reviewer` y se leyó su resultado terminal con `consume:false` tras aprobación TUI humana. La persona responsable confirmó el visto bueno visual A+B y posteriormente «apruebo»; [WIDGET-ACCEPTANCE](../../WIDGET-ACCEPTANCE.md) registra esa decisión, no una inspección visual del asistente ni revisión del código por ese subagente.
+
+Por elección humana, los casos especiales se amplían solo automatizadamente, sin perfil temporal ni nuevos subagentes: Unicode/temas, CSI/OSC, parada y reanudación de animación por frescura, adquisición/callback tardíos bajo la misma clave, dos tools running con nombres repetidos en LiveDoc, precedencia de compactación/espera y un índice SQLite de 2.000 jobs con resultados voluminosos. No cambia ningún archivo productivo.
+
+Resultados: 60/60 focales, 321/321 suite, sin skips/fallos/cancelaciones, check verde con host Pi 1.1.0 y smoke CLI aislado exit 0 sin modelos disponibles. La matriz separa UI controlada de Harness/SQLite y de la única prueba remota previa. La evidencia interactiva especial y la revisión independiente siguen pendientes. Al cerrar esta ampliación automatizada no se habían hecho commit/push/merge, migraciones reales ni promoción de fase 10. La solicitud posterior «crea PR» autoriza confirmar documentación/pruebas y publicar normalmente la rama contra `main`; no autoriza merge, migraciones ni promoción de fase.

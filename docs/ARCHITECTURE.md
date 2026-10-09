@@ -26,6 +26,16 @@ Cada trabajo ejecuta una tarea independiente. No existen cadenas ni lotes. La co
 - Construye un `ModelRuntime` público y sincroniza proveedores físicos visibles en `ctx.modelRegistry`.
 - Añade notificaciones fuera del contexto del modelo mediante `pi.appendEntry()`.
 
+### Widget de subagentes A+B
+
+`register.ts` crea `createSubagentsWidget` tras abrir el runtime únicamente para `mode === "tui" && hasUI`. A consume `JobsService.listJobs` en dos conjuntos, limita 4 filas/6 líneas y comparte consulta serial, frescura y animación; B recibe el método enlazado `SessionRuntime.watchJobActivity` para los activos visibles. El render usa el tema/ancho actuales y no consulta almacenamiento ni captura teclas.
+
+La frontera B resuelve internamente job→conversación y usa `watchDoc(LiveDoc)`. Publica solo callId/nombre de slots running, intento/espera y compactación, como reemplazos desde snapshot/callback. No entrega Harness, conversación ni cuerpo al componente. LiveDoc se materializa antes de proyectarse: no es una garantía de memoria constante ni sandbox. El listado recorre/ordena el índice aunque limite la página.
+
+El sellado invalida adquisiciones y callbacks; `retire()` drena adquisiciones/watches admitidos antes del cierre SDK. Los handles terminados se eliminan. El adaptador sella RPC antes de esperar cleanup del widget, que precede la retirada del runtime; no cambia control, revisiones, outbox ni notificaciones. `close()` conserva el lease hasta el cierre SDK real, incluidos proveedores que no terminan.
+
+Visto bueno humano A+B recibido el 2026-10-09; [registro y matriz](WIDGET-ACCEPTANCE.md) separan una prueba real de ejecución/lectura, UI controlada, Harness/SQLite con LiveDoc sintético y escenarios interactivos no ejercitados. La ampliación automatizada no cambia código productivo ni promueve fase 10.
+
 ### Descubrimiento (`src/agents.ts`)
 
 Busca:

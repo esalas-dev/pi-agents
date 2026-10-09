@@ -48,7 +48,7 @@ function setup(responses, options = {}) {
     assert.ok(factory, 'widget mounted');
     return factory({ requestRender: () => { renders++; } }, theme);
   };
-  return { widget, timers, calls, registrations, mount, renders: () => renders };
+  return { widget, timers, calls, registrations, mount, theme, ui, renders: () => renders };
 }
 
 const emptyCycle = [page(), page()];
@@ -188,6 +188,25 @@ test('muestra retry, deferred y compactación sin inventar progreso', async () =
   await h.widget.close();
 });
 
+test('compactación de fondo y ausencia de actividad no inventan estado; herramientas y espera conservan precedencia', async () => {
+  const activities = [
+    { tools: [], compactions: [{ blocking: false, attempt: 1 }] },
+    { tools: [], compactions: [] },
+    { tools: [], generation: { attempt: 2, pollAt: 1234 }, compactions: [{ blocking: true, attempt: 1 }] },
+    { tools: [{ callId: 'read-1', name: 'read' }], generation: { attempt: 2, retryAt: 1234 }, compactions: [{ blocking: true, attempt: 1 }] },
+  ];
+  const h = setup([page(activities.map((_, i) => job(`activity-${i}`, 'running'))), page()], { watchJobActivity: async () => ({ initial: activities.shift(), close: async () => {} }) });
+  h.widget.start(); await flush(); const component = h.mount();
+  try {
+    const lines = component.render(160);
+    assert.match(lines[1], /compactación en segundo plano/);
+    assert.match(lines[2], /sin actividad observable/);
+    assert.match(lines[3], /esperando proveedor/); assert.doesNotMatch(lines[3], /compactando/);
+    assert.match(lines[4], /herramientas: read/); assert.doesNotMatch(lines[4], /reintento|compactando/);
+    assert.doesNotMatch(lines.join('\n'), /1234|%/);
+  } finally { await h.widget.close(); }
+});
+
 test('observador ausente degrada solo actividad y vuelve a intentarse en la siguiente consulta', async () => {
   let acquisitions = 0;
   const h = setup([page([job('run1', 'running')]), page(), page([job('run1', 'running')]), page()], { watchJobActivity: async () => {
@@ -248,6 +267,71 @@ test('limita a cuatro observadores y cierra los retirados; spinner no crea watch
   await h.timers.advance(750);
   assert.equal(closes, 4);
   await h.widget.close();
+});
+
+test('Unicode ancho y combinado conserva columnas y render usa el tema vigente sin CSI ni OSC del agente', async () => {
+  const name = '\u001b[2J\u001b]8;;https://evil.test\u0007审阅é\u0301😀\u001b]8;;\u0007\r\t\u0000';
+  const h = setup([page([job('unicode-worker', 'running', { agent: { name } })]), page()]);
+  h.widget.start(); await flush(); const component = h.mount();
+  try {
+    h.theme.fg = (_color, text) => `\u001b[31m${text}\u001b[0m`;
+    const red = component.render(80).join('\n');
+    assert.match(red, /\u001b\[31m/); assert.match(red, /审阅é\u0301😀/);
+    assert.doesNotMatch(red, /evil\.test|\u001b\[2J|\u001b\]|\r|\t|\u0000|PRIVATE_/);
+    h.theme.fg = (_color, text) => `\u001b[34m${text}\u001b[0m`;
+    for (const width of [20, 40, 80]) {
+      const lines = component.render(width);
+      assert.ok(lines.length <= 6);
+      assert.match(lines[0], /\u001b\[34m/); assert.doesNotMatch(lines.join('\n'), /\u001b\[31m/);
+      for (const line of lines) assert.ok(visibleWidth(line) <= width);
+      assert.match(lines[1], width === 20 ? /^\| unicode- ejecut/ : /ejecutándose/);
+    }
+  } finally { await h.widget.close(); }
+});
+
+test('datos desactualizados detienen el spinner y una consulta exitosa lo reanuda sin ticks tras cierre', async () => {
+  const active = page([job('run1', 'running')]);
+  const h = setup([active, page(), { success: false, error: { message: 'offline' } }, active, page()]);
+  h.widget.start(); await flush(); const component = h.mount();
+  try {
+    await h.timers.advance(1000);
+    assert.match(component.render(80).join('\n'), /Datos desactualizados/);
+    const frozen = component.render(80)[1][0];
+    await h.timers.advance(500);
+    assert.equal(component.render(80)[1][0], frozen); assert.equal(h.calls.length, 3);
+    await h.timers.advance(500);
+    assert.doesNotMatch(component.render(80).join('\n'), /Datos desactualizados/);
+    const fresh = component.render(80)[1][0];
+    await h.timers.advance(250);
+    assert.notEqual(component.render(80)[1][0], fresh); assert.equal(h.calls.length, 5);
+    await h.widget.close();
+    assert.equal(h.timers.tasks.size, 0);
+    const renders = h.renders(); await h.timers.advance(5000);
+    assert.equal(h.renders(), renders); assert.equal(h.calls.length, 5);
+  } finally { await h.widget.close(); }
+});
+
+test('adquisición y callback tardíos de una instancia retirada no reemplazan el widget nuevo bajo la misma clave', async () => {
+  const acquisition = Promise.withResolvers(); let publish, lateCloses = 0;
+  const old = setup([page([job('old-worker', 'running')]), page()], { watchJobActivity: async (_id, onUpdate) => { publish = onUpdate; return acquisition.promise; } });
+  let next;
+  try {
+    old.widget.start(); await flush(); const closing = old.widget.close();
+    next = setup([page([job('new-worker', 'running')]), page()], { ui: old.ui });
+    next.widget.start(); await flush(); const component = old.mount();
+    const before = component.render(80).join('\n'); const mounts = old.registrations.length;
+    assert.match(before, /new-work/); assert.doesNotMatch(before, /old-work/);
+    acquisition.resolve({ initial: { tools: [{ callId: 'late', name: 'PRIVATE_LATE_SENTINEL' }], compactions: [] }, close: async () => { lateCloses++; } });
+    await closing;
+    publish({ tools: [{ callId: 'late', name: 'PRIVATE_LATE_SENTINEL' }], compactions: [] }); await flush();
+    await old.timers.advance(5000);
+    assert.equal(component.render(80).join('\n'), before);
+    assert.equal(old.registrations.length, mounts); assert.equal(lateCloses, 1);
+    assert.equal(old.timers.tasks.size, 0); assert.equal(old.calls.length, 2);
+  } finally {
+    acquisition.resolve(undefined);
+    await old.widget.close(); await next?.widget.close();
+  }
 });
 
 test('movimiento reducido conserva refresco y estado estático', async () => {
