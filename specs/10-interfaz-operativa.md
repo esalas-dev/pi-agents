@@ -4,6 +4,8 @@
 
 Propuesta. Última fase; depende de 01–09. La UI consume contratos existentes y no introduce semántica de negocio nueva.
 
+La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su plan fueron aprobados humanamente el 2026-10-08; se implementan A y B bajo una excepción limitada registrada en roadmap e índice. El 2026-10-09 el usuario autorizó completar B antes de la aceptación TUI de A y decidir la aceptación de A+B conjuntamente. El visto bueno humano al widget A+B se recibió después de su instalación y una prueba real de subagente; la ampliación de casos especiales se limitó por decisión humana a pruebas automatizadas. Véase [aprobación y matriz](../docs/WIDGET-ACCEPTANCE.md), con escenarios interactivos no observados y revisión independiente pendiente. Esto no sustituye esta fase ni altera la dependencia 01–09 de la interfaz operativa completa.
+
 ## Objetivo
 
 Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedules y workflows, con confirmaciones y trazabilidad adecuadas. Debe mejorar la supervisión sin ocultar estados durables ni enviar datos al modelo.
@@ -109,13 +111,17 @@ Objetivo de render: no recorrer resultados completos ni transcripts en cada fram
 
 ## Widget opcional
 
-Después de validar la interfaz principal puede añadirse un widget compacto encima del editor:
+Después de validar la interfaz principal puede añadirse el widget compacto de la [spec acotada](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md), encima del editor:
 
 ```text
-Subagentes: 2 activos · 3 en cola · 1 revisión · 1 workflow esperando aprobación
+Subagentes · 2 visibles
+| psa_7ab… reviewer     ejecutándose  42 s
+○ psa_318… tester       en cola        —
 ```
 
-Predeterminado: apagado o resumen de una línea. No se implementan inicialmente animaciones por job ni conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
+Su política de visibilidad es automática: se muestra mientras una consulta exitosa devuelva jobs no terminales visibles y se retira si una consulta exitosa no devuelve ninguno. No aparece vacío ni necesita un ajuste para activarse. Se incluye un spinner para jobs activos: frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. No representa porcentaje ni prueba de avance efectivo.
+
+Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. La etapa B de la spec acotada muestra solo señales técnicas allowlisted; no presenta una vista de conversación ni el transcript. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
 
 ## Recursos y recuperación
 
@@ -157,7 +163,8 @@ Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista e
 
 ## Accesibilidad y formato
 
-- Estado no depende solo de color; usa texto/símbolo.
+- Estado no depende solo de color ni de animación; usa texto/símbolo.
+- Permite movimiento reducido con símbolos estáticos, sin destellos ni saltos de layout.
 - Respeta keybindings de Pi cuando exista API pública.
 - Trunca con indicador y permite expandir.
 - No interpreta stdout como Markdown por defecto.
@@ -212,6 +219,7 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 8. Contenido con secuencias ANSI no puede alterar la TUI.
 9. Headless sigue operativo con UI deshabilitada.
 10. Workflows pendientes de aprobación son visibles y no avanzan solos.
+11. Animación comparte un reloj de 250 ms, no incrementa consultas y se detiene ante datos desactualizados, retirada o cierre; modo estático conserva información y no deja ticks tardíos.
 
 ## Pruebas
 
@@ -223,6 +231,7 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 - Confirmaciones y actor humano.
 - Modos TUI, print y RPC.
 - Pruebas de rendimiento basadas en operaciones, no tiempos frágiles.
+- Frames con reloj simulado, movimiento reducido, render agrupado, ausencia de consultas por tick y limpieza de animación en reload/cambio de sesión.
 - Integración de cada capacidad 01–09.
 
 ## Fuera de alcance inicial

@@ -11,6 +11,7 @@ import { formatControl, formatList, formatResult, formatReview, formatStatus, fo
 import { discoverAgents } from "../../agents.ts";
 import { createOutboxEmitter } from "../../runtime/outbox-emitter.ts";
 import { registerRpcServer } from "./rpc.ts";
+import { createSubagentsWidget } from "./subagents-widget.ts";
 
 const NOTICE = "pi-agents-notice"; const OUTPUT = "pi-agents-output";
 const display = (value: unknown): value is { title: string; text: string; level: "info" | "success" | "error"; jobId?: string } => Boolean(value && typeof value === "object" && typeof (value as any).title === "string" && typeof (value as any).text === "string");
@@ -26,6 +27,7 @@ export function formatToolResultResponse(value: any) {
 }
 
 export function canConfirmMigration(ctx: Pick<ExtensionContext, "mode" | "hasUI">): boolean { return ctx.mode === "tui" && ctx.hasUI; }
+export function canMountSubagentsWidget(ctx: Pick<ExtensionContext, "mode" | "hasUI">): boolean { return ctx.mode === "tui" && ctx.hasUI; }
 
 export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings): void {
   let state: PiSessionState | undefined; let agents: ReturnType<typeof discoverAgents>["agents"] = [];
@@ -69,13 +71,18 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
         isActive: () => state === current && current.generation.isActive(), clock: Date.now,
         subscribeWake: listener => current.runtime.subscribeOutboxWake(listener), report,
       });
+      let widget: ReturnType<typeof createSubagentsWidget> | undefined;
       try {
         pi.events.emit("pi-durable-subagents:ready", rpc.discovery());
         emitter.start();
+        if (canMountSubagentsWidget(current.context)) {
+          widget = (bindings.createWidget ?? createSubagentsWidget)({ jobs: current.runtime.jobs, ui: current.context.ui, watchJobActivity: current.runtime.watchJobActivity?.bind(current.runtime) });
+          widget.start();
+        }
       } catch (error) {
         rpc.seal();
-        await rpc.close();
-        await emitter.stop();
+        try { await widget?.close(); }
+        finally { try { await rpc.close(); } finally { await emitter.stop(); } }
         throw error;
       }
       let disposed = false;
@@ -84,7 +91,8 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
         disposed = true;
         if (state === current) state = undefined;
         rpc.seal();
-        try { await rpc.close(); } finally { await emitter.stop(); }
+        try { await widget?.close(); }
+        finally { try { await rpc.close(); } finally { await emitter.stop(); } }
       };
     } catch (error) { if (state === current) state = undefined; throw error; }
   } });

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import type { Context } from "@earendil-works/chord";
 import { withCancel } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
-import { createRegistry, Harness, type ToolRegistration } from "@earendil-works/pi-durable";
+import { createRegistry, Harness, LiveDoc, type ConversationId, type LiveState, type ToolRegistration } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { createSession } from "@earendil-works/pi-durable";
@@ -14,7 +14,7 @@ import { DomainError } from "../domain/errors.ts";
 import { JobsIndexDoc, StorageMetaDoc } from "../infrastructure/durable/documents.ts";
 import { OutboxMetaDoc } from "../infrastructure/durable/outbox-documents.ts";
 import { createOutboxRepository, type OutboxRepository } from "../infrastructure/durable/outbox.ts";
-import { createJobRepository } from "../infrastructure/durable/repository.ts";
+import { createJobRepository, type JobRepository } from "../infrastructure/durable/repository.ts";
 import { inspectStorage } from "../infrastructure/storage/inspect.ts";
 import { acquireLease, type Lease } from "../infrastructure/storage/lease.ts";
 import { createExecution } from "../infrastructure/durable/execution.ts";
@@ -29,7 +29,39 @@ import { createControlService } from "../application/control.ts";
 import { createParentJobsService, type ParentJobsService } from "../application/parent.ts";
 
 export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; isParentActive?: () => boolean; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; parent?: ParentJobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; seal(): void; retire(): Promise<void>; close(): Promise<void> };
+export type JobActivity = { tools: { callId: string; name: string }[]; generation?: { attempt: number; retryAt?: number; pollAt?: number }; compactions: { blocking: boolean; attempt: number; retryAt?: number }[] };
+type JobActivityWatch = { initial: JobActivity; closed: Promise<void>; close(): Promise<void> };
+export type SessionRuntime = { jobs: JobsService; parent?: ParentJobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; watchJobActivity(jobId: string, onUpdate: (activity: JobActivity) => void): Promise<JobActivityWatch | undefined>; seal(): void; retire(): Promise<void>; close(): Promise<void> };
+
+function projectActivity(live: Readonly<LiveState> | null): JobActivity {
+  const generation = live?.generation;
+  return {
+    tools: (live?.tools ?? []).filter(slot => slot.status === "running").map(({ callId, name }) => ({ callId, name })),
+    ...(generation ? { generation: { attempt: generation.attempt, ...(generation.retry ? { retryAt: generation.retry.at } : {}), ...(generation.deferred ? { pollAt: generation.deferred.pollAt } : {}) } } : {}),
+    compactions: (live?.compactions ?? []).map(({ blocking, attempt, retry }) => ({ blocking, attempt, ...(retry ? { retryAt: retry.at } : {}) })),
+  };
+}
+
+export async function createJobActivityWatcher(options: { jobId: string; repository: Pick<JobRepository, "get">; harness: Pick<Awaited<ReturnType<typeof Harness.open>>, "watchDoc">; context: Context; onUpdate: (activity: JobActivity) => void }): Promise<JobActivityWatch | undefined> {
+  const job = await options.repository.get(options.jobId);
+  if (!job || !["provisioning", "running", "cancelling"].includes(job.status) || job.conversationId === undefined) return undefined;
+  const watch = await options.harness.watchDoc(LiveDoc, job.conversationId as ConversationId, options.context);
+  if (!watch) return undefined;
+  const initial = projectActivity(watch.value);
+  let closed = false;
+  let callbackTail = Promise.resolve();
+  watch.start(async value => {
+    if (closed) return;
+    const activity = projectActivity(value);
+    callbackTail = callbackTail.then(() => { if (!closed) options.onUpdate(activity); }).catch(() => {});
+    await callbackTail;
+  });
+  let closePromise: Promise<void> | undefined;
+  return { initial, closed: watch.closed.then(() => {}), close() {
+    if (!closePromise) closePromise = (async () => { closed = true; await watch.stop(); await callbackTail; })();
+    return closePromise;
+  } };
+}
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
   if (typeof options.sessionId !== "string" || !options.sessionId) throw new DomainError("INVALID_REQUEST");
@@ -81,6 +113,8 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const jobs = createJobsService(repository, start, wait, result, review, query, control);
     const parent = authority ? createParentJobsService(authority, start, control, review) : undefined;
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
+    const activityWatches = new Set<JobActivityWatch>();
+    const activityAcquisitions = new Set<Promise<JobActivityWatch | undefined>>();
     let retiring: Promise<void> | undefined;
     let completion: Promise<void> | undefined;
     let closing: Promise<void> | undefined;
@@ -96,6 +130,8 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
       if (!retiring) {
         seal();
         retiring = (async () => {
+          await Promise.allSettled([...activityAcquisitions]);
+          await Promise.allSettled([...activityWatches].map(watch => watch.close()));
           await repository.drainParent();
           await coordinator.drain();
           // shortcut: SDK 1.0.1 puede retener el lease; simplificar solo con una API de cierre verificada.
@@ -112,7 +148,25 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     };
     retireOpening = retire;
     await coordinator.recover();
-    return { jobs, ...(parent ? { parent } : {}), outbox, subscribeOutboxWake, seal, retire, close() { return closing ??= retire().then(() => completion); } };
+    return { jobs, ...(parent ? { parent } : {}), outbox, subscribeOutboxWake, seal, retire,
+      async watchJobActivity(jobId, onUpdate) {
+        if (closed) return undefined;
+        const acquisition = (async () => {
+          const watch = await createJobActivityWatcher({ jobId, repository, harness: harness!, context: options.context, onUpdate: activity => { if (!closed) onUpdate(activity); } });
+          if (!watch) return undefined;
+          if (closed) { await watch.close(); return undefined; }
+          let watchClose: Promise<void> | undefined;
+          const managed: JobActivityWatch = { initial: watch.initial, closed: watch.closed, close() {
+            return watchClose ??= watch.close().finally(() => activityWatches.delete(managed));
+          } };
+          activityWatches.add(managed);
+          void managed.closed.then(() => activityWatches.delete(managed));
+          return managed;
+        })();
+        activityAcquisitions.add(acquisition);
+        try { return await acquisition; } finally { activityAcquisitions.delete(acquisition); }
+      },
+      close() { return closing ??= retire().then(() => completion); } };
   } catch (error) {
     if (retireOpening) {
       try { await retireOpening(); } catch (cleanupError) { report(cleanupError); }

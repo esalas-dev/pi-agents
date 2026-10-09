@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { registerPiAgents, canConfirmMigration } from '../src/adapters/pi/register.ts';
+import { registerPiAgents, canConfirmMigration, canMountSubagentsWidget } from '../src/adapters/pi/register.ts';
 import { resolveInput } from '../src/adapters/pi/resolve.ts';
 import { formatStatus, formatResult, briefSummary } from '../src/adapters/pi/display.ts';
 import { createModels } from '@earendil-works/pi-ai/models';
@@ -32,7 +32,7 @@ function host(ctx, t) {
   return { pi, handlers, registered, entries, dispatch: async (name, ...args) => handlers[name]?.(...args, ctx), async close() { await handlers.session_shutdown?.({}).catch(() => {}); await Promise.all(closures); } };
 }
 function modelRuntime(model) { return { registerNativeProvider() {}, getModel: () => model }; }
-function context(cwd) { return { cwd, mode: 'tui', hasUI: true, model: { provider: 'faux', id: 'faux-1' }, thinkingLevel: 'off', modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true, sessionManager: { getSessionId: () => 'adapter-test', getBranch: () => [] }, ui: { notify() {}, confirm: async () => true } }; }
+function context(cwd) { const widgets = []; return { cwd, widgets, mode: 'tui', hasUI: true, model: { provider: 'faux', id: 'faux-1' }, thinkingLevel: 'off', modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true, sessionManager: { getSessionId: () => 'adapter-test', getBranch: () => [] }, ui: { notify() {}, confirm: async () => true, setWidget: (key, factory, options) => widgets.push({ key, factory, options }) } }; }
 
  test('resolveInput conserva confianza, snapshot y modelo configurado', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-adapter-')); const agentDir = join(directory, 'agents'); await (await import('node:fs/promises')).mkdir(agentDir, { recursive: true }); await writeFile(join(agentDir, 'a.md'), '---\nname: worker\ndescription: worker\ntools: read,write\n---\nSystem prompt'); const ctx = context(directory); const model = { provider: 'faux', id: 'faux-1' };
@@ -132,8 +132,62 @@ for (const phase of ['createModels', 'openRuntime']) {
   });
 }
 
-test('migración solo puede confirmarse desde TUI con UI real', () => {
-  assert.equal(canConfirmMigration({ mode: 'tui', hasUI: true }), true); assert.equal(canConfirmMigration({ mode: 'rpc', hasUI: true }), false); assert.equal(canConfirmMigration({ mode: 'tui', hasUI: false }), false);
+test('el lifecycle crea el widget inyectado solo en TUI y lo cierra en shutdown', async t => {
+  for (const mode of ['tui', 'rpc']) {
+    const directory = await mkdtemp(join(tmpdir(), 'pi-widget-injected-'));
+    const previousDir = process.env.PI_AGENTS_STATE_DIR;
+    process.env.PI_AGENTS_STATE_DIR = join(directory, 'state');
+    const ctx = context(directory); ctx.mode = mode;
+    const events = []; let widgetOptions; const h = host(ctx, t);
+    try {
+      registerPiAgents(h.pi, { getAgentDir: () => directory, createModels: async () => createModels(), resolveModel: () => ({}), text: content => content, Type: { Object: x => x, String: () => ({}) }, version: 'test', createWidget: options => { widgetOptions = options; return { start() { events.push('start'); }, async close() { events.push('close'); } }; } });
+      await h.dispatch('session_start', { type: 'session_start', reason: 'startup' });
+      assert.deepEqual(events, mode === 'tui' ? ['start'] : []);
+      if (mode === 'tui') {
+        assert.equal(typeof widgetOptions.watchJobActivity, 'function');
+        assert.equal(await widgetOptions.watchJobActivity('missing', () => {}), undefined);
+      }
+      await h.dispatch('session_shutdown', { type: 'session_shutdown', reason: 'quit' });
+      assert.deepEqual(events, mode === 'tui' ? ['start', 'close'] : []);
+      assert.deepEqual(h.entries, []);
+    } finally {
+      try { await h.close(); await rm(directory, { recursive: true, force: true }); }
+      finally { if (previousDir === undefined) delete process.env.PI_AGENTS_STATE_DIR; else process.env.PI_AGENTS_STATE_DIR = previousDir; }
+    }
+  }
+});
+
+ test('el widget real se monta y limpia antes de retire solo para TUI con UI', { timeout: 10000 }, async () => {
+  for (const [mode, hasUI] of [['tui', true], ['rpc', true], ['tui', false], ['print', false], ['json', false]]) {
+    const directory = await mkdtemp(join(tmpdir(), 'pi-widget-registration-'));
+    const ctx = context(directory); ctx.mode = mode; ctx.hasUI = hasUI;
+    const h = host(ctx); const mounted = Promise.withResolvers();
+    const setWidget = ctx.ui.setWidget;
+    ctx.ui.setWidget = (...args) => { setWidget(...args); if (typeof args[1] === 'function') mounted.resolve(); };
+    const activeJob = { id: 'widget-job', status: 'running', agent: { name: 'test-agent' }, startedAt: Date.now() };
+    const expected = mode === 'tui' && hasUI;
+    let retired = false;
+    const runtime = { jobs: { unnotified: async () => ({ success: true, value: [] }), listJobs: async ({ statuses }) => ({ success: true, value: { items: statuses.includes('running') ? [activeJob] : [] } }) }, watchJobActivity: async () => ({ initial: { tools: [], compactions: [] }, closed: new Promise(() => {}), async close() {} }), outbox: { pending: async () => [], markEmitted: async () => {} }, subscribeOutboxWake: () => () => {}, seal() {}, async retire() { if (expected) assert.ok(ctx.widgets.some(widget => widget.factory === undefined)); retired = true; }, async close() {} };
+    try {
+      registerPiAgents(h.pi, { getAgentDir: () => directory, createModels: async () => modelRuntime({ provider: 'faux', id: 'faux-1' }), resolveModel: () => ({}), text: value => value, Type: { Object: value => value, String: () => ({}) }, version: 'test', openRuntime: async () => runtime });
+      await h.dispatch('session_start', { type: 'session_start', reason: 'startup' });
+      if (expected) {
+        await mounted.promise;
+        assert.ok(ctx.widgets.some(widget => typeof widget.factory === 'function' && widget.options?.placement === 'aboveEditor'));
+      } else assert.equal(ctx.widgets.length, 0);
+      await h.dispatch('session_shutdown', { type: 'session_shutdown', reason: 'quit' });
+      assert.equal(retired, true);
+      assert.deepEqual(h.entries, []);
+    } finally { await h.close(); await rm(directory, { recursive: true, force: true }); }
+  }
+});
+
+ test('migración y widget exigen modo TUI además de UI real', () => {
+  for (const canUse of [canConfirmMigration, canMountSubagentsWidget]) {
+    assert.equal(canUse({ mode: 'tui', hasUI: true }), true);
+    assert.equal(canUse({ mode: 'rpc', hasUI: true }), false);
+    assert.equal(canUse({ mode: 'tui', hasUI: false }), false);
+  }
 });
 
 test('presentación no lee respuesta completa para status y resume con límite', () => {

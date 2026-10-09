@@ -54,11 +54,16 @@ test('retire termina sin proveedor, close concurrente retiene lease hasta el cie
     runtime = await openSessionRuntime({ ...options(database, models), sessionId: 'parent-retire', onReport: error => reports.push(error) });
     assert.equal((await runtime.parent.start(request, async task => legacyInput(task.task))).success, true);
     await started.promise;
+    const watch = await runtime.watchJobActivity('psa_runtime', () => {});
+    assert.ok(watch);
+    let observationClosed = false;
+    void watch.closed.then(() => { observationClosed = true; });
     assert.equal(typeof runtime.retire, 'function');
     const firstRetire = runtime.retire();
     assert.equal(runtime.retire(), firstRetire);
     await firstRetire;
     await new Promise(resolve => setImmediate(resolve));
+    assert.equal(observationClosed, true);
     assert.deepEqual(reports, []);
     const denied = await runtime.parent.decideReview('psa_runtime', { requestId: 'late', status: 'approved' });
     assert.equal(denied.success, false);
