@@ -16,7 +16,7 @@ const status = await rpc.call("status", { id: "psa_ejemplo" }, { requestId: "mi-
 rpc.close();
 ```
 
-Un `ping` exitoso sin `sessionId` fija la sesión descubierta para las llamadas siguientes. Se puede crear el cliente con un `sessionId` conocido para fijarlo explícitamente. Una respuesta de otra sesión se ignora; el cliente no cambia de sesión silenciosamente. Para redescubrir tras un cambio, el caller crea un cliente nuevo sin `sessionId` y ejecuta `ping`.
+Un `ping` exitoso sin `sessionId` fija la sesión descubierta para las llamadas siguientes. Se puede crear el cliente con un `sessionId` conocido para fijarlo explícitamente. Una respuesta de otra sesión se ignora, excepto un error `SESSION_MISMATCH` válido y correlacionado, que se entrega como `RpcResponse` sin cambiar la sesión del cliente ni reenviar la solicitud. Para redescubrir tras un cambio, el caller crea un cliente nuevo sin `sessionId` y ejecuta `ping`.
 
 ## Transporte y sobres
 
@@ -26,7 +26,7 @@ Un `ping` exitoso sin `sessionId` fija la sesión descubierta para las llamadas 
 
 La solicitud contiene `protocolVersion: 1`, `requestId`, `correlationId`, `callerId`, `params` y `sessionId` (opcional únicamente para `ping`). La respuesta contiene protocolo, `requestId`, `correlationId`, `sessionId` y exactamente uno de `data` o `error` según `success`.
 
-El cliente instala el listener antes de emitir, valida la respuesta completa y solo acepta la operación/correlación/solicitud/sesión esperada. Respuestas malformadas o ajenas no completan la llamada. El listener y timer se retiran tras respuesta, timeout local, error de transporte o `close()`.
+El cliente instala el listener antes de emitir, valida la respuesta completa y solo acepta la operación/correlación/solicitud/sesión esperada. La única excepción de sesión es un error `SESSION_MISMATCH` válido, con operación, correlación y requestId esperados: completa la llamada sin redirección. Respuestas malformadas o ajenas no completan la llamada. Cada intento conserva el requestId capturado al enviarse, aunque el caller modifique o reutilice su objeto de opciones; esto no permite reutilizar una intención durable con otro payload. El listener y timer se retiran tras respuesta, timeout local, error de transporte o `close()`.
 
 Los identificadores `requestId`, `callerId` y `sessionId` son strings no vacíos con máximo de 256 bytes UTF-8. `correlationId` tiene entre 1 y 128 caracteres ASCII de `[A-Za-z0-9._-]`, pues forma parte del canal de respuesta. `pi.events` transporta objetos: no construyas JSON concatenando strings ni interpolando parámetros en canales. El texto de resultado se mide y trunca por bytes UTF-8; no se corta dentro de un par sustituto Unicode. El límite de 65536 bytes incluye el sobre JSON serializado y sus escapes.
 

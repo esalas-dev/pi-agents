@@ -1,9 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeRpcFixture } from './helpers/rpc.mjs';
+import { flushRpc, makeFakeTimers, makeRpcFixture } from './helpers/rpc.mjs';
 import { createRpcCaller } from './fixtures/rpc-caller-extension.ts';
 import { createOutboxEmitter } from '../src/runtime/outbox-emitter.ts';
-import { eventChannel, replyChannel } from '../rpc.ts';
+import { createRpcClient, eventChannel, replyChannel, requestChannel } from '../rpc.ts';
+
+test('SESSION_MISMATCH se entrega sin redirigir ni dejar recursos', async t => {
+  const timers = makeFakeTimers();
+  const fixture = await makeRpcFixture({ timers: timers.api });
+  let correlation = 0;
+  const client = createRpcClient({
+    bus: fixture.bus, callerId: 'trusted-extension', sessionId: 'previous-session', timers: timers.api,
+    createCorrelationId: () => `mismatch-${++correlation}`,
+  });
+  t.after(async () => { client.close(); await fixture.close(); });
+
+  for (const [operation, params] of [
+    ['status', { id: 'missing-job' }],
+    ['control', { id: 'missing-job', action: 'cancel' }],
+  ]) {
+    const pending = client.call(operation, params, { requestId: `mismatch:${operation}` })
+      .catch(error => ({ localError: error.code }));
+    await flushRpc();
+    const pendingBeforeDeadline = timers.pending;
+    timers.advance(31000);
+    const response = await pending;
+    assert.equal(response.success, false, JSON.stringify(response));
+    assert.equal(response.error?.code, 'SESSION_MISMATCH');
+    assert.equal(response.sessionId, 'rpc-session');
+    assert.equal(pendingBeforeDeadline, 0);
+    const channel = replyChannel(operation, `mismatch-${correlation}`);
+    assert.equal(fixture.bus.listenerCount(channel), 0);
+    fixture.bus.emit(channel, {
+      protocolVersion: 1, requestId: `mismatch:${operation}`, correlationId: `mismatch-${correlation}`,
+      sessionId: 'previous-session', success: true,
+      data: operation === 'status'
+        ? { id: 'missing-job', status: 'queued', agent: 'agent-a', model: { provider: 'faux', modelId: 'faux-1' }, createdAt: 1, updatedAt: 1, hasResult: false, reviewStatus: 'not_required', consumption: { count: 0 } }
+        : { jobId: 'missing-job', requestId: 'mismatch:control', action: 'cancel', previousStatus: 'queued', status: 'cancelled', replayed: false, appliedAt: 1 },
+    });
+    assert.equal(fixture.bus.listenerCount(channel), 0);
+    assert.equal(timers.pending, 0);
+  }
+  const requests = fixture.bus.emitted.filter(({ channel }) =>
+    channel === requestChannel('status') || channel === requestChannel('control'));
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests.map(({ data }) => data.sessionId), ['previous-session', 'previous-session']);
+});
 
 async function eventually(predicate, timeout = 3000) {
   const end = Date.now() + timeout;

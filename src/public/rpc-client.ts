@@ -80,8 +80,8 @@ export function createRpcClient(options: RpcClientOptions): {
         unsubscribe = options.bus.on(replyChannel(operation, correlationId), value => {
           let response: RpcResponse<O>;
           try { response = parseRpcResponse(operation, value); } catch { return; }
-          if (response.correlationId !== correlationId || response.requestId !== callOptions.requestId) return;
-          if (sessionId !== undefined && response.sessionId !== sessionId) return;
+          if (response.correlationId !== correlationId || response.requestId !== request.requestId) return;
+          if (sessionId !== undefined && response.sessionId !== sessionId && (response.success || response.error.code !== "SESSION_MISMATCH")) return;
           if (operation === "ping" && response.success) {
             const discovery = (response as Extract<RpcResponse<"ping">, { success: true }>).data;
             if (discovery.sessionId !== response.sessionId) return;

@@ -86,6 +86,63 @@ test('ignora respuestas con operación, correlación, requestId o sesión incorr
   client.close();
 });
 
+test('la excepción SESSION_MISMATCH conserva las guardas de respuesta', async t => {
+  const timers = makeTimers();
+  const bus = makeBus();
+  const client = createRpcClient({ bus, callerId: 'test-extension', sessionId: 'session-a', timers: timers.api, createCorrelationId: () => 'mismatch-guard' });
+  t.after(() => client.close());
+  const pending = client.call('status', { id: 'job-1' }, { requestId: 'mismatch-guard-request' });
+  const request = bus.emitted[0].data;
+  const channel = replyChannel('status', request.correlationId);
+  const mismatch = {
+    protocolVersion: 1, requestId: request.requestId, correlationId: request.correlationId, sessionId: 'session-b', success: false,
+    error: { code: 'SESSION_MISMATCH', message: 'La operación RPC no pudo completarse.', retryable: false, details: {} },
+  };
+  bus.emit(channel, { ...mismatch, protocolVersion: 2 });
+  bus.emit(channel, { ...mismatch, correlationId: 'other-correlation' });
+  bus.emit(channel, { ...mismatch, requestId: 'other-request' });
+  bus.emit(replyChannel('list', request.correlationId), mismatch);
+  bus.emit(channel, ok(request, 'session-b', job('wrong-session')));
+  bus.emit(channel, { ...mismatch, error: { ...mismatch.error, code: 'JOB_NOT_FOUND' } });
+  assert.equal(bus.listenerCount(channel), 1);
+  assert.equal(timers.pending, 1);
+  bus.emit(channel, ok(request, 'session-a'));
+  const response = await pending;
+  assert.equal(response.success, true);
+  assert.equal(response.data.id, 'job-1');
+  assert.equal(bus.listenerCount(channel), 0);
+  assert.equal(timers.pending, 0);
+});
+
+test('captura requestId al reutilizar opciones con respuestas invertidas', async t => {
+  const bus = makeBus();
+  const timers = makeTimers();
+  let correlation = 0;
+  const client = createRpcClient({ bus, callerId: 'test-extension', sessionId: 'session-a', timers: timers.api, createCorrelationId: () => `corr-${++correlation}` });
+  t.after(() => client.close());
+  const callOptions = { requestId: 'request-1' };
+  const first = client.call('status', { id: 'job-1' }, callOptions).catch(error => ({ localError: error.code }));
+  callOptions.requestId = 'request-2';
+  const second = client.call('status', { id: 'job-2' }, callOptions).catch(error => ({ localError: error.code }));
+  callOptions.requestId = 'request-3';
+  const requests = bus.emitted.map(({ data }) => data);
+  assert.deepEqual(requests.map(request => request.requestId), ['request-1', 'request-2']);
+
+  bus.emit(replyChannel('status', 'corr-1'), { ...ok(requests[0], 'session-a', job('wrong-request')), requestId: 'request-2' });
+  assert.equal(bus.listenerCount(replyChannel('status', 'corr-1')), 1);
+  bus.emit(replyChannel('status', 'corr-2'), ok(requests[1], 'session-a', job('job-2')));
+  bus.emit(replyChannel('status', 'corr-1'), ok(requests[0], 'session-a', job('job-1')));
+  while (timers.pending) timers.fire();
+  const responses = await Promise.all([first, second]);
+  assert.deepEqual(responses.map(response => response.requestId), ['request-1', 'request-2']);
+  assert.deepEqual(responses.map(response => response.data?.id), ['job-1', 'job-2']);
+  assert.ok(responses.every(response => response.success === true));
+  assert.equal(callOptions.requestId, 'request-3');
+  assert.equal(timers.pending, 0);
+  assert.equal(bus.listenerCount(replyChannel('status', 'corr-1')), 0);
+  assert.equal(bus.listenerCount(replyChannel('status', 'corr-2')), 0);
+});
+
 test('caller timeout and close clear listeners and timers', async () => {
   const timers = makeTimers();
   const bus = makeBus();
