@@ -4,7 +4,7 @@
 
 Propuesta. Última fase; depende de 01–09. La UI consume contratos existentes y no introduce semántica de negocio nueva.
 
-La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) propone dos etapas: estado/duración y actividad observada. Está pendiente de revisión humana y no implementada. No sustituye esta fase ni altera su orden: adelantar el widget requiere una excepción humana explícita registrada en el roadmap y el índice normativo.
+La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su plan fueron aprobados humanamente el 2026-10-08; se implementan A y B bajo una excepción limitada registrada en roadmap e índice. El 2026-10-09 el usuario autorizó completar B antes de la aceptación TUI de A y decidir la aceptación de A+B conjuntamente. Esto no sustituye esta fase ni altera la dependencia 01–09 de la interfaz operativa completa.
 
 ## Objetivo
 
@@ -111,15 +111,17 @@ Objetivo de render: no recorrer resultados completos ni transcripts en cada fram
 
 ## Widget opcional
 
-Después de validar la interfaz principal puede añadirse un widget compacto encima del editor:
+Después de validar la interfaz principal puede añadirse el widget compacto de la [spec acotada](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md), encima del editor:
 
 ```text
-Subagentes: 2 activos · 3 en cola · 1 revisión · 1 workflow esperando aprobación
+Subagentes · 2 visibles
+| psa_7ab… reviewer     ejecutándose  42 s
+○ psa_318… tester       en cola        —
 ```
 
-Predeterminado: apagado o resumen de una línea. Se incluye un spinner para jobs activos conforme a la [spec del widget](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md#animación-de-ejecución): frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. En modo resumen hay como máximo un spinner; en filas individuales, todas comparten el mismo frame. No representa porcentaje ni prueba de avance efectivo.
+Su política de visibilidad es automática: se muestra mientras una consulta exitosa devuelva jobs no terminales visibles y se retira si una consulta exitosa no devuelve ninguno. No aparece vacío ni necesita un ajuste para activarse. Se incluye un spinner para jobs activos: frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. No representa porcentaje ni prueba de avance efectivo.
 
-Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. No se incluyen conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
+Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. La etapa B de la spec acotada muestra solo señales técnicas allowlisted; no presenta una vista de conversación ni el transcript. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
 
 ## Recursos y recuperación
 

@@ -5,8 +5,8 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 ## Requisitos
 
 - Node.js `>=26.10.0`.
-- Pi **1.0.4** es el host objetivo del type-check y del smoke de carga actual. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
-- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`. No se afirma compatibilidad probada de todas las versiones superiores.
+- El type-check y el smoke de carga descubren el host Pi instalado; actualmente es Pi **1.1.0**. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
+- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`, Pi `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. No se afirma compatibilidad probada de todas las versiones superiores.
 - Agentes Markdown en `~/.pi/agent/agents/` o en el `.pi/agents/` más cercano del proyecto.
 - Un modelo configurado en Pi.
 
@@ -98,9 +98,24 @@ La extensión registra `pi_agents` para iniciar trabajos y las tools de consulta
 - `pi_agents_list({ statuses?, agent?, limit?, cursor?, pending_review? })`;
 - `pi_agents_wait({ id, until?, timeout_seconds? })`;
 - `pi_agents_result({ id, consume?, request_id? })`;
-- `pi_agents_control({ id, action, request_id, reason? })`, con acciones `pause`, `resume`, `cancel` y `retry`.
+- `pi_agents_control({ id, action, request_id, reason? })`, con acciones `pause`, `resume`, `cancel` y `retry`;
+- `pi_agents_review({ id, status, request_id, reason? })`, con status `approved` o `rejected`, únicamente para hijos propios del padre nativo activo.
 
-La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no aprueban resultados ni devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
+La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
+
+### Revisión parental nativa
+
+```json
+{"id":"psa_…","status":"approved","request_id":"review:1","reason":"Autorizar lectura del informe"}
+```
+
+La identidad procede del runtime y del vínculo persistido al iniciar el trabajo; no se admite `actor`, `parent` ni `callerRole` en parámetros. `reason` es opcional, máximo 2048 unidades UTF-16. El padre sigue siendo **model**, nunca human. Puede revisar solamente resultados terminales recuperables de sus propios hijos; aprobar un reporte fallido no convierte el trabajo en éxito ni autoriza merge, migración o promoción.
+
+Una decisión humana por `/subagents approve/reject` tiene precedencia, incluso al confirmar el mismo status: el padre no la puede reemplazar ni restaurar permiso mediante replay. Completar un trabajo no lo aprueba automáticamente. Los trabajos históricos sin vínculo requieren revisión humana; no se adoptan por nombres, perfiles o replay. Workers solo reciben CodingTools, no herramientas parentales ni delegación recursiva. La revisión RPC permanece prohibida: solo la tool parental nativa obtiene esa autoridad. La integración con fase03 conserva evento reviewed atómico, privacidad y migración 4→5; su aceptación global sigue pendiente.
+
+La implementación está verificada offline, **no instalada/cargada ni validada en TUI real por estas pruebas**. Bootstrap de resultados legacy sigue usando aprobación humana. Véase [aceptación parental y gates](docs/PARENT-REVIEW-ACCEPTANCE.md). No se ofrece downgrade con escritura ni sandbox frente a plugins/filesystem hostiles.
+
+Las extensiones Pi pueden usar la API pública `rpc.ts` para descubrimiento, consultas, control y eventos locales; `docs/RPC.md` documenta sobres, deadlines, reintentos y límites. El callerId es declarativo, no autentica al caller; `review` RPC siempre está prohibido y la cancelación activa requiere confirmación humana TUI. Los eventos pueden duplicarse y los consumidores deben deduplicar/reconciliar con status o list. La fase 03 sigue en validación mientras la revisión independiente y aceptación TUI estén pendientes; véase [`docs/PHASE-03-ACCEPTANCE.md`](docs/PHASE-03-ACCEPTANCE.md).
 
 ## Persistencia y recuperación
 
@@ -110,7 +125,9 @@ Cada sesión principal tiene su propio almacenamiento:
 ~/.pi/agent/pi-agents/sessions/<session-id>.sqlite
 ```
 
-La separación por sesión evita mezclar resultados y reduce conflictos entre procesos Pi distintos. Al cambiar de sesión o cerrar Pi, el Harness Durable se cierra ordenadamente. Al volver a abrir esa sesión:
+La separación por sesión evita mezclar resultados y reduce conflictos entre procesos Pi distintos. Al cambiar de sesión o cerrar Pi se usa retirada en dos fases: `retire()` invalida autoridad, sella admisión, cancela únicamente observación y drena writes admitidos; comienza el cierre SDK en segundo plano sin esperar al proveedor. `close()` espera el cierre completo y libera el lease solamente tras éxito.
+
+Pi Durable 1.0.1 puede esperar indefinidamente a un proveedor que ignore la señal. Mientras tanto, otra base puede operar, pero la misma base —incluido reload— devuelve `STORAGE_BUSY`; reintentar manualmente después del cierre real. Un fallo de cierre se reporta y retiene el lease. No hay cancelación durable implícita, cola de reintentos, timeout para liberar lease ni eliminación automática de locks. Salir del proceso no garantiza completar cleanup. Al volver a abrir esa sesión:
 
 - trabajos en cola siguen en cola;
 - conversaciones y envíos conservan su identidad;
@@ -119,7 +136,7 @@ La separación por sesión evita mezclar resultados y reduce conflictos entre pr
 - herramientas no seguras producen el tratamiento `interrupted` de Pi Durable en vez de repetir ciegamente efectos;
 - resultados ya confirmados no vuelven a ejecutarse.
 
-La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3, y las de esquema 3 una tercera migración explícita 3→4 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados; el esquema 4 añade control e historial append-only.
+La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3, y las de esquema 3 una tercera migración explícita 3→4 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados; el esquema 4 añade control e historial append-only. El runtime usa esquema 5: requiere migración humana explícita 4→5, con backup verificado, conserva identidad/review/ledger parentales e inicializa outbox vacío sin inventar eventos históricos.
 
 ## Concurrencia y configuración
 
@@ -147,6 +164,12 @@ La carpeta de estado puede contener instrucciones, respuestas, rutas, argumentos
 - Un mismo archivo SQLite debe pertenecer a un solo proceso. La separación por ID de sesión reduce el riesgo, pero no permite abrir deliberadamente la misma sesión principal en dos procesos concurrentes.
 - Pi Durable es experimental. Antes de actualizarlo hay que revisar su changelog, recompilar conceptualmente los contratos y repetir las pruebas de recuperación.
 
+### Reevaluar futuras versiones de Pi Durable
+
+Antes de actualizar desde **1.0.1**, inspeccionar las APIs públicas de `Harness.close`, scheduler/Session y cancelación del waiter de Chord. El probe local original observó close pendiente a 1000 ms y `STORAGE_BUSY` hasta liberar el proveedor: es diagnóstico, no un workaround de producción.
+
+Repetir las pruebas persistentes de proveedor que ignora señal, ambas fases compartidas, writes/observadores tardíos, fallo SDK, lease y reapertura, comprobando que no se sintetiza cancelación durable. Simplificar la retirada solo después de demostrar cierre seguro y revisión independiente; no actualizar ni parchear la dependencia automáticamente. Contrato: [§3.1](docs/superpowers/specs/2026-10-07-aprobacion-padre-design.md).
+
 ## Desarrollo y pruebas
 
 ```sh
@@ -157,7 +180,7 @@ npm test
 
 `npm run check` ejecuta TypeScript estricto sin emisión y comprueba la sintaxis de todos los `.ts` productivos. Descubre el Pi de `PATH`; para otra instalación, define `PI_AGENTS_PI_PACKAGE_ROOT` con la raíz de su paquete. Las rutas locales se generan en `.cache/pi-agents/tsconfig.host.json`, ignorado por Git; no modifican la resolución runtime. El chequeo de sintaxis utiliza `stripTypeScriptTypes`, API pública experimental de Node que emite una advertencia informativa.
 
-Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo usan el host Pi `1.0.4` y sus peers públicos alineados; las versiones históricas no forman parte de la compatibilidad prometida.
+Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo descubren el host Pi mediante `PATH` o `PI_AGENTS_PI_PACKAGE_ROOT` y verifican que sus peers públicos estén alineados con la versión detectada; la evidencia actual corresponde a Pi `1.1.0`. Las versiones históricas no forman parte de la compatibilidad prometida.
 
 Los `peerDependencies` son suministrados por Pi y no deben añadirse como dependencias runtime directas. Las dependencias transitivas de Pi Durable se inventarían por separado; no se asume que coinciden con las del host. Las pruebas cubren:
 
@@ -170,7 +193,8 @@ Los `peerDependencies` son suministrados por Pi y no deben añadirse como depend
 - adaptadores Pi, autoridad TUI-only, consulta/listado/espera, revisión/consumo y smoke de carga;
 - límite de concurrencia;
 - cierre y reapertura durante una generación;
-- controles de cola, retry enlazado, abortos públicos, reconciliación y migración 3→4.
+- controles de cola, retry enlazado, abortos públicos, reconciliación y migración 3→4;
+- ownership parental, precedencia humana, replay con permiso vigente, workers reales y retirada/cierre con SDK y SQLite reales bajo proveedores faux.
 
 Para verificar que Pi puede cargar el paquete sin invocar un modelo:
 

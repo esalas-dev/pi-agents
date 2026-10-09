@@ -20,8 +20,8 @@ Cada trabajo ejecuta una tarea independiente. No existen cadenas ni lotes. La co
 `index.ts` solo conecta bindings públicos del host. `src/adapters/pi/resolve.ts` resuelve agente, confianza, proveedor y snapshot; `display.ts` presenta vistas compactas; `register.ts` registra comandos, tool, renderers y lifecycle sin poseer transiciones Durable.
 
 - Registra el comando, la herramienta y renderers de entradas.
-- Abre recursos solo desde `session_start`, no durante la carga de la fábrica.
-- Cierra el runtime desde `session_shutdown`; su propietario libera coordinador, Harness y lease.
+- Abre recursos desde `session_start` o ensure de tools/comandos, nunca durante la carga de la fábrica.
+- Invalida estado/generación antes de retirar el runtime desde switch/shutdown; el cierre SDK continúa en segundo plano y conserva el lease hasta éxito.
 - Consulta la confianza mediante la API nativa.
 - Construye un `ModelRuntime` público y sincroniza proveedores físicos visibles en `ctx.modelRegistry`.
 - Añade notificaciones fuera del contexto del modelo mediante `pi.appendEntry()`.
@@ -35,7 +35,7 @@ Busca:
 
 Los archivos se ordenan por nombre para que la resolución sea determinista. Primero se insertan los personales y después los de proyecto, produciendo reemplazo por `name`.
 
-### Registro, cola, consulta y control (esquemas 2, 3 y 4)
+### Registro, cola, consulta y control (esquemas 2 a 5)
 
 La persistencia separa `StorageMetaDoc`, `JobsIndexDoc`, `JobDocFamily`, `JobResultDocFamily` y `RequestLedgerDocFamily`. En el esquema 3 también separa `JobReviewDocFamily` y `JobConsumptionDocFamily`; el esquema 4 añade `JobControlDocFamily`, `controlHistory`, campos de intento y estados de ciclo de vida. El índice contiene orden y resúmenes compactos; el cuerpo del job y la respuesta se leen por separado. El ledger conserva `requestId`, actor, hash canónico y recibo de la operación (`start`, `consume`, `review`, `control` o `retry`). Las mutaciones de cola y control actualizan job, índice, ledger e historial en el mismo commit.
 
@@ -93,9 +93,9 @@ retry terminal ──▶ nuevo queued enlazado por `retryOf`
 | Durante modelo o herramienta | El scheduler Durable reanuda desde su checkpoint. |
 | Después del resultado, antes de cambiar el job | `Submission.wait()` devuelve el resultado ya durable y se completa el job. |
 | Después de completar el job, antes de notificar | En `session_start` se buscan terminales con `notified: false`. |
-| Después de añadir la notificación, antes de marcarla | Se busca el job ID entre las entradas de la rama activa y se evita duplicarla. |
+| Después de añadir la notificación, antes de marcarla | La recuperación puede volver a notificar: actualmente no se deduplica contra las entradas Pi. |
 
-La última deduplicación cruza dos almacenes —la sesión Pi y SQLite Durable— y por ello no puede ser una transacción única. El job ID convierte la recuperación en una comprobación idempotente.
+La notificación y `markNotified` cruzan dos almacenes —Pi y SQLite Durable— y no son una transacción única. No se promete entrega exactamente una vez.
 
 ## Concurrencia
 
@@ -109,7 +109,7 @@ De esta forma no se reservan muchas tareas Durable que aparenten estar ejecután
 
 ## Persistencia por sesión principal
 
-El archivo usa el ID de la sesión Pi. Una base de esquema 2 no abre el Harness: mantenimiento TUI, autorización humana y backup verificado deben completar 2 → 3; una base de esquema 3 requiere después 3 → 4. Ambas migraciones son explícitas y atómicas. Esto aporta:
+El archivo usa el ID de la sesión Pi. Una base de esquema 2 no abre el Harness: mantenimiento TUI, autorización humana y backup verificado deben completar 2 → 3; una base de esquema 3 requiere después 3 → 4. El runtime usa esquema 5 y exige también migración humana 4 → 5, con backup verificado, conservación de ownership/review/ledger y outbox vacío sin eventos históricos. Todas estas migraciones son explícitas y atómicas. Esto aporta:
 
 - `status` y `result` con semántica local a la conversación principal;
 - notificaciones dirigidas a la sesión que inició el trabajo;
@@ -126,9 +126,9 @@ Esto mantiene autenticación y proveedores ordinarios sin depender de internals.
 
 ## Herramientas
 
-Además de `pi_agents` para admitir trabajos, la extensión registra `pi_agents_status`, `pi_agents_list`, `pi_agents_wait`, `pi_agents_result` y `pi_agents_control`. El comando expone `cancel`, `pause`, `resume` y `retry`. Estas tools delegan en `JobsService`; no implementan transiciones ni aprobación.
+Además de `pi_agents` para admitir trabajos, la extensión registra `pi_agents_status`, `pi_agents_list`, `pi_agents_wait`, `pi_agents_result`, `pi_agents_control` y `pi_agents_review`. El comando expone `cancel`, `pause`, `resume` y `retry`. Las tools delegan en servicios; no implementan transiciones ni políticas duplicadas.
 
-El esquema 3 protege los resultados con revisión separada: jobs iniciados por modelo o extensión quedan `pending` tras migración; una tool no recibe el cuerpo `pending` o `rejected`. `approve`/`reject` exige actor humano desde la TUI activa y solo cambia el documento de revisión. `peek` humano no marca consumo; `consume` exige `requestId` y actualiza ledger y agregado de consumo en el mismo commit.
+El esquema 3 protege los resultados con revisión separada: jobs iniciados por modelo o extensión quedan `pending` tras migración; una tool no recibe el cuerpo `pending` o `rejected`. Los comandos `approve`/`reject` exigen actor humano desde la TUI activa. La nueva tool permite exclusivamente revisión model parental propia con referencia host exacta y ownership persistido. La decisión no altera ejecución/resultado ni implica aceptación técnica. `peek` humano no marca consumo; `consume` exige `requestId` y actualiza ledger y agregado de consumo en el mismo commit.
 
 Las tools truncan el texto a 64 KiB por bytes UTF-8 y devuelven longitud total, SHA-256 e indicador de truncado. El cuerpo completo permanece en SQLite.
 
@@ -142,6 +142,28 @@ Se instala únicamente `CodingTools` de Pi Durable:
 No se conserva un `ExtensionToolContext` de la llamada original: su vida termina cuando la herramienta principal retorna. Por ello no sería correcto intentar invocar posteriormente `ctx.executeTool()` desde el trabajo de fondo.
 
 Las herramientas Durable aplican sus políticas de replay. La cancelación activa persiste primero `control.pending` y el coordinador usa únicamente `Conversation.abort()`/`Harness.abortSubmission()`. Si el aborto no se puede confirmar, persiste `interrupted`; solo la confirmación publica `cancelled`. Efectos no seguros no se repiten ciegamente después de una caída.
+
+## Autoridad parental y lifecycle
+
+`ParentJobsService` conserva una `ParentAuthority` congelada emitida por SessionRuntime y delega en start/retry/review. El repository comprueba referencia exacta, actividad y `parentSessionId` dentro del commit. ReviewService deriva `model/parent:<sessionId>`; los argumentos públicos no contienen credenciales. `createdBy`/toolCallId y hashes canónicos históricos se conservan. Retry propio con otro toolCallId conserva vínculo solo por esa autoridad; retry humano/extension no lo hereda.
+
+Review/index/ledger y `job.reviewed` se actualizan atómicamente. El evento se genera por cambio de status o toma de autoridad humana, incluso al mantener el status; no por replay o no-op. No publica vínculo parental, autor, motivo ni requestId. `decidedByActor` es aditivo; decisiones históricas sin actor se consideran humanas. Humano confirma mismo status parental: cambio efectivo de autoridad y posterior bloqueo del padre. Mismo autor/status parental: no-op conserva fecha/motivo/auditoría, aunque un requestId nuevo registra ledger. Se verifica permiso vigente antes de replay/consumo; una aprobación antigua no restaura acceso retirado. No se adopta ownership legacy ni se aprueba al completar.
+
+`retire()` comparte una fase 1: invalida/sella síncronamente, detiene pump y observación, drena almacenamiento parental y continuaciones/finish/lecturas/callbacks ya admitidos, y empieza una única promesa de cierre SDK. `close()` comparte la fase completa y espera SDK+release. Fallo de fase 1 impide fase 2; rechazo SDK observado/propagado conserva lease. No early-return de flags, nuevo manager, poller ni liberación por timeout.
+
+El driver cancela solamente contexto de lectura/wait mediante `withCancel` público de Chord; submit/abort humano y cierre usan contexto independiente. Extrae AssistantEntry mediante `Conversation.entries` read-only, rango exacto y límite 1, con guards tras awaits. Coordinator no observa ni publica nuevos resultados después de stop; sí drena writes admitidos previamente.
+
+El adaptador invalida generación antes de awaits y la verifica después de modelos/open/migración/ensure. Retira runtimes abiertos obsoletos sin publicarlos. La cadena espera únicamente fase 1 y se recupera tras fallos: otra base puede operar; misma base/reload devuelve `STORAGE_BUSY` hasta cierre real y permite reintento manual. Los errores del cierre SDK retirado siguen reportándose sin reactivar su autoridad ni permitir publicaciones RPC/eventos tardíos. Ni cierre normal ni fallo de apertura sintetizan cancelación durable. Un proveedor pendiente puede retener recursos indefinidamente y process exit no garantiza cleanup.
+
+Reevaluación SDK futura y límites: [README](../README.md#reevaluar-futuras-versiones-de-pi-durable), [§3.1 de la spec](superpowers/specs/2026-10-07-aprobacion-padre-design.md) y [aceptación](PARENT-REVIEW-ACCEPTANCE.md). Durable1.0.1 sigue fijado, sin patch/update. La integración conserva RPC/outbox/esquema 5 y está cubierta offline; no sustituye aceptación TUI ni revisión independiente de fase03.
+
+## API pública RPC y eventos
+
+El entrypoint raíz `rpc.ts` publica solo contratos RPC, el cliente, canales y tipos/eventos; el caller no importa adaptadores ni servicios internos. El cliente instala el listener de respuesta antes de emitir, valida protocolo/correlación/solicitud/sesión y limpia listener y timer tras completar, expirar, fallar el transporte o cerrar. Un `ping` exitoso puede fijar la sesión; el cliente no se redirige silenciosamente si cambia.
+
+Los handlers del servidor delegan en los mismos `JobsService` y políticas que los comandos/tools. El actor siempre es `extension` con `callerId` declarativo; no es autenticación. `spawn` usa cwd y confianza actuales. `review` RPC está prohibido; cancelar ejecución activa requiere confirmación TUI y la pausa activa sigue no soportada.
+
+Las transiciones observables y su evento se persisten en el mismo commit Durable. El emisor ordena secuencias y confirma después de emitir; una caída entre ambos pasos puede duplicar un evento con el mismo `(sessionId,eventId)`. El bus no ofrece ack de consumidor, entrega exactly-once, replay completo ni GC física de documentos. Cada consumidor deduplica y reconcilia estado mediante status/list. La ventana indexada mantiene hasta 1000 referencias recientes, no un límite de almacenamiento. El namespace `pi-durable-subagents:*` evita colisiones nominales locales con `subagents:*`; no prueba convivencia real con upstream. Véase [`RPC.md`](RPC.md) para contratos y [`PHASE-03-ACCEPTANCE.md`](PHASE-03-ACCEPTANCE.md) para evidencia y gates pendientes.
 
 ## Seguridad
 

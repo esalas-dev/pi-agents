@@ -8,10 +8,11 @@ import { DomainError } from "../../domain/errors.ts";
 import type { Lease } from "./lease.ts";
 import { LegacyJobsDoc } from "../durable/legacy-v1.ts";
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, StorageMetaDoc } from "../durable/documents.ts";
+import { schema4Source } from "./schema4-source.ts";
 
-export type StorageInspection = { kind: "empty" } | { kind: "legacy-v1"; jobs: number; sourceHash: string } | { kind: "current"; schemaVersion: 2 | 3 | 4; jobs?: number; sourceHash?: string };
+export type StorageInspection = { kind: "empty" } | { kind: "legacy-v1"; jobs: number; sourceHash: string } | { kind: "current"; schemaVersion: 2 | 3 | 4 | 5; jobs?: number; sourceHash?: string };
 
-function hiddenCurrent(schemaVersion: 2 | 3 | 4, extras: { jobs?: number; sourceHash?: string } = {}): StorageInspection {
+function hiddenCurrent(schemaVersion: 2 | 3 | 4 | 5, extras: { jobs?: number; sourceHash?: string } = {}): StorageInspection {
   const value = { kind: "current" as const, schemaVersion } as StorageInspection & Record<string, unknown>;
   for (const [key, item] of Object.entries(extras)) Object.defineProperty(value, key, { value: item, enumerable: false });
   return value;
@@ -53,9 +54,13 @@ export async function inspectStorage(lease: Lease, context: Context): Promise<St
     if (kinds.has("pi-agents.storage")) {
       session = createSession(storage);
       const meta = await session.snapshot(StorageMetaDoc, context);
-      if (meta?.storageSchemaVersion !== 2 && meta?.storageSchemaVersion !== 3 && meta?.storageSchemaVersion !== 4) throw new DomainError("STORAGE_INCONSISTENT");
+      if (meta?.storageSchemaVersion !== 2 && meta?.storageSchemaVersion !== 3 && meta?.storageSchemaVersion !== 4 && meta?.storageSchemaVersion !== 5) throw new DomainError("STORAGE_INCONSISTENT");
       if ([...kinds].some(kind => kind === "pi-agents.jobs")) throw new DomainError("STORAGE_INCONSISTENT");
-      if (meta.storageSchemaVersion === 4) return hiddenCurrent(4);
+      if (meta.storageSchemaVersion === 4) {
+        const source = await schema4Source(session, storage, context);
+        return hiddenCurrent(4, source);
+      }
+      if (meta.storageSchemaVersion === 5) return hiddenCurrent(5);
       const index = await session.snapshot(JobsIndexDoc, context);
       if (!index) throw new DomainError("STORAGE_INCONSISTENT");
       const jobs = Object.keys(index.summaries).length;

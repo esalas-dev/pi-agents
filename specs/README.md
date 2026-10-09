@@ -20,7 +20,7 @@ La base existente permanece como punto de partida:
 
 ## Secuencia obligatoria
 
-Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de fase 00](00-preparacion-arquitectonica.md), aprobada y aún no implementada, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Su [plan de implementación](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) requiere revisión y elección del método de ejecución. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
+Las fases deben diseñarse, implementarse y validarse en este orden, salvo excepciones humanas acotadas registradas aquí y en el roadmap. La [spec de fase 00](00-preparacion-arquitectonica.md), aprobada y aún no implementada, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Su [plan de implementación](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) requiere revisión y elección del método de ejecución. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
 
 | Orden | Especificación | Resultado principal | Depende de |
 |---:|---|---|---|
@@ -35,6 +35,8 @@ Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de
 | 08 | [Scheduling durable](08-scheduling-durable.md) | Crear ejecuciones programadas sin duplicarlas | 01–07 |
 | 09 | [Workflows declarativos](09-workflows-declarativos.md) | Componer agentes, gates, joins y aprobaciones | 01–08 |
 | 10 | [Interfaz operativa](10-interfaz-operativa.md) | Operar las capacidades anteriores desde una UI coherente | 01–09 |
+
+**Excepción autorizada (2026-10-08):** se adelantan solo las etapas A y B del widget compacto de subagentes descrito en la [spec acotada](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su [plan](../docs/superpowers/plans/2026-10-08-widget-subagentes.md), ambos aprobados humanamente; se eligió ejecución Native. El 2026-10-09 el usuario autorizó implementar B antes de aceptar A y aplazar la decisión de aceptación hasta revisar ambas conjuntamente. No adelanta el panel ni otras capacidades de fase 10; la secuencia de las fases 01–09 y sus dependencias se mantiene.
 
 ## Principios transversales
 
@@ -57,7 +59,7 @@ No se debe prometer `exactly once` cuando intervienen SQLite y un sistema extern
 
 Un agente puede proponer, ejecutar o verificar. No puede aprobar su propio resultado ni promover automáticamente una rama, artefacto o cambio. Los estados de revisión y las acciones de promoción deben registrar actor, instante y motivo.
 
-Las consultas desde tools respetarán la política de exposición definida en la especificación 01. Las notificaciones seguirán fuera del contexto del modelo salvo configuración explícita y auditable.
+Las tools respetarán la política de exposición de la especificación 01: el agente padre recibe los resultados de sus subagentes verificados, mientras que callers no relacionados siguen sujetos al gate humano. Esa entrega no equivale a aprobación ni promoción. Las notificaciones generales seguirán fuera del contexto del modelo; la entrega al padre es una ruta específica y atribuida, no una autorización global.
 
 ### Compatibilidad y migraciones
 
@@ -105,7 +107,7 @@ Los mensajes localizados son presentación; `code` es el contrato.
 - **Trabajo (`job`)**: unidad durable creada a partir de agente, tarea, modelo y cwd resueltos.
 - **Intento (`attempt`)**: ejecución concreta; un retry crea un nuevo trabajo enlazado, no reescribe el historial.
 - **Resultado**: respuesta final y metadatos terminales del trabajo.
-- **Revisión**: decisión humana sobre exposición o aceptación; no equivale a éxito técnico.
+- **Revisión**: decisión humana registrada sobre el resultado; limita la exposición a callers no relacionados, pero no oculta el informe al padre verificado. No equivale a éxito técnico ni a promoción.
 - **Consumo**: registro de que un consumidor recuperó un resultado; no equivale a aprobación.
 - **Gate**: verificación determinista ejecutada después de la respuesta del agente.
 - **Promoción**: integración de una rama o artefacto fuera de esta extensión; nunca automática.

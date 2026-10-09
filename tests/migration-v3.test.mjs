@@ -19,8 +19,10 @@ test('migra esquema 3 a 4 con backup, conserva resultados/revisión/consumo y cr
     assert.equal(after.jobs['job-queued'].job.queueOrdinal, 1); assert.deepEqual(after.jobs['job-queued'].control, { events: [] });
     assert.equal(after.jobs['job-completed'].result.finalResponse, 'preserve'); assert.deepEqual(after.jobs['job-completed'].consumption, { count: 1, requestIds: ['consume:job-completed'] });
     const lease = await acquireLease(database); assert.deepEqual(await inspectStorage(lease, context), { kind: 'current', schemaVersion: 4 }); await lease.release();
-    const repeated = await service.migrate({ dbPath: database, clock: () => 2002, confirm: async () => { throw new Error('no authorization on current schema'); } });
-    assert.deepEqual(repeated.value, { schemaVersion: 4, migratedJobs: 0 });
+    const upgraded = await service.migrate({ dbPath: database, clock: () => 2002, confirm: async value => ({ requestId: 'human:migrate-v4', actor: { kind: 'human' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2002 }) });
+    assert.deepEqual(upgraded.value, { schemaVersion: 5, migratedJobs: 7 });
+    const repeated = await service.migrate({ dbPath: database, clock: () => 2003, confirm: async () => { throw new Error('no authorization on current schema'); } });
+    assert.deepEqual(repeated.value, { schemaVersion: 5, migratedJobs: 0 });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

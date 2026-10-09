@@ -4,6 +4,7 @@ import { DomainError } from "./errors.ts";
 import type { JobResult } from "./jobs.ts";
 
 export type Actor = { kind: "human" | "model" | "extension" | "system"; id?: string };
+export type ParentAuthority = Readonly<{ sessionId: string; isActive(): boolean }>;
 export type StartIntent = { agent: string; task: string; cwd: string };
 export type StartRequest = { requestId: string; actor: Actor; intent: StartIntent };
 export type Clock = () => number;
@@ -11,8 +12,9 @@ export type CreateId = () => string;
 export type AdmissionReceipt = { jobId: string; status: "queued"; agent: string };
 export type ConsumeRequest = { requestId: string; actor: Actor; consumer: string };
 export type ConsumeReceipt = { jobId: string; requestId: string; consumedAt: number; consumedBy: string; count: number; result: JobResult };
-export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; reason?: string };
+export type ReviewReceipt = { jobId: string; requestId: string; status: "approved" | "rejected"; decidedAt: number; decidedBy?: string; decidedByActor?: Actor; reason?: string };
 export type ControlAction = "pause" | "resume" | "cancel" | "retry";
+export type ControlAdmission = { requireActiveConfirmation: boolean; activeCancellationConfirmed: boolean };
 export type ControlRequest = { requestId: string; action: ControlAction; actor: Actor; reason?: string };
 export type RetryRequest = Omit<ControlRequest, "action"> & { action: "retry" };
 export type ControlEvent = { action: ControlAction; requestId: string; actor: Actor; requestedAt: number; appliedAt?: number; previousStatus: string; nextStatus: string; result?: string; error?: string };
@@ -20,7 +22,7 @@ export type ControlReceipt = { jobId: string; requestId: string; action: Control
 export type RetryReceipt = ControlReceipt & { retryJobId?: string; retryOf?: string; attemptNumber?: number };
 export type ControlPolicy = (job: { createdBy?: Actor }, request: ControlRequest) => boolean;
 export type RequestOperation = "start" | "consume" | "review" | "control" | (string & {});
-export type RequestRecord = { requestId: string; operation: RequestOperation; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt; receipt?: import("@earendil-works/chord").JsonValue };
+export type RequestRecord = { requestId: string; operation: RequestOperation; actor: Actor; canonicalVersion: 1; payloadHash: string; admittedAt: number; response: AdmissionReceipt; parentSessionId?: string; receipt?: import("@earendil-works/chord").JsonValue };
 export type MigrationApproval = { requestId: string; actor: Actor & { kind: "human" }; dbPath: string; sourceHash: string; approvedAt: number };
 export type ResolveInput = (intent: StartIntent) => Promise<import("./jobs.ts").ResolvedJobInput>;
 

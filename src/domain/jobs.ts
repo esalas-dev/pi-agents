@@ -13,6 +13,7 @@ export type JobFilter = {
 export type WaitOptions = { until?: JobStatusPublic | "terminal"; timeoutSeconds?: number; signal?: AbortSignal };
 export type ResultAccess = { mode: "human" | "tool"; operation: "peek" | "consume"; actor: Actor; requestId?: string };
 export type ReviewDecision = { requestId: string; status: Exclude<ReviewState, "not_required" | "pending">; actor: Actor & { kind: "human" }; reason?: string };
+export type ParentReviewDecision = { requestId: string; status: Exclude<ReviewState, "not_required" | "pending">; reason?: string };
 export type JobListView = {
   id: string; status: JobStatusPublic; internalStatus?: JobStatus; agent: JobAgentSnapshot; model: JobModel;
   thinkingLevel: ModelThinkingLevel; cwd: string; createdAt: number; startedAt?: number; updatedAt: number;
@@ -31,7 +32,7 @@ export type JobControl = { pending: "cancel"; requestedAt: number; requestedBy: 
 export type JobRecord = {
   id: string; status: JobStatus; task: string; cwd: string; createdAt: number; updatedAt: number; startedAt?: number; finishedAt?: number;
   agent: JobAgentSnapshot; model: JobModel; thinkingLevel: ModelThinkingLevel; conversationId?: number; submissionId?: number;
-  result?: JobResult; resultMeta?: Omit<JobResult, "finalResponse">; createdBy?: Actor; notified: boolean;
+  result?: JobResult; resultMeta?: Omit<JobResult, "finalResponse">; createdBy?: Actor; parentSessionId?: string; notified: boolean;
   control?: JobControl; retryOf?: string; attemptNumber?: number; rootAttemptId?: string; queueOrdinal?: number; controlHistory?: import("./requests.ts").ControlEvent[];
 };
 

@@ -56,7 +56,7 @@ test('migra esquema 2 a 3 con autorización, backup y documentos separados', asy
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('declinada no modifica esquema 2 y esquema 3 es idempotente', async () => {
+test('declinada no modifica esquema 2 y esquema 5 es idempotente', async () => {
   const directory = await mkdtemp(join('/tmp', 'pi-agents-migration-v2-errors-'));
   try {
     const database = await createV2Database(directory); const service = createMaintenanceService(context); let calls = 0;
@@ -66,7 +66,9 @@ test('declinada no modifica esquema 2 y esquema 3 es idempotente', async () => {
     assert.equal(approved.success, true);
     const upgraded = await service.migrate({ dbPath: database, clock: () => 2001, confirm: async value => ({ requestId: 'human:migrate-v3', actor: { kind: 'human' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2002 }) });
     assert.deepEqual(upgraded.value, { schemaVersion: 4, migratedJobs: 3 });
-    const repeated = await service.migrate({ dbPath: database, clock: () => 2003, confirm: async () => { calls++; throw new Error('no authorization on current schema'); } });
-    assert.deepEqual(repeated.value, { schemaVersion: 4, migratedJobs: 0 }); assert.equal(calls, 1);
+    const upgraded5 = await service.migrate({ dbPath: database, clock: () => 2003, confirm: async value => ({ requestId: 'human:migrate-v4', actor: { kind: 'human' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2004 }) });
+    assert.deepEqual(upgraded5.value, { schemaVersion: 5, migratedJobs: 3 });
+    const repeated = await service.migrate({ dbPath: database, clock: () => 2005, confirm: async () => { calls++; throw new Error('no authorization on current schema'); } });
+    assert.deepEqual(repeated.value, { schemaVersion: 5, migratedJobs: 0 }); assert.equal(calls, 1);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

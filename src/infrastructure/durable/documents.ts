@@ -4,7 +4,7 @@ import type { JobRecord, JobResult, ReviewState, ConsumptionState } from "../../
 import type { ControlEvent } from "../../domain/requests.ts";
 
 export type StorageMeta = {
-  storageSchemaVersion: 2 | 3 | 4;
+  storageSchemaVersion: 2 | 3 | 4 | 5;
   source: "new" | "migrated";
   migrationRequestId?: string;
   migratedAt?: number;
@@ -14,13 +14,13 @@ export type StorageMeta = {
   backupHash?: string;
 };
 export type JobsIndex = {
-  storageSchemaVersion: 2 | 3 | 4;
+  storageSchemaVersion: 2 | 3 | 4 | 5;
   order: string[];
   summaries: Record<string, { id: string; status: JobRecord["status"]; agent: string; createdAt: number; updatedAt: number; hasResult: boolean; notified: boolean; reviewStatus?: ReviewState }>;
 };
 export type JobDocument = JobRecord;
 export type JobResultDocument = JobResult;
-export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; reason?: string };
+export type JobReviewDocument = { status: ReviewState; decidedAt?: number; decidedBy?: string; decidedByActor?: { kind: "human" | "model"; id?: string }; reason?: string };
 export type JobConsumptionDocument = ConsumptionState;
 export type JobControlDocument = { events: ControlEvent[] };
 export type LedgerCell = { record: JsonValue };
