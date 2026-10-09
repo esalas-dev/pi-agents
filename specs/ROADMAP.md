@@ -81,7 +81,7 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
 | 02 | `completada` | Cancelación, pausa, reanudación y retry durables | 01 | Cierre por aprobación humana y PR #4/#5 fusionados; main `f87d77e` revalidado con 99/99 pruebas. Mantener la pausa activa como no soportada y conservar los límites de evidencia del informe de aceptación. |
-| 03 | `lista para planificar` | RPC versionado, capacidades, eventos y outbox | 01–02 | Documento escrito aprobado humanamente (`e0d0a99`, 2026-10-07). Revisar el [plan de fase 03](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) y elegir método de ejecución; sin implementación autorizada. |
+| 03 | `en validación` | RPC versionado, capacidades, eventos, outbox y cliente caller | 01–02 | T8 fusionada; gates automatizados T9 verdes. Revisión independiente y aceptación TUI siguen pendientes; no completar la fase solo por tests/smoke. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
 | 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
@@ -205,7 +205,7 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 
 ## Fase 03 — Eventos y RPC versionado
 
-Índice de spec: [`03-eventos-rpc.md`](03-eventos-rpc.md). Diseño conversacional y [documento escrito de diseño](../docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md) aprobados humanamente el 2026-10-07; habilitada la planificación, no la ejecución. Fase aún no implementada. [Plan de implementación](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) redactado y revisado inline, pendiente de revisión humana y método de ejecución. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
+Índice de spec: [`03-eventos-rpc.md`](03-eventos-rpc.md). Diseño conversacional y [documento escrito de diseño](../docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md) aprobados humanamente el 2026-10-07. El [plan de implementación](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) está aprobado. T1–T8 fueron implementadas y T8 quedó fusionada en PR #8; T9 añade el cliente público, caller y gates AC-15–17. La verificación automática final de T9 está registrada; la revisión independiente y aceptación TUI siguen pendientes por separado. Estado actual `en validación`. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
 
 ### Gate de entrada
 
@@ -230,11 +230,12 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 - pendientes sin descarte; ventana indexada de los últimos 1000 emitidos, sin prometer limpieza física del histórico;
 - ledger existente sin TTL y canonización de dominio; `correlationId` separado del `requestId` durable;
 - cancelación activa con confirmación humana TUI y protección frente a carreras; migración humana 4 → 5 con backup;
-- documento escrito aprobado; pendientes revisión del plan y elección del método de ejecución.
+- plan aprobado y T8 fusionada; T9 se ejecuta inline por decisión humana para esta tarea;
+- el caller de ejemplo solo demuestra aislamiento local de nombres; no se afirma convivencia real con upstream.
 
-### Gate de salida
+### Evidencia y estado de validación
 
-Transición y creación de evento ocurren en el mismo commit Durable. Las pruebas cubren duplicación entre emisión y confirmación, reapertura, timeouts, versiones incompatibles y coexistencia con upstream.
+La referencia RPC y la matriz [`docs/PHASE-03-ACCEPTANCE.md`](../docs/PHASE-03-ACCEPTANCE.md) registran contratos y evidencia. T9 pasó type-check/sintaxis, 215/215 pruebas no omitidas (1 skip), diff-check, inventario de paquete y smoke offline de carga. La revisión independiente y la aceptación TUI siguen pendientes; por ello la fase permanece `en validación` y no se declara completada.
 
 ## Fase 04 — Resultados estructurados y gates
 

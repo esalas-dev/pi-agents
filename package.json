@@ -12,6 +12,7 @@
   "license": "MIT",
   "files": [
     "index.ts",
+    "rpc.ts",
     "src",
     "docs",
     "README.md",

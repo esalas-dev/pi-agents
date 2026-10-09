@@ -102,6 +102,8 @@ La extensión registra `pi_agents` para iniciar trabajos y las tools de consulta
 
 La herramienta de inicio siempre representa una sola tarea. Retorna al agente principal en cuanto el trabajo queda persistido y encolado; no espera el resultado. Las tools no aprueban resultados ni devuelven cuerpos `pending` o `rejected`. `consume` exige `request_id`, que se deduplica en el ledger durable. Una respuesta textual de tool está limitada a 64 KiB e incluye longitud total, SHA-256 e indicador de truncado; el cuerpo completo permanece en SQLite.
 
+Las extensiones Pi pueden usar la API pública `rpc.ts` para descubrimiento, consultas, control y eventos locales; `docs/RPC.md` documenta sobres, deadlines, reintentos y límites. El callerId es declarativo, no autentica al caller; `review` RPC siempre está prohibido y la cancelación activa requiere confirmación humana TUI. Los eventos pueden duplicarse y los consumidores deben deduplicar/reconciliar con status o list. La fase 03 sigue en validación mientras la revisión independiente y aceptación TUI estén pendientes; véase [`docs/PHASE-03-ACCEPTANCE.md`](docs/PHASE-03-ACCEPTANCE.md).
+
 ## Persistencia y recuperación
 
 Cada sesión principal tiene su propio almacenamiento:

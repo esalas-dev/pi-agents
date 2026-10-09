@@ -12,7 +12,7 @@ async function typescriptFiles(directory) {
   return groups.flat().sort();
 }
 
-for (const file of ['index.ts', ...await typescriptFiles('src')]) {
+for (const file of ['index.ts', 'rpc.ts', ...await typescriptFiles('src')]) {
   try {
     const javascript = stripTypeScriptTypes(await readFile(file, 'utf8'), { mode: 'strip', sourceUrl: file });
     const result = spawnSync(process.execPath, ['--input-type=module', '--check'], {
