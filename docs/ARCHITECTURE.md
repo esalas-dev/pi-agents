@@ -143,6 +143,14 @@ No se conserva un `ExtensionToolContext` de la llamada original: su vida termina
 
 Las herramientas Durable aplican sus políticas de replay. La cancelación activa persiste primero `control.pending` y el coordinador usa únicamente `Conversation.abort()`/`Harness.abortSubmission()`. Si el aborto no se puede confirmar, persiste `interrupted`; solo la confirmación publica `cancelled`. Efectos no seguros no se repiten ciegamente después de una caída.
 
+## API pública RPC y eventos
+
+El entrypoint raíz `rpc.ts` publica solo contratos RPC, el cliente, canales y tipos/eventos; el caller no importa adaptadores ni servicios internos. El cliente instala el listener de respuesta antes de emitir, valida protocolo/correlación/solicitud/sesión y limpia listener y timer tras completar, expirar, fallar el transporte o cerrar. Un `ping` exitoso puede fijar la sesión; el cliente no se redirige silenciosamente si cambia.
+
+Los handlers del servidor delegan en los mismos `JobsService` y políticas que los comandos/tools. El actor siempre es `extension` con `callerId` declarativo; no es autenticación. `spawn` usa cwd y confianza actuales. `review` RPC está prohibido; cancelar ejecución activa requiere confirmación TUI y la pausa activa sigue no soportada.
+
+Las transiciones observables y su evento se persisten en el mismo commit Durable. El emisor ordena secuencias y confirma después de emitir; una caída entre ambos pasos puede duplicar un evento con el mismo `(sessionId,eventId)`. El bus no ofrece ack de consumidor, entrega exactly-once, replay completo ni GC física de documentos. Cada consumidor deduplica y reconcilia estado mediante status/list. La ventana indexada mantiene hasta 1000 referencias recientes, no un límite de almacenamiento. El namespace `pi-durable-subagents:*` evita colisiones nominales locales con `subagents:*`; no prueba convivencia real con upstream. Véase [`RPC.md`](RPC.md) para contratos y [`PHASE-03-ACCEPTANCE.md`](PHASE-03-ACCEPTANCE.md) para evidencia y gates pendientes.
+
 ## Seguridad
 
 La tool de control exige `request_id`; los actores model no pueden controlar jobs humanos bajo la política predeterminada y la cancelación activa requiere autoridad TUI. La confianza del proyecto es una barrera de carga, no una sandbox. La extensión no lee `.pi/agents` cuando `ctx.isProjectTrusted()` es falso. Una vez autorizado, instrucciones y herramientas se ejecutan con los permisos del proceso anfitrión.

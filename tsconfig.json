@@ -13,6 +13,8 @@
   },
   "include": [
     "index.ts",
-    "src/**/*.ts"
+    "rpc.ts",
+    "src/**/*.ts",
+    "tests/fixtures/rpc-caller-extension.ts"
   ]
 }
