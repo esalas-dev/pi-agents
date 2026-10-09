@@ -13,7 +13,7 @@ import { inspectStorage } from '../src/infrastructure/storage/inspect.ts';
 import { acquireLease } from '../src/infrastructure/storage/lease.ts';
 import { createBackup } from '../src/infrastructure/storage/backup.ts';
 import { migrateV4ToV5 } from '../src/infrastructure/storage/migrate.ts';
-import { JobDocFamily, JobResultDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
+import { JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
 import { OutboxEventDocFamily, OutboxMetaDoc, OutboxPageDocFamily } from '../src/infrastructure/durable/outbox-documents.ts';
 import { createV4Database, ledgerKey, snapshotDocuments } from './helpers/v4.mjs';
 
@@ -160,6 +160,39 @@ test('migra v4 a v5 una sola vez, conserva profundamente jobs y ledgers e inicia
     const repeated = await service.migrate({ dbPath: fixture.database, clock: () => 2002, confirm: async () => { throw new Error('no authorization on schema 5'); } }); assert.deepEqual(repeated.value, { schemaVersion: 5, migratedJobs: 0 });
     const afterDocs = await snapshotDocuments(fixture.database); const unchanged = document => !['pi-agents.storage', 'pi-agents.jobs-index', 'pi-durable-subagents.outbox-meta'].includes(document.kind);
     assert.deepEqual(afterDocs.filter(unchanged), beforeDocs.filter(unchanged));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('v4→v5 conserva binding, autor de review y ledger parentales sin eventos históricos', async () => {
+  const directory = await mkdtemp('/tmp/pi-agents-parent-migration-');
+  try {
+    const fixture = await createV4Database(directory);
+    const service = createMaintenanceService(context);
+    let oldHash;
+    await service.migrate({ dbPath: fixture.database, clock: () => 2000, confirm: async info => { oldHash = info.sourceHash; return undefined; } });
+    const session = createSession(await openNodeSqliteStorage(fixture.database));
+    try {
+      await session.commit(async tx => {
+        const job = await tx.doc(JobDocFamily, 'completed-job', null);
+        job.parentSessionId = 'migration-parent'; job.createdBy = { kind: 'model', id: 'native-call' };
+        const review = await tx.doc(JobReviewDocFamily, 'completed-job', null);
+        review.decidedBy = 'parent:migration-parent'; review.decidedByActor = { kind: 'model', id: 'parent:migration-parent' };
+        const cell = await tx.doc(RequestLedgerDocFamily, ledgerKey('parent-review'), null);
+        cell.record = { requestId: 'parent-review', operation: 'review', actor: { kind: 'model', id: 'parent:migration-parent' }, canonicalVersion: 1, payloadHash: 'historic-hash', admittedAt: 1200, parentSessionId: 'migration-parent', response: { jobId: 'completed-job', status: 'queued', agent: job.agent.name }, receipt: { jobId: 'completed-job', requestId: 'parent-review', status: 'approved', decidedAt: 1200, decidedBy: 'parent:migration-parent', decidedByActor: { kind: 'model', id: 'parent:migration-parent' } } };
+      }, context);
+    } finally { await session.close(context); }
+    const before = await snapshotDocuments(fixture.database);
+    const { outcome, info } = await approved(service, fixture.database);
+    assert.equal(outcome.success, true);
+    assert.notEqual(info.sourceHash, oldHash);
+    const after = await snapshotDocuments(fixture.database);
+    const unchanged = document => !['pi-agents.storage', 'pi-agents.jobs-index', 'pi-durable-subagents.outbox-meta'].includes(document.kind);
+    assert.deepEqual(after.filter(unchanged), before.filter(unchanged));
+    const snapshot = await publicSnapshot(fixture.database);
+    assert.equal(snapshot.jobs['completed-job'].job.parentSessionId, 'migration-parent');
+    assert.equal(snapshot.jobs['queued-job'].job.parentSessionId, undefined);
+    assert.deepEqual(snapshot.outbox, { nextSequence: 1, nextToEmit: 1, recent: [] });
+    assert.equal(snapshot.event, undefined);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

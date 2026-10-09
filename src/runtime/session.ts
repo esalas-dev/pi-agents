@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import * as path from "node:path";
 import type { Context } from "@earendil-works/chord";
+import { withCancel } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
 import { createRegistry, Harness, type ToolRegistration } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
@@ -25,12 +26,16 @@ import { createWaitService } from "../application/wait.ts";
 import { createResultService } from "../application/result.ts";
 import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
+import { createParentJobsService, type ParentJobsService } from "../application/parent.ts";
 
-export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; seal(): void; close(): Promise<void> };
+export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; isParentActive?: () => boolean; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
+export type SessionRuntime = { jobs: JobsService; parent?: ParentJobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; seal(): void; retire(): Promise<void>; close(): Promise<void> };
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
-  const report = options.onReport ?? (() => {}); const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
+  if (typeof options.sessionId !== "string" || !options.sessionId) throw new DomainError("INVALID_REQUEST");
+  const report = (error: unknown) => { try { options.onReport?.(error); } catch {} };
+  const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
+  let retireOpening: (() => Promise<void>) | undefined;
   try {
     await mkdir(path.dirname(options.storagePath), { recursive: true, mode: 0o700 });
     lease = await acquireLease(options.storagePath); const inspection = await inspectStorage(lease, options.context);
@@ -56,29 +61,68 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
       wakeListeners.add(listener);
       return () => wakeListeners.delete(listener);
     };
-    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), options.sessionId);
-    const execution = createExecution(harness, options.context, tools, clock);
+    let closed = false;
+    const authority = options.sessionId === undefined ? undefined : Object.freeze({ sessionId: options.sessionId, isActive: () => !closed && (options.isParentActive?.() ?? true) });
+    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), options.sessionId, authority);
+    const observation = withCancel(options.context);
+    const execution = createExecution(harness, options.context, tools, clock, observation.context);
     let coordinator: ReturnType<typeof createCoordinator>;
     const query = createQueryService(repository);
     const wait = createWaitService(query, harness, options.context);
     const result = createResultService(repository, query, clock);
     const review = createReviewService(repository, clock);
-    const control = createControlService(repository, clock);
+    const controlService = createControlService(repository, clock);
+    const control: ReturnType<typeof createControlService> = { ...controlService, async retry(id, request, parent) {
+      const outcome = await controlService.retry(id, request, parent);
+      if (outcome.success) coordinator.wake();
+      return outcome;
+    } };
     const start = createStartService(repository, () => coordinator.wake(), report);
     const jobs = createJobsService(repository, start, wait, result, review, query, control);
+    const parent = authority ? createParentJobsService(authority, start, control, review) : undefined;
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
+    let retiring: Promise<void> | undefined;
+    let completion: Promise<void> | undefined;
+    let closing: Promise<void> | undefined;
+    const seal = () => {
+      if (closed) return;
+      closed = true;
+      jobs.seal();
+      coordinator.stop();
+      observation.cancel();
+      unsubscribeCommits(); wakeListeners.clear();
+    };
+    const retire = () => {
+      if (!retiring) {
+        seal();
+        retiring = (async () => {
+          await repository.drainParent();
+          await coordinator.drain();
+          // shortcut: SDK 1.0.1 puede retener el lease; simplificar solo con una API de cierre verificada.
+          completion = (async () => {
+            await harness?.close(options.context);
+            harness = undefined;
+            await lease?.release();
+            lease = undefined;
+          })();
+          void completion.catch(report);
+        })();
+      }
+      return retiring;
+    };
+    retireOpening = retire;
     await coordinator.recover();
-    let closePromise: Promise<void> | undefined;
-    let sealed = false;
-    const seal = () => { if (sealed) return; sealed = true; jobs.seal(); coordinator.stop(); };
-    return { jobs, outbox, subscribeOutboxWake, seal, close() {
-      seal();
-      closePromise ??= (async () => {
-        unsubscribeCommits(); wakeListeners.clear();
-        try { await harness?.close(options.context); }
-        finally { harness = undefined; await lease?.release(); lease = undefined; }
-      })();
-      return closePromise;
-    } };
-  } catch (error) { try { await harness?.close(options.context); } finally { await lease?.release(); } throw error; }
+    return { jobs, ...(parent ? { parent } : {}), outbox, subscribeOutboxWake, seal, retire, close() { return closing ??= retire().then(() => completion); } };
+  } catch (error) {
+    if (retireOpening) {
+      try { await retireOpening(); } catch (cleanupError) { report(cleanupError); }
+    } else if (harness) {
+      // Opening failed before any application observer existed; SDK still owns its storage.
+      const failedHarness = harness;
+      void (async () => { await failedHarness.close(options.context); await lease?.release(); })().catch(report);
+    } else {
+      await lease?.release();
+    }
+    throw error;
+  }
 }

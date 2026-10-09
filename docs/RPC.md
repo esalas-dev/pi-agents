@@ -43,7 +43,7 @@ El RPC client rechaza errores locales con `RpcClientError`, separados del sobre 
 | `result` | `{ id, operation: "peek" | "consume" }` | Job y resultado autorizado. `consume` es mutante/idempotente por `requestId`. |
 | `spawn` | `{ agent, task }` | Recibo `{ jobId, status: "queued", agent }`; no espera generación. Usa cwd y confianza de la sesión activa. |
 | `control` | `{ id, action, reason? }` | Recibo durable para `pause`, `resume`, `cancel` o `retry`, sujeto a política y propiedad existentes. |
-| `review` | `{}` | Siempre `RPC_REVIEW_FORBIDDEN`; aprobación/rechazo solo por autoridad humana TUI. |
+| `review` | `{}` | Siempre `RPC_REVIEW_FORBIDDEN`; el caller extension no recibe autoridad TUI ni parental. |
 
 Las vistas de status/list/wait son allowlists; no exponen task, prompt, cwd, rutas, errores internos ni actor. Los resultados `pending` o `rejected` no se revelan. `result` limita el sobre completo a 65536 bytes, devuelve `totalBytes`, SHA-256 del texto completo y `truncated`; el cuerpo completo no aparece en otro campo. `provisioning` se presenta como `running`.
 
@@ -63,7 +63,7 @@ No hay reintento automático. Si el resultado de una mutación queda incierto po
 
 Los eventos llevan `protocolVersion`, `eventId`, `sequence`, `sessionId`, `jobId`, `type`, `occurredAt` y `data` de allowlist. Los tipos actuales son `job.queued`, `job.provisioning`, `job.started`, `job.paused`, `job.resumed`, `job.cancel-requested`, `job.cancelled`, `job.completed`, `job.failed`, `job.interrupted`, `job.reviewed` y `job.consumed`. No existe `pause-requested` porque la pausa activa no está soportada.
 
-La mutación y el registro durable del evento son atómicos. El emisor ordena por secuencia, pero una caída después de emitir y antes de confirmar puede producir duplicados con el mismo `(sessionId, eventId)`. No hay acuse de procesamiento, garantía de entrega exactamente una vez, replay completo a consumidores tardíos ni GC física automática. La ventana reciente indexa hasta 1000 referencias de eventos emitidos; esto no limita los documentos históricos almacenados. Los eventos no incluyen tareas, prompts, texto de resultados, cwd, rutas, stdout ni motivos libres.
+La mutación y el registro durable del evento son atómicos. El emisor ordena por secuencia, pero una caída después de emitir y antes de confirmar puede producir duplicados con el mismo `(sessionId, eventId)`. No hay acuse de procesamiento, garantía de entrega exactamente una vez, replay completo a consumidores tardíos ni GC física automática. La ventana reciente indexa hasta 1000 referencias de eventos emitidos; esto no limita los documentos históricos almacenados. Los eventos no incluyen tareas, prompts, texto de resultados, cwd, rutas, stdout ni motivos libres. `job.reviewed` también cubre la revisión parental nativa autorizada y la toma de autoridad humana aun con el mismo status; no publica padre/actor/requestId. Replay y no-op no emiten otro evento.
 
 Un consumidor debe deduplicar por `(sessionId, eventId)` y consultar `status`/`list` para reconciliar. La separación de `pi-durable-subagents:*` frente a `subagents:*` garantiza solo aislamiento de nombres probado localmente; no afirma convivencia de runtime con upstream.
 

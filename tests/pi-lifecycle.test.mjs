@@ -56,6 +56,7 @@ function fakeRuntime(options) {
     jobs: { unnotified: async () => ({ success: true, value: [] }) },
     seal() { calls.seal++; },
     async close() { calls.close++; },
+    retire() { return this.close(); },
   };
 }
 
@@ -96,6 +97,38 @@ test('el cambio de sesión sella antes de esperar el cierre anterior', async () 
   await switching;
   const next = await f.lifecycle.ensure(f.context('new'));
   assert.equal(next.sessionId, 'new');
+  await f.lifecycle.close();
+});
+
+test('switch retira recursos sin esperar close SDK y mantiene autoridad de la generación nueva', { timeout: 5000 }, async () => {
+  const sdkClose = deferred();
+  const f = fixture();
+  const old = f.context('old');
+  await f.handlers.get('session_start')({}, old);
+  const first = await f.lifecycle.ensure(old);
+  first.runtime.close = () => sdkClose.promise;
+  first.runtime.retire = async () => {};
+  let opened = false;
+  const switching = f.handlers.get('session_start')({}, f.context('new')).then(() => { opened = true; });
+  try {
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(opened, true, 'session switch must wait retire, not full SDK close');
+    assert.equal(first.generation.isActive(), false);
+    const next = await f.lifecycle.ensure(f.context('new'));
+    assert.equal(next.sessionId, 'new');
+    assert.equal(f.opened[0].options.isParentActive(), false);
+    assert.equal(f.opened[1].options.isParentActive(), true);
+  } finally { sdkClose.resolve(); await switching; await f.lifecycle.close(); }
+});
+
+test('informa un fallo SDK tardío sin reactivar la autoridad retirada', async () => {
+  const f = fixture();
+  await f.handlers.get('session_start')({}, f.context('old'));
+  await f.handlers.get('session_start')({}, f.context('new'));
+  f.opened[0].options.onReport(new Error('sdk-close-after-retire'));
+  assert.equal(f.reports.some(report => report.data.text === 'sdk-close-after-retire'), true);
+  assert.equal(f.opened[0].options.isParentActive(), false);
+  assert.equal(f.opened[1].options.isParentActive(), true);
   await f.lifecycle.close();
 });
 

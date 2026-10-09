@@ -6,7 +6,7 @@ import { makeStoreFixture } from './helpers/store.mjs';
 import { createQueryService } from '../src/application/query.ts';
 import { createResultService } from '../src/application/result.ts';
 import { createReviewService } from '../src/application/review.ts';
-import { RequestLedgerDocFamily } from '../src/infrastructure/durable/documents.ts';
+import { RequestLedgerDocFamily, JobReviewDocFamily, JobsIndexDoc } from '../src/infrastructure/durable/documents.ts';
 
 const job = (id, overrides = {}) => ({
   id,
@@ -33,9 +33,9 @@ async function seedReview(fixture, id, review) {
   }, (await import('@earendil-works/chord/context')).BACKGROUND_CONTEXT);
 }
 
-async function setup(review = pendingReview) {
-  const fixture = await makeStoreFixture();
-  await fixture.seedJob(job('job-review'), result);
+async function setup(review = pendingReview, { parentAuthority, parentSessionId } = {}) {
+  const fixture = await makeStoreFixture({ parentAuthority });
+  await fixture.seedJob(job('job-review', parentSessionId === undefined ? {} : { parentSessionId }), result);
   await seedReview(fixture, 'job-review', review);
   const query = createQueryService(fixture.repository);
   return { fixture, query, resultService: createResultService(fixture.repository, query), reviewService: createReviewService(fixture.repository, () => 2000) };
@@ -56,6 +56,48 @@ test('bloquea tool pending/rejected pero permite peek humano y no consume', asyn
     assert.equal(rejected.success, false);
     assert.equal(rejected.error.code, 'RESULT_REJECTED');
   } finally { await current.fixture.close(); }
+});
+
+test('aprobación parental consume y rechazo humano bloquea replay del ledger antiguo', async () => {
+  const parentAuthority = Object.freeze({ sessionId: 'parent-review-session', isActive: () => true });
+  const current = await setup(pendingReview, { parentAuthority, parentSessionId: parentAuthority.sessionId });
+  try {
+    const approved = await current.reviewService.decideReview('job-review', { requestId: 'review-parent-approve', status: 'approved' }, parentAuthority);
+    assert.equal(approved.success, true);
+    assert.deepEqual(approved.value.decidedByActor, { kind: 'model', id: 'parent:parent-review-session' });
+    assert.deepEqual((await current.fixture.repository.review('job-review')).decidedByActor, { kind: 'model', id: 'parent:parent-review-session' });
+
+    const request = { requestId: 'consume-old', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' };
+    const first = await current.resultService.consumeResult('job-review', request);
+    assert.equal(first.success, true);
+    assert.equal(first.value.count, 1);
+    assert.equal((await current.fixture.repository.receipt(request.requestId)).requestId, request.requestId);
+
+    const rejected = await current.reviewService.decideReview('job-review', {
+      requestId: 'review-human-reject',
+      status: 'rejected',
+      actor: { kind: 'human', id: 'u' },
+    });
+    assert.equal(rejected.success, true);
+    assert.deepEqual(rejected.value.decidedByActor, { kind: 'human', id: 'u' });
+
+    const beforeReplay = {
+      review: await current.fixture.repository.review('job-review'),
+      index: await current.fixture.repository.index(),
+      consumption: await current.fixture.repository.consumption('job-review'),
+      ledger: await current.fixture.repository.receipt(request.requestId),
+    };
+    const replay = await current.resultService.consumeResult('job-review', request);
+    assert.equal(replay.success, false);
+    assert.equal(replay.error.code, 'RESULT_REJECTED');
+    assert.equal(Object.hasOwn(replay, 'value'), false);
+    assert.deepEqual(await current.fixture.repository.review('job-review'), beforeReplay.review);
+    assert.deepEqual(await current.fixture.repository.index(), beforeReplay.index);
+    assert.deepEqual(await current.fixture.repository.consumption('job-review'), beforeReplay.consumption);
+    assert.deepEqual(await current.fixture.repository.receipt(request.requestId), beforeReplay.ledger);
+  } finally {
+    await current.fixture.close();
+  }
 });
 
 test('aprueba y consume con replay idempotente y consumidores distintos', async () => {
@@ -124,7 +166,16 @@ test('replay de consume vuelve a comprobar review vigente sin incrementar consum
       const request = { requestId: `consume-replay-${nextStatus}`, actor: { kind: 'model', id: 'm' }, consumer: 'model:m' };
       const first = await current.resultService.consumeResult('job-review', request);
       assert.equal(first.success, true);
-      await current.reviewService.decideReview('job-review', { requestId: `review-${nextStatus}`, status: nextStatus, actor: { kind: 'human', id: 'u' } });
+      if (nextStatus === 'pending') {
+        // Pending is a persisted gate, not an allowed review decision.
+        await current.fixture.session.commit(async tx => {
+          const review = await tx.doc(JobReviewDocFamily, 'job-review', null); review.status = 'pending';
+          const index = await tx.doc(JobsIndexDoc); index.summaries['job-review'].reviewStatus = 'pending';
+        }, BACKGROUND_CONTEXT);
+      } else {
+        const rejected = await current.reviewService.decideReview('job-review', { requestId: `review-${nextStatus}`, status: nextStatus, actor: { kind: 'human', id: 'u' } });
+        assert.equal(rejected.success, true);
+      }
       const replay = await current.resultService.consumeResult('job-review', request);
       assert.equal(replay.success, false);
       assert.equal(replay.error.code, nextStatus === 'rejected' ? 'RESULT_REJECTED' : 'RESULT_REVIEW_REQUIRED');

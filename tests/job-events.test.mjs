@@ -224,6 +224,77 @@ test('retry appends one exact queued event and review/consume replay without app
   } finally { await f.close(); }
 });
 
+test('parent review commits one private-safe event and skips replay and same-parent no-op', async () => {
+  const authority = Object.freeze({ sessionId: 'parent-a', isActive: () => true });
+  const f = await makeStoreFixture({ sessionId: 'parent-a', parentAuthority: authority });
+  const decision = { requestId: 'parent-review-1', status: 'approved', actor: { kind: 'model', id: 'parent:parent-a' }, reason: 'SECRET_SENTINEL' };
+  try {
+    await f.seedJob(storedJob('parent-child', 'completed', { parentSessionId: 'parent-a', createdBy: { kind: 'model', id: 'spawn-call' } }), storedResult());
+    const first = await f.repository.decideReview('parent-child', decision, 10, authority);
+    const events = await f.outbox.pending(10);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, 'job.reviewed');
+    assert.equal(events[0].sessionId, 'parent-a');
+    assert.deepEqual(events[0].data, { status: 'completed', agent: 'agent', hasResult: true, reviewStatus: 'approved' });
+    assert.equal(/SECRET_SENTINEL|parentSessionId|decidedBy|parent:parent-a/.test(JSON.stringify(events)), false);
+    assert.deepEqual(await f.repository.decideReview('parent-child', decision, 11, authority), first);
+    const noop = await f.repository.decideReview('parent-child', { ...decision, requestId: 'parent-noop', reason: 'different' }, 12, authority);
+    assert.equal(noop.decidedAt, 10);
+    assert.equal(noop.reason, 'SECRET_SENTINEL');
+    assert.deepEqual(await f.outbox.pending(10), events);
+    await f.repository.decideReview('parent-child', { ...decision, requestId: 'parent-reject', status: 'rejected' }, 13, authority);
+    assert.deepEqual((await f.outbox.pending(10)).map(event => event.data.reviewStatus), ['approved', 'rejected']);
+    await f.reopen();
+    assert.equal((await ledger(f, decision.requestId)).record.receipt.decidedByActor.kind, 'model');
+    assert.equal((await f.repository.review('parent-child')).status, 'rejected');
+    assert.equal((await f.outbox.pending(10)).length, 2);
+  } finally { await f.close(); }
+});
+
+test('parent review outbox failure rolls back review, index and ledger', async () => {
+  const authority = Object.freeze({ sessionId: 'parent-a', isActive: () => true });
+  const f = await makeStoreFixture({ sessionId: 'parent-a', parentAuthority: authority, failCommit: writes => JSON.stringify(writes).includes('pi-durable-subagents.outbox-event') });
+  const decision = { requestId: 'parent-rollback', status: 'approved', actor: { kind: 'model', id: 'parent:parent-a' } };
+  try {
+    await f.seedJob(storedJob('parent-child', 'completed', { parentSessionId: 'parent-a', createdBy: { kind: 'model' } }), storedResult());
+    await f.session.commit(async tx => { const review = await tx.doc(JobReviewDocFamily, 'parent-child', { status: 'pending' }); review.status = 'pending'; }, context);
+    await assert.rejects(f.repository.decideReview('parent-child', decision, 10, authority), /failpoint: outbox-event/);
+    await f.reopen();
+    assert.equal((await f.repository.review('parent-child')).status, 'pending');
+    assert.equal((await f.repository.index()).summaries['parent-child'].reviewStatus, undefined);
+    assert.equal(await ledger(f, decision.requestId), undefined);
+    assert.deepEqual(await f.outbox.pending(10), []);
+  } finally { await f.close(); }
+});
+
+test('sealed repository rejects parent review without a ledger or event', async () => {
+  const authority = Object.freeze({ sessionId: 'parent-a', isActive: () => true });
+  const f = await makeStoreFixture({ sessionId: 'parent-a', parentAuthority: authority });
+  try {
+    await f.seedJob(storedJob('parent-child', 'completed', { parentSessionId: 'parent-a', createdBy: { kind: 'model' } }), storedResult());
+    f.repository.seal();
+    await assert.rejects(f.repository.decideReview('parent-child', { requestId: 'sealed-review', status: 'approved', actor: { kind: 'model', id: 'parent:parent-a' } }, 10, authority), error => error?.error?.code === 'RUNTIME_CLOSING');
+    assert.equal(await ledger(f, 'sealed-review'), undefined);
+    assert.deepEqual(await f.outbox.pending(10), []);
+  } finally { await f.close(); }
+});
+
+test('human same-status takeover emits a change and permanently blocks old parent replay', async () => {
+  const authority = Object.freeze({ sessionId: 'parent-a', isActive: () => true });
+  const f = await makeStoreFixture({ sessionId: 'parent-a', parentAuthority: authority });
+  const decision = { requestId: 'parent-approve', status: 'approved', actor: { kind: 'model', id: 'parent:parent-a' } };
+  try {
+    await f.seedJob(storedJob('parent-child', 'completed', { parentSessionId: 'parent-a', createdBy: { kind: 'model' } }), storedResult());
+    await f.repository.decideReview('parent-child', decision, 10, authority);
+    await f.repository.decideReview('parent-child', { ...decision, requestId: 'human-takeover', actor: { kind: 'human', id: 'tui' } }, 11);
+    const events = await f.outbox.pending(10);
+    assert.deepEqual(events.map(event => event.type), ['job.reviewed', 'job.reviewed']);
+    assert.deepEqual(events.map(event => event.data.reviewStatus), ['approved', 'approved']);
+    await assert.rejects(f.repository.decideReview('parent-child', decision, 12, authority), error => error?.error?.code === 'INVALID_REQUEST');
+    assert.deepEqual(await f.outbox.pending(10), events);
+  } finally { await f.close(); }
+});
+
 test('admit atomically appends one exact queued event and races fresh duplicate requests', async () => {
   const f = await makeStoreFixture({ createId: () => 'job-1' });
   try {

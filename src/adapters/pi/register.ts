@@ -31,16 +31,20 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
   let state: PiSessionState | undefined; let agents: ReturnType<typeof discoverAgents>["agents"] = [];
   const report = (error: unknown) => { try { pi.appendEntry(OUTPUT, { title: "subagents", text: error instanceof Error ? error.message : String(error), level: "error" }); } catch {} };
   const completion = (ctx: ExtensionContext) => agents = discoverAgents({ cwd: ctx.cwd, agentDir: bindings.getAgentDir(), projectTrusted: ctx.isProjectTrusted() }).agents;
+  const currentState = (current: PiSessionState) => state === current && current.generation.isActive() && current.context.sessionManager.getSessionId() === current.sessionId;
   const notify = async (job: JobRecord, result: JobResult, current: PiSessionState) => {
-    if (state !== current || !current.generation.isActive()) return;
+    if (!currentState(current)) return;
     const summary = briefSummary(result, job.status); pi.appendEntry(NOTICE, { title: `${job.status === "completed" ? "Subagente completado" : "Subagente finalizado"} · ${job.id}`, text: `${job.agent.name}: ${summary}`, level: job.status === "completed" ? "success" : "error", jobId: job.id });
-    current.context.ui.notify(`${job.id}: ${summary}`, job.status === "completed" ? "info" : "error"); await current.runtime.jobs.markNotified(job.id);
+    if (!currentState(current)) return;
+    current.context.ui.notify(`${job.id}: ${summary}`, job.status === "completed" ? "info" : "error");
+    if (!currentState(current)) return;
+    await current.runtime.jobs.markNotified(job.id);
   };
   const openRuntime = bindings.openRuntime ?? openSessionRuntime;
   const lifecycle = createPiLifecycle(pi, { ...bindings, openRuntime: async options => openRuntime({ ...options, onSettled: async (job, result) => {
     await options.onSettled?.(job, result);
     const current = state;
-    if (current?.sessionId === options.sessionId) await notify(job, result, current);
+    if (current?.sessionId === options.sessionId && options.isParentActive?.()) await notify(job, result, current);
   } }) }, { onOpen: async current => {
     state = current; completion(current.context);
     try {
@@ -85,7 +89,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
     } catch (error) { if (state === current) state = undefined; throw error; }
   } });
   const ensure = (ctx: ExtensionContext) => lifecycle.ensure(ctx);
-  const start = async (ctx: ExtensionContext, agent: string, task: string, requestId: string, actor: StartRequest["actor"]) => { const current = await ensure(ctx); return current.runtime.jobs.start({ requestId, actor, intent: { agent, task, cwd: ctx.cwd } }, intent => resolveInput(ctx, current.models, intent, bindings)); };
+  const start = async (ctx: ExtensionContext, agent: string, task: string, requestId: string, actor: StartRequest["actor"]) => { const current = await ensure(ctx); const request = { requestId, actor, intent: { agent, task, cwd: ctx.cwd } }; return actor.kind === "model" && current.runtime.parent ? current.runtime.parent.start(request, intent => resolveInput(ctx, current.models, intent, bindings)) : current.runtime.jobs.start(request, intent => resolveInput(ctx, current.models, intent, bindings)); };
   const render = (entry: unknown, theme: any) => { if (!display(entry)) return undefined; const color = entry.level === "error" ? "error" : entry.level === "success" ? "success" : "accent"; return bindings.text(`${theme.fg(color, theme.bold(entry.title))}\n${entry.text}`) as Component; };
   pi.registerEntryRenderer(NOTICE, (entry: any, _options: any, theme: any) => render(entry.data, theme)); pi.registerEntryRenderer(OUTPUT, (entry: any, _options: any, theme: any) => render(entry.data, theme));
   const Type = bindings.Type as any;
@@ -94,7 +98,7 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
   pi.registerTool(({ name: "pi_agents", label: "Pi Agents", description: "Inicia un agente durable en segundo plano.", parameters: Type.Object({ agent: textType(), task: textType() }), async execute(toolCallId: string, params: { agent: string; task: string }, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const outcome = await start(ctx, params.agent, params.task, `tool:${toolCallId}`, { kind: "model", id: toolCallId }); if (!outcome.success) return { content: [{ type: "text", text: outcome.error.message }], details: outcome.error, isError: true }; return { content: [{ type: "text", text: `Trabajo ${outcome.value.jobId} encolado para ${outcome.value.agent}.` }], details: outcome.value }; } } as any));
   registerQueryTool(({ name: "pi_agents_status", label: "Pi Agents status", description: "Consulta el estado durable de un trabajo.", parameters: Type.Object({ id: textType() }), async execute(_toolCallId: string, params: { id: string }, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const current = await ensure(ctx); return toolReply(await current.runtime.jobs.getJob(params.id, { includeTask: false }), formatWait); } } as any));
   registerQueryTool(({ name: "pi_agents_list", label: "Pi Agents list", description: "Lista trabajos de la sesión.", parameters: Type.Object({ statuses: Type.Optional?.(Type.Array?.(textType()) ?? textType()) ?? textType(), agent: Type.Optional?.(textType()) ?? textType(), limit: Type.Optional?.(Type.Number?.() ?? textType()) ?? textType(), cursor: Type.Optional?.(textType()) ?? textType(), pending_review: Type.Optional?.(Type.Boolean?.() ?? textType()) ?? textType() }), async execute(_toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const current = await ensure(ctx); return toolReply(await current.runtime.jobs.listJobs({ statuses: params.statuses, agent: params.agent, limit: params.limit, cursor: params.cursor, pendingReview: params.pending_review }), formatList); } } as any));
-  registerQueryTool(({ name: "pi_agents_wait", label: "Pi Agents wait", description: "Espera sin cancelar el trabajo.", parameters: Type.Object({ id: textType(), until: textType(), timeout_seconds: textType() }), async execute(_toolCallId: string, params: any, signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const current = await ensure(ctx); const waitSignal = signal ? AbortSignal.any([signal, current.generation.signal]) : current.generation.signal; return toolReply(await current.runtime.jobs.waitForJob(params.id, { until: params.until, timeoutSeconds: params.timeout_seconds, signal: waitSignal }), formatWait); } } as any));
+  registerQueryTool(({ name: "pi_agents_wait", label: "Pi Agents wait", description: "Espera sin cancelar el trabajo.", parameters: Type.Object({ id: textType(), until: textType(), timeout_seconds: textType() }), async execute(_toolCallId: string, params: any, signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const current = await ensure(ctx); const waitSignal = signal ? AbortSignal.any([signal, current.generation.signal]) : current.generation.signal; return toolReply(await current.runtime.jobs.waitForJob(params.id, { until: params.until === "" ? undefined : params.until, timeoutSeconds: params.timeout_seconds === "" ? undefined : typeof params.timeout_seconds === "string" ? Number(params.timeout_seconds) : params.timeout_seconds, signal: waitSignal }), formatWait); } } as any));
   registerQueryTool(({ name: "pi_agents_result", label: "Pi Agents result", description: "Recupera un resultado autorizado.", parameters: Type.Object({ id: textType(), consume: textType(), request_id: textType() }), async execute(toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) { const current = await ensure(ctx); if (params.consume && !params.request_id) return { content: [{ type: "text", text: "consume requiere request_id." }], isError: true }; const outcome = await current.runtime.jobs.getResult(params.id, { mode: "tool", operation: params.consume ? "consume" : "peek", actor: { kind: "model", id: toolCallId }, ...(params.request_id ? { requestId: params.request_id } : {}) }); if (!outcome.success) return toolReply(outcome, value => value); return formatToolResultResponse(outcome.value); } } as any));
   registerQueryTool(({ name: "pi_agents_control", label: "Pi Agents control", description: "Controla un trabajo durable con autorización del actor.", parameters: Type.Object({ id: textType(), action: textType(), request_id: textType(), reason: textType() }), async execute(toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) {
     if (!params.request_id) return { content: [{ type: "text", text: "control requiere request_id." }], isError: true };
@@ -108,8 +112,14 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
     }
     const request = { requestId: params.request_id, action: params.action, actor: { kind: "model", id: toolCallId }, ...(params.reason === undefined ? {} : { reason: params.reason }) } as any;
     const admission = { requireActiveConfirmation: true, activeCancellationConfirmed };
-    const outcome = params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request, admission);
+    const outcome = params.action === "retry" && current.runtime.parent ? await current.runtime.parent.retry(params.id, request) : params.action === "retry" ? await current.runtime.jobs.retry(params.id, request) : await current.runtime.jobs.control(params.id, request, admission);
     return toolReply(outcome, formatControl);
+  } } as any));
+  registerQueryTool(({ name: "pi_agents_review", label: "Pi Agents review", description: "Decide una revisión parental durable.", parameters: Type.Object({ id: textType(), status: textType(), request_id: textType(), reason: Type.Optional?.(textType()) ?? textType() }), async execute(_toolCallId: string, params: any, _signal: AbortSignal, _onUpdate: unknown, ctx: ExtensionContext) {
+    const keys = params && typeof params === "object" ? Object.keys(params) : [];
+    if (!params || keys.some(key => !["id", "status", "request_id", "reason"].includes(key)) || typeof params.id !== "string" || !params.id || typeof params.status !== "string" || !["approved", "rejected"].includes(params.status) || typeof params.request_id !== "string" || !params.request_id || (params.reason !== undefined && (typeof params.reason !== "string" || params.reason.length > 2048))) return { content: [{ type: "text", text: "Solicitud de revisión inválida." }], isError: true };
+    const current = await ensure(ctx); if (!current.runtime.parent) return { content: [{ type: "text", text: "No hay contexto parental nativo." }], isError: true };
+    return toolReply(await current.runtime.parent.decideReview(params.id, { requestId: params.request_id, status: params.status, ...(params.reason === undefined ? {} : { reason: params.reason }) }), formatReview);
   } } as any));
   pi.registerCommand("subagents", { description: "Inicia o consulta un subagente durable", handler: async (args, ctx) => {
     try {

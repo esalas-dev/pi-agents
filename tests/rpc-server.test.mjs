@@ -251,6 +251,7 @@ test('Pi registra RPC, anuncia ready y arranca el outbox en orden; limpia antes 
     subscribeOutboxWake: () => { order.push('wake-subscribe'); return () => order.push('wake-unsubscribe'); },
     seal() { order.push('runtime-seal'); },
     async close() { order.push(`runtime-close:${bus.listenerCount(requestChannel('ping'))}`); },
+    retire() { return this.close(); },
   };
   const handlers = [];
   const pi = {

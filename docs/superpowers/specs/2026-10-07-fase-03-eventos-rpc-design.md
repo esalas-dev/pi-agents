@@ -45,7 +45,7 @@ Los nombres anteriores definen responsabilidades, no un árbol de archivos ya im
 
 El adaptador construye siempre `{ kind: "extension", id: callerId }`. Un caller no puede aportar `human`, `model`, `system`, una marca de confirmación ni una política de autorización. `callerId` es declarativo: otra extensión cargada puede suplantarlo. La propiedad lógica de jobs evita usos accidentales entre callers cooperativos, **no autentica identidad**.
 
-`review` RPC responde `RPC_REVIEW_FORBIDDEN`, incluso si una configuración enumera callers. Una aprobación o rechazo debe proceder de la TUI humana existente. RPC no puede habilitar migraciones ni promover cambios Git.
+`review` RPC responde `RPC_REVIEW_FORBIDDEN`, incluso si una configuración enumera callers. RPC no concede autoridad de revisión. Fuera de RPC se conservan la TUI humana y la revisión parental nativa de hijos propios definida en la [spec parental](2026-10-07-aprobacion-padre-design.md), integrada por autorización humana del PR #10 el 2026-10-09: actor model, nunca human, y precedencia humana. RPC no puede habilitar migraciones ni promover cambios Git.
 
 ## 3. Transporte y contratos públicos
 
@@ -155,7 +155,7 @@ Cada evento tiene `protocolVersion: 1`, `eventId`, secuencia positiva monotónic
 | Intención de cancelación activa | `job.cancel-requested` / `job:cancel-requested` | Misma transacción que `control.pending` |
 | Cancelación queued/paused o activa confirmada | `job.cancelled` / `job:cancelled` | No anunciarla antes del efecto confirmado |
 | Terminal | `job.completed`, `job.failed`, `job.interrupted` / canales correspondientes | Solo en el commit terminal efectivo |
-| Decisión humana | `job.reviewed` / `job:reviewed` | Cambio efectivo de revisión desde la TUI |
+| Decisión humana o parental nativa autorizada | `job.reviewed` / `job:reviewed` | Cambio efectivo de status o toma de autoridad humana; no replay/no-op |
 | Consumo autorizado | `job.consumed` / `job:consumed` | Incremento efectivo de consumo, incluido desde tools |
 
 Un commit puede crear más de un evento cuando realmente cambia varias entidades; sus secuencias son consecutivas y deterministas dentro de ese commit. Rechazos, replays y asignaciones sin cambio efectivo no producen eventos. Se elimina `pause-requested`: no existe una pausa activa implementada. Cancelar directamente queued/paused emite cancelled, no una intención activa inexistente. Marcar notificación Pi no es un evento de dominio de esta fase.
@@ -209,7 +209,7 @@ El propietario usa un token interno de generación además del sessionId: reabri
 
 Los handlers RPC se registran desde session_start, no en la fábrica. Al cambiar sesión se sella la anterior, se abortan esperas y se cierran recursos antes de anunciar la nueva. Solicitar otra sesión en un runtime activo produce `SESSION_MISMATCH`; una solicitud no puede seleccionar arbitrariamente otro SQLite.
 
-Durante el cierre se deja de admitir trabajo y se responde `RPC_SHUTTING_DOWN` a nuevas llamadas solo mientras el endpoint todavía está presente para rechazar. Se terminan las esperas sin cancelar jobs, se detienen emisor y timers, se drenan operaciones de almacenamiento admitidas y se liberan listeners, Harness y lease de forma idempotente. Después de retirar el endpoint/completar shutdown no se publica ninguna respuesta tardía, error tardío o evento de la generación cerrada. Los pendientes de outbox permanecen durables.
+Durante el cierre se deja de admitir trabajo y se responde `RPC_SHUTTING_DOWN` a nuevas llamadas solo mientras el endpoint todavía está presente para rechazar. Se terminan las esperas sin cancelar jobs, se detienen emisor y timers, se drenan operaciones de almacenamiento admitidas y se liberan listeners, Harness y lease de forma idempotente. Después de retirar el endpoint/completar shutdown no se publica ninguna respuesta RPC tardía, error RPC tardío o evento de la generación cerrada. La integración parental usa `retire()` para drenar fase 1 sin esperar proveedor; `close()` libera el lease solo tras cierre SDK satisfactorio. Los fallos operativos de ese cierre se reportan sin reactivar autoridad. Los pendientes de outbox permanecen durables.
 
 Una migración rechazada o apertura fallida no anuncia ready. No se registra un endpoint listo que dependa de que una llamada posterior abra correctamente el runtime. Un caller sin endpoint debe gestionar su timeout; no existe una respuesta mágica cuando no hay listener servidor.
 

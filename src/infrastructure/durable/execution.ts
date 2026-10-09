@@ -10,7 +10,7 @@ function assistantText(entry: unknown): { text: string; model?: JobModel } {
   if (first?.role !== "assistant") return { text: "" };
   return { text: (first.content ?? []).filter(part => part.type === "text").map(part => part.text ?? "").join(""), ...(first.provider && first.model ? { model: { provider: first.provider, modelId: first.model } } : {}) };
 }
-export function createExecution(harness: Harness, context: Context, tools: ReadonlyMap<string, ToolRegistration>, clock: Clock): DurableExecution {
+export function createExecution(harness: Harness, context: Context, tools: ReadonlyMap<string, ToolRegistration>, clock: Clock, waitContext: Context = context): DurableExecution {
   return {
     async create(tx, job) {
       const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
@@ -42,12 +42,20 @@ export function createExecution(harness: Harness, context: Context, tools: Reado
     },
     async wait(job) {
       if (job.submissionId === undefined || job.conversationId === undefined) throw new Error("La ejecución durable carece de identificadores.");
-      const submission = await harness.submission(job.submissionId as SubmissionId, context);
+      waitContext.abortSignal?.throwIfAborted();
+      const submission = await harness.submission(job.submissionId as SubmissionId, waitContext);
+      waitContext.abortSignal?.throwIfAborted();
       if (!submission) throw new Error("La solicitud durable no existe.");
-      const settled = await submission.wait(context); const finishedAt = clock();
+      const settled = await submission.wait(waitContext);
+      waitContext.abortSignal?.throwIfAborted();
+      const finishedAt = clock();
       if (settled.status === "done" && settled.type === "input") {
-        const conversation = await harness.conversation(job.conversationId as ConversationId, context); if (!conversation) throw new Error("La conversación durable no existe.");
-        const entry = await conversation.commit(tx => tx.entry(AssistantEntry, settled.answer), context); const extracted = assistantText(entry);
+        const conversation = await harness.conversation(job.conversationId as ConversationId, waitContext);
+        waitContext.abortSignal?.throwIfAborted();
+        if (!conversation) throw new Error("La conversación durable no existe.");
+        const page = await conversation.entries({ minEntryId: settled.answer, maxEntryId: settled.answer }, 1, undefined, waitContext);
+        waitContext.abortSignal?.throwIfAborted();
+        const entry = page.items[0]; const extracted = assistantText(AssistantEntry.is(entry) ? entry : undefined);
         return { finalResponse: extracted.text, durationMs: Math.max(0, finishedAt - (job.startedAt ?? job.createdAt)), model: extracted.model ?? job.model, status: "completed" };
       }
       const detail = "detail" in settled && settled.detail !== undefined ? `: ${typeof settled.detail === "string" ? settled.detail : JSON.stringify(settled.detail)}` : "";

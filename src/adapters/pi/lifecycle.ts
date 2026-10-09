@@ -22,7 +22,7 @@ export function createPiLifecycle(pi: ExtensionAPI, bindings: LifecycleBindings,
   };
   const closeResources = async (runtime: SessionRuntime, currentGeneration: GenerationScope, dispose?: () => Promise<void>) => {
     try { await dispose?.(); } catch (error) { report(error); }
-    try { await runtime.close(); } catch (error) { report(error); }
+    try { await runtime.retire(); } catch (error) { report(error); }
     currentGeneration.close();
   };
   const invalidate = (): Promise<void> => {
@@ -57,8 +57,9 @@ export function createPiLifecycle(pi: ExtensionAPI, bindings: LifecycleBindings,
         const database = path.join(process.env.PI_AGENTS_STATE_DIR?.trim() || path.join(bindings.getAgentDir(), "pi-agents", "sessions"), `${id.replace(/[^a-zA-Z0-9._-]/g, "_")}.sqlite`);
         const options: RuntimeOptions = {
           storagePath: database, models, context: BACKGROUND_CONTEXT, defaultCwd: ctx.cwd, sessionId: id,
+          isParentActive: () => state?.generation === next && next.isActive() && current(next, ctx),
           maxConcurrency: Math.max(1, Math.min(16, Number(process.env.PI_AGENTS_CONCURRENCY) || 4)),
-          onReport: error => { if (current(next, ctx)) report(error); },
+          onReport: report,
           onSettled: async () => { if (!current(next, ctx)) return; },
         };
         const open = async () => openRuntime(options);
@@ -82,7 +83,7 @@ export function createPiLifecycle(pi: ExtensionAPI, bindings: LifecycleBindings,
         }
         if (!current(next, ctx)) {
           runtime.seal();
-          await runtime.close();
+          await runtime.retire();
           return undefined;
         }
         const opened: PiSessionState = { sessionId: id, runtime, models, context: ctx, generation: next };
@@ -116,10 +117,7 @@ export function createPiLifecycle(pi: ExtensionAPI, bindings: LifecycleBindings,
   const ensure = async (ctx: ExtensionContext): Promise<PiSessionState> => {
     if (shuttingDown) throw new Error("No se pudo iniciar pi-agents.");
     const id = ctx.sessionManager.getSessionId();
-    if (!generation) {
-      if (opening) throw new Error("No se pudo iniciar pi-agents.");
-      await beginOpen(ctx);
-    } else if (generation.sessionId !== id) throw new Error("No se pudo iniciar pi-agents.");
+    if (!generation || generation.sessionId !== id || generation.phase === "closed") await beginOpen(ctx);
     else if (!generation.isActive()) await opening;
     if (!state || state.generation !== generation || !state.generation.isActive()) throw new Error("No se pudo iniciar pi-agents.");
     return state;
