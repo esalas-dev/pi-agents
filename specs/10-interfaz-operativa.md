@@ -4,6 +4,8 @@
 
 Propuesta. Última fase; depende de 01–09. La UI consume contratos existentes y no introduce semántica de negocio nueva.
 
+La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) propone dos etapas: estado/duración y actividad observada. Está pendiente de revisión humana y no implementada. No sustituye esta fase ni altera su orden: adelantar el widget requiere una excepción humana explícita registrada en el roadmap y el índice normativo.
+
 ## Objetivo
 
 Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedules y workflows, con confirmaciones y trazabilidad adecuadas. Debe mejorar la supervisión sin ocultar estados durables ni enviar datos al modelo.
