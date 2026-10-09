@@ -194,9 +194,10 @@ export function createJobRepository(session: Session, context: Context, clock: C
             return;
           }
           const sameParent = parental && review.decidedByActor?.kind === "model" && review.decidedByActor.id === decision.actor.id;
-          const effectiveAt = sameParent && review.decidedAt !== undefined ? review.decidedAt : at;
+          const sameStatus = sameParent && review.status === decision.status;
+          const effectiveAt = sameStatus && review.decidedAt !== undefined ? review.decidedAt : at;
           const effectiveStatus = sameParent && (review.status === decision.status) ? review.status : decision.status;
-          const effectiveReason = sameParent && review.status === decision.status && review.reason !== undefined ? review.reason : decision.reason;
+          const effectiveReason = sameStatus ? review.reason : decision.reason;
           review.status = effectiveStatus; review.decidedAt = effectiveAt; review.decidedBy = decision.actor.id; review.reason = effectiveReason;
           review.decidedByActor = structuredClone(decision.actor);
           const index = await tx.doc(JobsIndexDoc);
@@ -381,7 +382,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
       await session.commit(async tx => {
         const job = await tx.doc(JobDocFamily, id, null as unknown as JsonValue);
         if (!job || job.status !== "cancelling") return;
-        result.model = structuredClone(job.model);
+        result.model = plain(job.model);
         job.status = "cancelled"; job.resultMeta = { durationMs: result.durationMs, model: structuredClone(result.model), status: result.status, error: detail };
         job.finishedAt = at; job.updatedAt = at; delete job.control;
         const body = await tx.doc(JobResultDocFamily, id, result); Object.assign(body, structuredClone(result));

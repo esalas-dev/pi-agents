@@ -18,7 +18,7 @@ test('no expone el cuerpo completo del resultado en details de una tool', () => 
 test('registra las tools de consulta y control con parámetros separados', () => {
   const pi = fakePi();
   registerPiAgents(pi, { getAgentDir: () => '/tmp', createModels: async () => ({}), resolveModel: () => ({}), text: value => value, Type: { Object: fields => ({ fields }), String: () => ({ type: 'string' }) }, version: 'test' });
-  assert.deepEqual(pi.tools.map(tool => tool.name), ['pi_agents', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result', 'pi_agents_control']);
+  assert.deepEqual(pi.tools.map(tool => tool.name), ['pi_agents', 'pi_agents_status', 'pi_agents_list', 'pi_agents_wait', 'pi_agents_result', 'pi_agents_control', 'pi_agents_review']);
   assert.ok(pi.tools.slice(1).every(tool => tool.parameters));
   assert.equal(pi.commands.length, 1);
 });
