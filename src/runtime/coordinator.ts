@@ -61,14 +61,14 @@ export function createCoordinator(options: { repository: JobRepository; executio
       } catch (error) {
         if (!active(g)) return;
         try { await options.repository.finish(job.id, { finalResponse: "", durationMs: 0, model: job.model, status: "interrupted", error: error instanceof Error ? error.message : String(error) }, options.clock()); }
-        catch (finishError) { report(finishError); }
+        catch (finishError) { if (!stopped) report(finishError); }
       }
     }
   };
   const reconcileControls = () => track(reconcile());
   const pump = async () => {
     if (stopped) return;
-    await reconcileControls();
+    await reconcileControls(); if (stopped) return;
     while (!stopped) {
       const g = generation;
       const job = await options.repository.claimNext(options.maxConcurrency, (tx, candidate) => options.execution.create(tx, candidate));
@@ -77,7 +77,7 @@ export function createCoordinator(options: { repository: JobRepository; executio
       startContinuation(job);
     }
   };
-  function wake() { if (stopped) return; tail = tail.then(pump).catch(report); }
+  function wake() { if (stopped) return; tail = tail.then(pump).catch(error => { if (!stopped) report(error); }); }
   return {
     async recover() {
       await reconcileControls();

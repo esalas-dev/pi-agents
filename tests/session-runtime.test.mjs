@@ -15,7 +15,7 @@ import { createLegacyFixture } from './helpers/legacy.mjs';
 import { legacyInput } from './helpers/legacy.mjs';
 
 const hasCode = code => error => error?.error?.code === code;
-const options = (storagePath, models = createModels()) => ({ storagePath, models, context, defaultCwd: process.cwd(), maxConcurrency: 1, now: () => 10, createId: () => 'psa_runtime' });
+const options = (storagePath, models = createModels()) => ({ storagePath, models, context, defaultCwd: process.cwd(), sessionId: `test-${storagePath}`, maxConcurrency: 1, now: () => 10, createId: () => 'psa_runtime' });
 const request = { requestId: 'runtime:1', actor: { kind: 'model' }, intent: { agent: 'test-agent', task: 'hazlo', cwd: process.cwd() } };
 
  test('base legacy exige mantenimiento antes de abrir Harness', async () => {
@@ -26,7 +26,7 @@ const request = { requestId: 'runtime:1', actor: { kind: 'model' }, intent: { ag
 
 test('base vacía inicializa meta e índice y close es idempotente', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-runtime-empty-')); const database = join(directory, 'jobs.sqlite');
-  try { const runtime = await openSessionRuntime(options(database)); assert.equal(runtime.parent, undefined); await runtime.close(); await runtime.close(); const lease = await acquireLease(database); await lease.release(); }
+  try { const runtime = await openSessionRuntime(options(database)); await runtime.close(); await runtime.close(); const lease = await acquireLease(database); await lease.release(); }
   finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -267,22 +267,21 @@ for (const phase of ['finish', 'markNotified']) {
       const harness = await originalOpen(...args);
       const originalClose = harness.close.bind(harness);
       harness.close = (...closeArgs) => { closeCalls++; return originalClose(...closeArgs); };
-      if (phase === 'finish') {
-        const originalCommit = harness.commit.bind(harness);
-        harness.commit = (fn, ...commitArgs) => originalCommit(async tx => {
-          const value = await fn(tx);
-          if (!held && watchWrites) {
-            const job = await tx.doc(JobDocFamily, 'psa_runtime');
-            if (job?.status === 'completed') { held = true; entered.resolve(); await release.promise; }
-          }
-          return value;
-        }, ...commitArgs);
-      }
+      const originalCommit = harness.commit.bind(harness);
+      harness.commit = (fn, ...commitArgs) => originalCommit(async tx => {
+        const value = await fn(tx);
+        if (!held && watchWrites) {
+          const job = await tx.doc(JobDocFamily, 'psa_runtime');
+          const admitted = phase === 'finish' ? job?.status === 'completed' : job?.notified;
+          if (admitted) { held = true; entered.resolve(); await release.promise; }
+        }
+        return value;
+      }, ...commitArgs);
       return harness;
     });
     try {
       runtime = await openSessionRuntime({ ...options(database, models), onSettled: async job => {
-        if (phase === 'markNotified') { entered.resolve(); await release.promise; await runtime.jobs.markNotified(job.id); }
+        if (phase === 'markNotified') assert.equal((await runtime.jobs.markNotified(job.id)).success, true);
       } });
       watchWrites = true;
       const admitted = await runtime.jobs.start(request, async task => legacyInput(task.task));

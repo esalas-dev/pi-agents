@@ -11,6 +11,7 @@ import { Harness } from '@earendil-works/pi-durable';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 import { JobDocFamily, JobsIndexDoc, JobReviewDocFamily } from '../src/infrastructure/durable/documents.ts';
 import { registerPiAgents } from '../src/adapters/pi/register.ts';
+import { makeEventBus } from './helpers/rpc.mjs';
 
 async function nativeFixture(t, responses = []) {
   const directory = await mkdtemp(join(tmpdir(), 'pi-parent-native-'));
@@ -34,7 +35,7 @@ async function nativeFixture(t, responses = []) {
   });
   const previousDir = process.env.PI_AGENTS_STATE_DIR;
   process.env.PI_AGENTS_STATE_DIR = join(directory, 'pi-agents', 'sessions');
-  registerPiAgents({ on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => tools.push(tool), registerCommand: (_name, command) => { handlers.command = command.handler; }, registerEntryRenderer() {}, appendEntry: (type, data) => entries.push({ type, data }) }, {
+  registerPiAgents({ events: makeEventBus(), on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => tools.push(tool), registerCommand: (_name, command) => { handlers.command = command.handler; }, registerEntryRenderer() {}, appendEntry: (type, data) => entries.push({ type, data }) }, {
     getAgentDir: () => directory, createModels: async () => models, resolveModel: () => ({ model: ctx.model }), text: value => value, Type: { Object: x => x, String: () => ({}) }, version: 'test',
   });
   const execute = (name, params, id = name) => tools.find(tool => tool.name === name).execute(id, params, undefined, undefined, ctx);

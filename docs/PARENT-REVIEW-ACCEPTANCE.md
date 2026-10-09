@@ -1,6 +1,6 @@
 # Aprobación parental — aceptación offline
 
-## Alcance y estado
+## Alcance y estado — registro histórico previo a integración
 
 Implementación en `feat/parent-review-dev`, worktree `.worktrees/parent-review-dev`. P1/P2 cuentan con revisiones históricas independientes; P3 corregida en `fc87a0b` y deuda de formato #64 cerrada separadamente en `966f549`. P3/P4 y revisión final son **autorrevisión**, no revisión independiente, por instrucción expresa de continuar sin subagentes.
 
@@ -23,7 +23,7 @@ Entorno objetivo: macOS arm64, Node26.10.0, Pi1.0.4, Pi Durable/Chord1.0.1. No s
 | PR-09 dos fases, writes/observadores, lease y lifecycle | Verificado | session-runtime; coordinator; pi-adapters; parent-native-runtime |
 | PR-10 retry nativo con toolCallId distinto y sin herencia genérica | Verificado | parent-admission; retry; parent-native-runtime |
 | PR-11 Pi real desde cwd ajeno, carga y flujo interactivo | **NOT VERIFIED** | Requiere autorización de carga y sesión real; fixtures no sustituyen host |
-| PR-12 RPC/outbox/proyección/migración4→5 | **PENDING FASE03** | Fase03 no está integrada ni aceptada por esta rama |
+| PR-12 RPC/outbox/proyección/migración4→5 | **VERIFICADO OFFLINE en PR #10** | job-events; rpc-authority; migration-v4; lifecycle; ver integración al final |
 
 Los nombres de evidencia corresponden a `tests/<nombre>.test.mjs`. El flujo integrado usa SQLite/Harness/servicios reales y proveedor faux: spawn→pending bloqueado→approve model→peek/consume→reopen conserva identidad→human.reject→parent/replayconsume denegados; otro padre y job sin vínculo requieren humano. La segunda rama autoriza leer diagnóstico de ejecución failed sin cambiar su status. Se inspecciona `conversation.agent()` real: read/bash, sin review ni delegación.
 
@@ -53,4 +53,18 @@ No se probó proveedor remoto, filesystem hostil, crash físico ni versión SDK 
 2. PR-11: sesión Pi real desde cwd ajeno, herramienta presente solo en principal, aprobación propia y acceso sin comando humano, human reject efectivo, ajenos/legacy bloqueados; switch/reload/busy/otra base/reapertura. Registrar evidencia y aceptación aparte.
 3. PR-12: autorización e integración fase03, outbox reviewed atómico por cambio efectivo, no evento replay/no-op, RPCreview bloqueado, proyección privada y metadata/migración conservadas.
 
-El job histórico T1 sin vínculo mantiene gate humano. No se le adoptó ownership ni se leyó su reporte alrededor del gate. No hay permiso implícito para instalar, migrar datos reales, merge/push/publicar.
+El job histórico T1 sin vínculo mantiene gate humano. No se le adoptó ownership ni se leyó su reporte alrededor del gate. Este registro original no concedía permiso implícito para instalar, migrar datos reales, merge/push/publicar.
+
+## Integración PR #10 — 2026-10-09
+
+El humano autorizó incorporar ambas implementaciones a main; PR #11 ya quedó integrado en la rama parental. La resolución combina `origin/main` mediante merge, sin rebase ni force-push, y condiciona publicación/fusión a gates técnicos verdes. Es autorrevisión inline solicitada, no revisión independiente ni aceptación global de fase03.
+
+La cobertura integrada conserva autoridad parental ligada a generación, precedencia humana, replay/no-op, privacidad y atomicidad review/index/ledger/outbox, rechazo RPCreview y esquema 5. Una toma humana con igual status genera `job.reviewed`; repetir el mismo autor/status no lo duplica. Migración 4→5 conserva binding, autor y ledger, los incluye en hash de consentimiento y no crea eventos históricos ni adopta jobs legacy.
+
+Lifecycle limpia RPC/emisor antes de retirar el runtime y no espera al proveedor para cambiar a otra base. Retirada sella nuevas operaciones; las pruebas de writes admitidos bloquean una transacción ya iniciada, no una llamada nueva después del sello. `close()` sigue esperando SDK y conserva lease ante fallo; el reporte operativo tardío no reactiva autoridad. Se mantienen dos pruebas que antes habían quedado combinadas en un solo bloque durante el merge.
+
+La resolución usa el host detectado Pi 1.1.0 sin cambiar dependencias ni instalar paquetes. El gate antiguo fijado a Pi 1.0.4 desaparece por integrar el descubrimiento ya existente en main, no por omitir la prueba. Logs RED/GREEN y suite están conservados localmente en `.superpowers/pr-parent-review-integration/`; son evidencia del autor.
+
+Verificación integrada: `npm test` 289/289, sin fallos/cancelaciones/skips; `npm run check` tipos/sintaxis exit 0; `npm pack --dry-run` exit 0, 59 archivos sin estado/evidencia/SQLite; `git diff --check` exit 0. La comprobación del estado/diff del checkout principal coincide con el snapshot inicial. Mem-stack bloqueado: CLI no disponible (exit 127), sin instalación ni edición de memoria.
+
+PR-11/TUI real y AC-03-17 siguen pendientes. No se ejecutó modelo remoto, instalación/reload, migración real, aceptación TUI ni revisión independiente. Las referencias de instalación y resultados 165/165 anteriores son históricos, no verificación de la instalación actual.

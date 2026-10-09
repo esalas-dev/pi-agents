@@ -36,6 +36,17 @@ test('retorna inmediatamente un job terminal y respeta until completed', async (
   } finally { await fixture.close(); }
 });
 
+test('un job cancelled satisface until terminal sin esperar el timeout', async () => {
+  const fixture = await makeStoreFixture();
+  try {
+    await fixture.seedJob(job('cancelled', { status: 'cancelled', finishedAt: 1010 }), { ...result, status: 'interrupted' });
+    const wait = await service(fixture);
+    const returned = await wait.waitForJob('cancelled', { until: 'terminal', timeoutSeconds: 0.01 });
+    assert.equal(returned.success, true);
+    assert.equal(returned.value.status, 'cancelled');
+  } finally { await fixture.close(); }
+});
+
 test('observa una transición durante watchDoc sin cancelar el job', async () => {
   const fixture = await makeStoreFixture();
   try {

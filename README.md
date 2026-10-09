@@ -5,8 +5,8 @@ Paquete instalable para Pi que ejecuta **un agente y una tarea por invocación**
 ## Requisitos
 
 - Node.js `>=26.10.0`.
-- Pi **1.0.4** es el host objetivo del type-check y del smoke de carga actual. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
-- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`. No se afirma compatibilidad probada de todas las versiones superiores.
+- El type-check y el smoke de carga descubren el host Pi instalado; actualmente es Pi **1.1.0**. La aceptación TUI humana del rediseño sigue pendiente; véase `docs/PHASE-00-ACCEPTANCE.md`.
+- Entorno de desarrollo comprobado: macOS arm64 con Node `26.10.0`, Pi `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. No se afirma compatibilidad probada de todas las versiones superiores.
 - Agentes Markdown en `~/.pi/agent/agents/` o en el `.pi/agents/` más cercano del proyecto.
 - Un modelo configurado en Pi.
 
@@ -111,9 +111,11 @@ La herramienta de inicio siempre representa una sola tarea. Retorna al agente pr
 
 La identidad procede del runtime y del vínculo persistido al iniciar el trabajo; no se admite `actor`, `parent` ni `callerRole` en parámetros. `reason` es opcional, máximo 2048 unidades UTF-16. El padre sigue siendo **model**, nunca human. Puede revisar solamente resultados terminales recuperables de sus propios hijos; aprobar un reporte fallido no convierte el trabajo en éxito ni autoriza merge, migración o promoción.
 
-Una decisión humana por `/subagents approve/reject` tiene precedencia, incluso al confirmar el mismo status: el padre no la puede reemplazar ni restaurar permiso mediante replay. Completar un trabajo no lo aprueba automáticamente. Los trabajos históricos sin vínculo requieren revisión humana; no se adoptan por nombres, perfiles o replay. Workers solo reciben CodingTools, no herramientas parentales ni delegación recursiva. No hay revisión RPC operativa en esta versión; fase03 sigue siendo una integración pendiente.
+Una decisión humana por `/subagents approve/reject` tiene precedencia, incluso al confirmar el mismo status: el padre no la puede reemplazar ni restaurar permiso mediante replay. Completar un trabajo no lo aprueba automáticamente. Los trabajos históricos sin vínculo requieren revisión humana; no se adoptan por nombres, perfiles o replay. Workers solo reciben CodingTools, no herramientas parentales ni delegación recursiva. La revisión RPC permanece prohibida: solo la tool parental nativa obtiene esa autoridad. La integración con fase03 conserva evento reviewed atómico, privacidad y migración 4→5; su aceptación global sigue pendiente.
 
 La implementación está verificada offline, **no instalada/cargada ni validada en TUI real por estas pruebas**. Bootstrap de resultados legacy sigue usando aprobación humana. Véase [aceptación parental y gates](docs/PARENT-REVIEW-ACCEPTANCE.md). No se ofrece downgrade con escritura ni sandbox frente a plugins/filesystem hostiles.
+
+Las extensiones Pi pueden usar la API pública `rpc.ts` para descubrimiento, consultas, control y eventos locales; `docs/RPC.md` documenta sobres, deadlines, reintentos y límites. El callerId es declarativo, no autentica al caller; `review` RPC siempre está prohibido y la cancelación activa requiere confirmación humana TUI. Los eventos pueden duplicarse y los consumidores deben deduplicar/reconciliar con status o list. La fase 03 sigue en validación mientras la revisión independiente y aceptación TUI estén pendientes; véase [`docs/PHASE-03-ACCEPTANCE.md`](docs/PHASE-03-ACCEPTANCE.md).
 
 ## Persistencia y recuperación
 
@@ -134,7 +136,7 @@ Pi Durable 1.0.1 puede esperar indefinidamente a un proveedor que ignore la señ
 - herramientas no seguras producen el tratamiento `interrupted` de Pi Durable en vez de repetir ciegamente efectos;
 - resultados ya confirmados no vuelven a ejecutarse.
 
-La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3, y las de esquema 3 una tercera migración explícita 3→4 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados; el esquema 4 añade control e historial append-only.
+La entrega usa un `requestId` derivado del ID del trabajo, de modo que una caída entre el envío y el registro local recupera el mismo envío en lugar de duplicarlo. Las bases v1 requieren mantenimiento humano explícito, backup verificado y conversión atómica al esquema 2; una base legacy no se abre directamente. Las bases de esquema 2 requieren una segunda migración autorizada, con backup, al esquema 3, y las de esquema 3 una tercera migración explícita 3→4 antes de abrir el Harness. El esquema 3 conserva revisión y consumo en documentos separados; el esquema 4 añade control e historial append-only. El runtime usa esquema 5: requiere migración humana explícita 4→5, con backup verificado, conserva identidad/review/ledger parentales e inicializa outbox vacío sin inventar eventos históricos.
 
 ## Concurrencia y configuración
 
@@ -178,7 +180,7 @@ npm test
 
 `npm run check` ejecuta TypeScript estricto sin emisión y comprueba la sintaxis de todos los `.ts` productivos. Descubre el Pi de `PATH`; para otra instalación, define `PI_AGENTS_PI_PACKAGE_ROOT` con la raíz de su paquete. Las rutas locales se generan en `.cache/pi-agents/tsconfig.host.json`, ignorado por Git; no modifican la resolución runtime. El chequeo de sintaxis utiliza `stripTypeScriptTypes`, API pública experimental de Node que emite una advertencia informativa.
 
-Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo usan el host Pi `1.0.4` y sus peers públicos alineados; las versiones históricas no forman parte de la compatibilidad prometida.
+Se usa `skipLibCheck: true`, autorizado ante errores en declaraciones upstream: se comprueba el código propio y su uso de tipos importados, pero no la consistencia interna de los `.d.ts` de dependencias. Esto no sustituye las pruebas de integración con Pi. El type-check y el smoke objetivo descubren el host Pi mediante `PATH` o `PI_AGENTS_PI_PACKAGE_ROOT` y verifican que sus peers públicos estén alineados con la versión detectada; la evidencia actual corresponde a Pi `1.1.0`. Las versiones históricas no forman parte de la compatibilidad prometida.
 
 Los `peerDependencies` son suministrados por Pi y no deben añadirse como dependencias runtime directas. Las dependencias transitivas de Pi Durable se inventarían por separado; no se asume que coinciden con las del host. Las pruebas cubren:
 

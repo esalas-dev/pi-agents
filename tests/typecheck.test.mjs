@@ -36,16 +36,19 @@ test('tsc acepta una asignación correcta sin emitir JavaScript', async () => {
   assert.equal(result.emitted, false);
 });
 
-test('check-syntax incluye todos los TS de src y detecta un archivo nuevo inválido', async () => {
+test('check-syntax incluye todos los TS de src y el entrypoint rpc.ts', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-agents-syntax-'));
   try {
     await writeFile(join(directory, 'package.json'), '{"type":"module"}');
     await mkdir(join(directory, 'src', 'nested'), { recursive: true });
     await writeFile(join(directory, 'index.ts'), 'export default () => {};');
+    await writeFile(join(directory, 'rpc.ts'), 'const bad: number = ;');
     await writeFile(join(directory, 'src', 'nested', 'new.ts'), 'const bad: number = ;');
     const run = () => spawnSync(process.execPath, [join(root, 'scripts/check-syntax.mjs')], { cwd: directory, encoding: 'utf8' });
     assert.notEqual(run().status, 0);
     await writeFile(join(directory, 'src', 'nested', 'new.ts'), 'const good: number = 1;');
+    assert.notEqual(run().status, 0, 'rpc.ts debe formar parte del gate');
+    await writeFile(join(directory, 'rpc.ts'), 'export type RpcVersion = 1;');
     const good = run();
     assert.equal(good.status, 0, good.stdout + good.stderr);
   } finally { await rm(directory, { recursive: true, force: true }); }

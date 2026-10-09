@@ -57,7 +57,7 @@ No se debe prometer `exactly once` cuando intervienen SQLite y un sistema extern
 
 Un agente puede proponer, ejecutar o verificar. No puede aprobar su propio resultado ni promover automáticamente una rama, artefacto o cambio. Los estados de revisión y las acciones de promoción deben registrar actor, instante y motivo.
 
-Las consultas desde tools respetarán la política de exposición definida en la especificación 01. Las notificaciones seguirán fuera del contexto del modelo salvo configuración explícita y auditable.
+Las tools respetarán la política de exposición de la especificación 01: el agente padre recibe los resultados de sus subagentes verificados, mientras que callers no relacionados siguen sujetos al gate humano. Esa entrega no equivale a aprobación ni promoción. Las notificaciones generales seguirán fuera del contexto del modelo; la entrega al padre es una ruta específica y atribuida, no una autorización global.
 
 ### Compatibilidad y migraciones
 
@@ -105,7 +105,7 @@ Los mensajes localizados son presentación; `code` es el contrato.
 - **Trabajo (`job`)**: unidad durable creada a partir de agente, tarea, modelo y cwd resueltos.
 - **Intento (`attempt`)**: ejecución concreta; un retry crea un nuevo trabajo enlazado, no reescribe el historial.
 - **Resultado**: respuesta final y metadatos terminales del trabajo.
-- **Revisión**: decisión humana sobre exposición o aceptación; no equivale a éxito técnico.
+- **Revisión**: decisión humana registrada sobre el resultado; limita la exposición a callers no relacionados, pero no oculta el informe al padre verificado. No equivale a éxito técnico ni a promoción.
 - **Consumo**: registro de que un consumidor recuperó un resultado; no equivale a aprobación.
 - **Gate**: verificación determinista ejecutada después de la respuesta del agente.
 - **Promoción**: integración de una rama o artefacto fuera de esta extensión; nunca automática.

@@ -13,6 +13,7 @@ import { Harness } from '@earendil-works/pi-durable';
 import { acquireLease } from '../src/infrastructure/storage/lease.ts';
 import { openSessionRuntime } from '../src/runtime/session.ts';
 import { legacyInput } from './helpers/legacy.mjs';
+import { makeEventBus } from './helpers/rpc.mjs';
 
 function host(ctx, t) {
   const handlers = {}; const registered = { tools: [] }; const entries = []; const closures = [];
@@ -27,7 +28,7 @@ function host(ctx, t) {
       return harness;
     });
   }
-  const pi = { on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => { registered.tools.push(tool); registered.tool = tool; }, registerCommand: (name, command) => { registered.command = { name, ...command }; }, registerEntryRenderer: () => {}, appendEntry: (type, data) => entries.push({ type, data }) };
+  const pi = { events: makeEventBus(), on: (name, fn) => { handlers[name] = fn; }, registerTool: tool => { registered.tools.push(tool); registered.tool = tool; }, registerCommand: (name, command) => { registered.command = { name, ...command }; }, registerEntryRenderer: () => {}, appendEntry: (type, data) => entries.push({ type, data }) };
   return { pi, handlers, registered, entries, dispatch: async (name, ...args) => handlers[name]?.(...args, ctx), async close() { await handlers.session_shutdown?.({}).catch(() => {}); await Promise.all(closures); } };
 }
 function modelRuntime(model) { return { registerNativeProvider() {}, getModel: () => model }; }
@@ -91,7 +92,7 @@ for (const phase of ['createModels', 'openRuntime']) {
     let fixture, mock, opening, next;
     try {
       const settled = Promise.withResolvers();
-      fixture = await openSessionRuntime({ storagePath: join(directory, 'pi-agents', 'sessions', 'one.sqlite'), models, context: background, defaultCwd: directory, maxConcurrency: 1, createId: () => 'old-child', onSettled: async () => settled.resolve() });
+      fixture = await openSessionRuntime({ storagePath: join(directory, 'pi-agents', 'sessions', 'one.sqlite'), sessionId: 'one', models, context: background, defaultCwd: directory, maxConcurrency: 1, createId: () => 'old-child', onSettled: async () => settled.resolve() });
       const admitted = await fixture.jobs.start({ requestId: 'seed', actor: { kind: 'model' }, intent: { agent: 'test-agent', task: 'seed', cwd: directory } }, async task => ({ ...legacyInput(task.task), cwd: directory }));
       assert.equal(admitted.success, true);
       await settled.promise;

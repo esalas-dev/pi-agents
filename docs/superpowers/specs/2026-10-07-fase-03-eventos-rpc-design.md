@@ -2,17 +2,17 @@
 
 ## Estado y autoridad del documento
 
-**Diseño conversacional aprobado; documento escrito pendiente de revisión y aprobación humana.** Fecha: 2026-10-07 UTC. No autoriza implementación, instalación de dependencias ni migraciones reales. La aprobación de este documento habilitará la elaboración de un plan, que también requerirá revisión y elección humana del método de ejecución.
+**Diseño conversacional y documento escrito aprobados humanamente.** Fecha: 2026-10-07 UTC. El usuario aprobó explícitamente el documento versionado en `e0d0a99`. Esta aprobación habilita la elaboración del plan, no la implementación, instalación de dependencias ni migraciones reales. El plan requerirá revisión y elección humana del método de ejecución.
 
-Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad.
+Este documento refina y, para fase 03, sustituye los puntos incompatibles de la propuesta [`specs/03-eventos-rpc.md`](../../../specs/03-eventos-rpc.md): ledger RPC acotado, aprobación RPC por allowlist, `pause-requested`, limpieza del handler servidor por respuesta y atomicidad opcional. Los contratos no modificados de fases anteriores conservan su autoridad. La enmienda solicitada el 2026-10-08 a la especificación 01 habilita lectura/entrega al padre verificado; no modifica el contrato de resultados expuestos por RPC.
 
-Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 02 cerrada por aprobación humana y PR #4/#5 fusionados. Entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4`, Pi Durable `1.0.1`. No se promete compatibilidad histórica ni con todas las versiones posteriores.
+Base examinada: `main` en `f87d77eba4ba99129a8b9bef6b576cec1309e05a`, con fase 02 cerrada por aprobación humana y PR #4/#5 fusionados. Entorno comprobado: macOS arm64, Node `26.10.0`, host Pi detectado actualmente `1.1.0`, Pi Durable `1.0.1` y Chord `1.0.1`. La resolución valida la versión instalada y la alineación de sus peers; no se promete compatibilidad histórica ni con todas las versiones posteriores.
 
 ## 1. Intención y alcance acordados
 
 Permitir que **extensiones locales de confianza** observen y operen subagentes mediante contratos públicos, sin importar módulos internos. Éxito significa reutilizar servicios de dominio, conservar idempotencia tras reapertura, persistir eventos junto con los cambios que describen y evitar exposición de contenido sensible.
 
-Aprobaciones conversacionales explícitas: arquitectura y autoridad; persistencia y recuperación; contrato y lifecycle; mapeo de eventos y pruebas. No se presume aprobación del documento escrito a partir de ellas.
+Aprobaciones conversacionales explícitas: arquitectura y autoridad; persistencia y recuperación; contrato y lifecycle; mapeo de eventos y pruebas. La aprobación del documento escrito se obtuvo por separado, después de su revisión.
 
 ### Incluido
 
@@ -45,7 +45,7 @@ Los nombres anteriores definen responsabilidades, no un árbol de archivos ya im
 
 El adaptador construye siempre `{ kind: "extension", id: callerId }`. Un caller no puede aportar `human`, `model`, `system`, una marca de confirmación ni una política de autorización. `callerId` es declarativo: otra extensión cargada puede suplantarlo. La propiedad lógica de jobs evita usos accidentales entre callers cooperativos, **no autentica identidad**.
 
-`review` RPC responde `RPC_REVIEW_FORBIDDEN`, incluso si una configuración enumera callers. Una aprobación o rechazo debe proceder de la TUI humana existente. RPC no puede habilitar migraciones ni promover cambios Git.
+`review` RPC responde `RPC_REVIEW_FORBIDDEN`, incluso si una configuración enumera callers. RPC no concede autoridad de revisión. Fuera de RPC se conservan la TUI humana y la revisión parental nativa de hijos propios definida en la [spec parental](2026-10-07-aprobacion-padre-design.md), integrada por autorización humana del PR #10 el 2026-10-09: actor model, nunca human, y precedencia humana. RPC no puede habilitar migraciones ni promover cambios Git.
 
 ## 3. Transporte y contratos públicos
 
@@ -90,7 +90,7 @@ Error: mismos campos de correlación y sesión, `success: false` y `error: { cod
 
 `requestId` identifica la intención durable; `correlationId` identifica un intento de transporte. Al repetir una mutación se conserva `requestId` y se genera otro `correlationId`. No se admiten solicitudes concurrentes con la misma correlación dentro de la generación activa: el duplicado se descarta antes de iniciar otro efecto y se informa localmente, sin emitir una segunda respuesta en el canal del intento original. El caller instala el listener antes de emitir y verifica operación, correlación, solicitud y sesión en la respuesta.
 
-Todos los sobres se validan en runtime. IDs son strings no vacíos; `correlationId` debe ser seguro para interpolar en un canal, con caracteres ASCII alfanuméricos, punto, guion y guion bajo y máximo 128 caracteres. `sessionId`, `requestId` y `callerId` no se interpolan en canales. No se aceptan funciones, valores no JSON, referencias circulares ni campos de autoridad. Parámetros desconocidos se rechazan; los campos informativos opcionales nuevos de respuestas pueden ignorarse para compatibilidad aditiva.
+Todos los sobres se validan en runtime. IDs son strings no vacíos; `requestId`, `callerId` y `sessionId` tienen un máximo de 256 bytes UTF-8 cada uno. `correlationId` debe ser seguro para interpolar en un canal, con caracteres ASCII alfanuméricos, punto, guion y guion bajo y máximo 128 caracteres. Los sobres con IDs que excedan estos límites se descartan antes de ejecutar, sin reflejar el ID inválido en una respuesta ni volcar el contenido en logs. Esta precisión fue aprobada humanamente durante la planificación el 2026-10-07 para preservar el presupuesto del sobre. `sessionId`, `requestId` y `callerId` no se interpolan en canales. No se aceptan funciones, valores no JSON, referencias circulares ni campos de autoridad. Parámetros desconocidos se rechazan; los campos informativos opcionales nuevos de respuestas pueden ignorarse para compatibilidad aditiva.
 
 Únicamente se admite `protocolVersion: 1`: versiones diferentes responden `PROTOCOL_UNSUPPORTED`. Si un sobre malformado no contiene correlación segura, no se genera un canal arbitrario para contestarlo; se informa localmente sin volcar el payload. No se replica la solicitud en logs o errores.
 
@@ -111,7 +111,7 @@ Todos los sobres se validan en runtime. IDs son strings no vacíos; `correlation
 
 `status`, `list` y `wait` proyectan por allowlist: ID, estado público, nombre de agente, modelo, instantes, posición de cola, duración, disponibilidad de resultado, estado de revisión y resumen de consumo. No retornan `JobRecord`, prompts, definición completa del agente, `filePath`, cwd, tarea, errores internos, actores o historial de control. `provisioning` sigue proyectado como `running` en vistas públicas; el evento específico identifica el paso interno sin cambiar esa compatibilidad.
 
-`result` aplica el acceso restringido de fase 01, también durante un replay: no devuelve cuerpos `pending` o `rejected`. Retorna texto UTF-8 acotado, `totalBytes`, SHA-256 del texto completo e indicador `truncated`, con metadatos públicos de job/resultado. El sobre JSON serializado completo debe caber en 65536 bytes: se reserva espacio para metadatos y escaping antes de truncar en frontera UTF-8. No se incluyen el cuerpo completo en otro campo, una ruta de archivo ni mensajes internos de error. La disponibilidad de resultados de jobs cancelados debe comprobarse con el contrato de dominio; no se fabrica un resultado cuando el servicio responde `RESULT_NOT_READY`.
+`result` por RPC aplica el acceso restringido de fase 01, también durante un replay: no devuelve cuerpos `pending` o `rejected`. La excepción de lectura para el padre solo corresponde a su tool interna y a la ruta interna de entrega, con relación de creación verificada; un RPC `callerId` declarativo no acredita parentesco ni hereda esa excepción. RPC retorna texto UTF-8 acotado, `totalBytes`, SHA-256 del texto completo e indicador `truncated`, con metadatos públicos de job/resultado. El sobre JSON serializado completo debe caber en 65536 bytes: se reserva espacio para metadatos y escaping antes de truncar en frontera UTF-8. No se incluyen el cuerpo completo en otro campo, una ruta de archivo ni mensajes internos de error. La disponibilidad de resultados de jobs cancelados debe comprobarse con el contrato de dominio; no se fabrica un resultado cuando el servicio responde `RESULT_NOT_READY`.
 
 ### 3.4 Descubrimiento y capacidades
 
@@ -155,7 +155,7 @@ Cada evento tiene `protocolVersion: 1`, `eventId`, secuencia positiva monotónic
 | Intención de cancelación activa | `job.cancel-requested` / `job:cancel-requested` | Misma transacción que `control.pending` |
 | Cancelación queued/paused o activa confirmada | `job.cancelled` / `job:cancelled` | No anunciarla antes del efecto confirmado |
 | Terminal | `job.completed`, `job.failed`, `job.interrupted` / canales correspondientes | Solo en el commit terminal efectivo |
-| Decisión humana | `job.reviewed` / `job:reviewed` | Cambio efectivo de revisión desde la TUI |
+| Decisión humana o parental nativa autorizada | `job.reviewed` / `job:reviewed` | Cambio efectivo de status o toma de autoridad humana; no replay/no-op |
 | Consumo autorizado | `job.consumed` / `job:consumed` | Incremento efectivo de consumo, incluido desde tools |
 
 Un commit puede crear más de un evento cuando realmente cambia varias entidades; sus secuencias son consecutivas y deterministas dentro de ese commit. Rechazos, replays y asignaciones sin cambio efectivo no producen eventos. Se elimina `pause-requested`: no existe una pausa activa implementada. Cancelar directamente queued/paused emite cancelled, no una intención activa inexistente. Marcar notificación Pi no es un evento de dominio de esta fase.
@@ -209,7 +209,7 @@ El propietario usa un token interno de generación además del sessionId: reabri
 
 Los handlers RPC se registran desde session_start, no en la fábrica. Al cambiar sesión se sella la anterior, se abortan esperas y se cierran recursos antes de anunciar la nueva. Solicitar otra sesión en un runtime activo produce `SESSION_MISMATCH`; una solicitud no puede seleccionar arbitrariamente otro SQLite.
 
-Durante el cierre se deja de admitir trabajo y se responde `RPC_SHUTTING_DOWN` a nuevas llamadas solo mientras el endpoint todavía está presente para rechazar. Se terminan las esperas sin cancelar jobs, se detienen emisor y timers, se drenan operaciones de almacenamiento admitidas y se liberan listeners, Harness y lease de forma idempotente. Después de retirar el endpoint/completar shutdown no se publica ninguna respuesta tardía, error tardío o evento de la generación cerrada. Los pendientes de outbox permanecen durables.
+Durante el cierre se deja de admitir trabajo y se responde `RPC_SHUTTING_DOWN` a nuevas llamadas solo mientras el endpoint todavía está presente para rechazar. Se terminan las esperas sin cancelar jobs, se detienen emisor y timers, se drenan operaciones de almacenamiento admitidas y se liberan listeners, Harness y lease de forma idempotente. Después de retirar el endpoint/completar shutdown no se publica ninguna respuesta RPC tardía, error RPC tardío o evento de la generación cerrada. La integración parental usa `retire()` para drenar fase 1 sin esperar proveedor; `close()` libera el lease solo tras cierre SDK satisfactorio. Los fallos operativos de ese cierre se reportan sin reactivar autoridad. Los pendientes de outbox permanecen durables.
 
 Una migración rechazada o apertura fallida no anuncia ready. No se registra un endpoint listo que dependa de que una llamada posterior abra correctamente el runtime. Un caller sin endpoint debe gestionar su timeout; no existe una respuesta mágica cuando no hay listener servidor.
 
@@ -249,7 +249,7 @@ Una reapertura después de cada ventana de backup/migración debe demostrar ause
 | AC-03-05 | Caída después de emisión y antes de confirmación duplica con mismo eventId; reapertura drena pendientes en orden |
 | AC-03-06 | Pendientes cruzan varias páginas; ventana reciente conserva como máximo 1000 referencias sin borrar pendientes ni prometer GC física |
 | AC-03-07 | Status/list/wait no materializan cuerpos de resultados ni exponen snapshots internos; result cabe en 65536 bytes incluyendo JSON y escaping |
-| AC-03-08 | Result pending/rejected no se expone ni mediante replay; consumo repetido no incrementa contador ni crea otro evento |
+| AC-03-08 | Result RPC pending/rejected no se expone ni mediante replay; la excepción de lectura del padre no autoriza RPC; consumo repetido no incrementa contador ni crea otro evento |
 | AC-03-09 | Actor forjado, control no autorizado y review RPC se rechazan; spoofing de callerId no se presenta como resuelto |
 | AC-03-10 | Cancel activa requiere consentimiento TUI; carrera queued→running y timeout/rechazo de confirmación no la evitan; pausa activa sigue no soportada |
 | AC-03-11 | Deadlines, correlaciones y respuestas tardías no producen doble respuesta; timeout no revierte commit ni cancela job |
