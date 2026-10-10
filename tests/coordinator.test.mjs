@@ -269,6 +269,16 @@ test('stop durante wait no finaliza ni notifica un job de una generación sellad
   } finally { await f.close(); }
 });
 
+test('wake reconcilia controles durables antes de buscar trabajo', async () => {
+  const f = await makeStoreFixture(); let cancelled = false;
+  const job = { ...input('cancelling-job', 'provisioning'), status: 'cancelling', control: { pending: 'cancel' } };
+  try {
+    await f.seedJob(job);
+    const c = createCoordinator({ repository: { ...f.repository, active: async () => cancelled ? [] : [job], claimNext: async () => null, finishCancelled: async id => { assert.equal(id, job.id); cancelled = true; } }, execution: { abort: async value => { assert.equal(value.id, job.id); return 'aborted'; } }, maxConcurrency: 1, clock: () => 2, report: () => {} });
+    c.wake(); await c.drain(); assert.equal(cancelled, true); c.stop();
+  } finally { await f.close(); }
+});
+
 test('fallo de creación revierte claim sin perder el job', async () => {
   const f = await makeStoreFixture(); const errors = []; const execution = { create: async () => { throw new Error('config'); }, submit: async () => 1, wait: async job => result(job) };
   try {

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { createSession } from '@earendil-works/pi-durable';
+import { configure, createRegistry, createSession, Harness } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
+import { createModels } from '@earendil-works/pi-ai/models';
+import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
+import { canonicalStart } from '../../src/domain/requests.ts';
 import { JobConsumptionDocFamily, JobControlDocFamily, JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from '../../src/infrastructure/durable/documents.ts';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
 
@@ -45,6 +48,37 @@ export async function createV4Database(directory) {
   }, context);
   await session.close(context);
   return { database, jobs, ledgers };
+}
+
+export async function createV4RecoveryDatabase(directory) {
+  const fixture = await createV4Database(directory);
+  const models = createModels(); const faux = fauxProvider();
+  faux.setResponses([() => new Promise(() => {})]); models.setProvider(faux.provider);
+  const harness = await Harness.open(await openNodeSqliteStorage(fixture.database), { models, registry: createRegistry() }, context);
+  let conversationId; let submissionId;
+  try {
+    conversationId = await harness.commit(async tx => {
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      await configure(tx, conversation.id, { model: { provider: 'faux', modelId: 'faux-1' }, thinkingLevel: 'off', tools: [], extensions: [], instructions: 'private', cwd: '/tmp/project' });
+      return conversation.id;
+    }, context);
+    const conversation = await harness.conversation(conversationId, context);
+    const submission = await conversation.submit({ type: 'input', content: 'private-running-job', requestId: 'pi-agents:running-job' }, context);
+    submissionId = submission.id;
+  } finally { await harness.close(context); }
+  const queuedInput = { task: 'private-queued-job', cwd: '/tmp/project', agent: fixture.jobs[0].agent, model: fixture.jobs[0].model, thinkingLevel: fixture.jobs[0].thinkingLevel };
+  const queued = canonicalStart({ requestId: 'request:queued', actor: { kind: 'human', id: 'alice' }, intent: { agent: queuedInput.agent.name, task: queuedInput.task, cwd: queuedInput.cwd } });
+  const queuedRequest = { ...queued.normalized, payloadHash: queued.payloadHash };
+  const queuedRecord = { ...fixture.ledgers[ledgerKey('request:queued')], payloadHash: queued.payloadHash };
+  delete queuedRecord.receipt;
+  const session = createSession(await openNodeSqliteStorage(fixture.database));
+  try {
+    await session.commit(async tx => {
+      const job = await tx.doc(JobDocFamily, 'running-job', null); job.conversationId = conversationId; job.submissionId = submissionId; job.startedAt = 1050; job.updatedAt = 1050;
+      const cell = await tx.doc(RequestLedgerDocFamily, ledgerKey('request:queued'), null); cell.record = queuedRecord;
+    }, context);
+  } finally { await session.close(context); }
+  return { ...fixture, conversationId, submissionId, queuedRequest, queuedInput };
 }
 
 export async function snapshotDocuments(database) {

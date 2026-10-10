@@ -13,6 +13,14 @@ El roadmap no sustituye las especificaciones de fase:
 
 La estrategia es **roadmap global y plan detallado fase por fase**. No se mantiene un plan ejecutable único para todas las fases.
 
+## Organización Spec Kit
+
+Specs, planes y tareas operativos viven en `specs/<feature>/`. El [índice](README.md) permite
+seleccionarlos y el [informe de migración](MIGRATION.md) registra precedencia y discrepancias.
+Los originales archivados no son un segundo backlog. Los pasajes de baseline y planificación
+antigua que contradicen el mapa global se conservan como antecedentes, no como estado actual.
+La migración no modifica gates ni acredita nuevas pruebas o aprobaciones.
+
 ## Reglas de uso
 
 1. Una fase no comienza hasta que sus dependencias hayan superado sus gates de salida.
@@ -72,7 +80,7 @@ Evidencia del análisis inicial:
 - Pi Durable está fijado en `1.0.1` y su API es experimental;
 - el código fue documentado como validado con Pi `1.0.1`, mientras el entorno inspeccionado usa Pi `1.0.4`.
 
-Estas observaciones son históricas y no autorizan cambios de código. El baseline se creó después, con autorización humana, en `efc690ffdf15c3157eb7167a02dac12f6668843a`. Al iniciar el diseño de fase 00 se verificaron árbol limpio, `npm run check` y 9/9 pruebas. El resto de la preparación continúa sin implementar; véase la [spec de fase 00](00-preparacion-arquitectonica.md).
+Estas observaciones son históricas y no autorizan cambios de código. El baseline se creó después, con autorización humana, en `efc690ffdf15c3157eb7167a02dac12f6668843a`. Al iniciar el diseño de fase 00 se verificaron árbol limpio, `npm run check` y 9/9 pruebas. Esa observación corresponde al baseline histórico; el cierre posterior figura en el mapa global y en la [spec de fase 00](000-preparacion-arquitectonica/spec.md).
 
 ## Mapa global
 
@@ -81,18 +89,18 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
 | 02 | `completada` | Cancelación, pausa, reanudación y retry durables | 01 | Cierre por aprobación humana y PR #4/#5 fusionados; main `f87d77e` revalidado con 99/99 pruebas. Mantener la pausa activa como no soportada y conservar los límites de evidencia del informe de aceptación. |
-| 03 | `en validación` | RPC versionado, capacidades, eventos, outbox y cliente caller | 01–02 | T8 fusionada; gates automatizados T9 verdes. Revisión independiente y aceptación TUI siguen pendientes; no completar la fase solo por tests/smoke. |
+| 03 | `completada` | RPC versionado, capacidades, eventos, outbox y cliente caller | 01–02 | Implementación fusionada en la base `94288cc`; plan aprobado y método subagent-driven registrados. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; la persona aceptó el veredicto favorable posterior y ordenó completar/promocionar la fase, aunque su informe independiente no es recuperable; excepción humana explícita registrada en `phase03-promotion.md`. Aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal, sin proveedor remoto ni migración real. Promoción administrativa, sin publicar/integrar ni habilitar automáticamente 004–010; ver [matriz](../docs/PHASE-03-ACCEPTANCE.md). No reejecutar las tareas importadas. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
 | 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
 | 07 | `bloqueada` | Steering durable, ordenado y auditable | 01–06 | Resolver steering sobre jobs pausados sin conversación activa. |
 | 08 | `bloqueada` | Scheduling por sesión con misfire y deduplicación | 01–07 | Elegir parser temporal y retención de ocurrencias. |
 | 09 | `bloqueada` | Workflows declarativos y recuperables | 01–08 | Fijar una única fuente de verdad para runs y steps. |
-| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | La interfaz completa sigue bloqueada; excepción limitada al widget A+B autorizada y aprobada el 2026-10-08, con ejecución Native en worktree aislado. El 2026-10-09 se recibió visto bueno humano al widget A+B instalado y se probó ejecución/lectura con un subagente real; evidencia especial ampliada solo automatizadamente. Ver registro acotado, sin promover esta fase. |
+| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | La interfaz completa sigue bloqueada. Widget A+B implementado y fusionado por PR #12; visto bueno humano conjunto registrado. Revalidación de 011 en `011-cierre-widget`: 328/328, check y segunda revisión independiente APTO. Candidato local faux aceptado humanamente el 2026-10-09 tras pasar la guía TUI; validación 011 cerrada con límites registrados, sin publicar/integrar correcciones ni promover fase 10. |
 
 ## Fase 00 — Preparación arquitectónica
 
-Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
+Spec aprobada: [`00-preparacion-arquitectonica.md`](000-preparacion-arquitectonica/spec.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
 
 ### Objetivo
 
@@ -117,13 +125,13 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - política de versiones soportadas de Pi y Pi Durable;
 - README y arquitectura actualizados solo con comportamiento real.
 
-### Diseño implementado y verificación pendiente
+### Diseño y verificación: registro histórico
 
 - índice compacto, familias de jobs/resultados/solicitudes y metadatos de esquema;
 - conversión atómica v1 → esquema 2 mediante mantenimiento humano y backup obligatorio;
 - entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4` y Pi Durable `1.0.1`, sin promesa sobre mínimos históricos;
 - TypeScript estricto con declaraciones públicas del host, sin añadir copias directas de sus peers;
-- spec y plan ejecutados; queda aceptación TUI humana, revisión independiente y completar la matriz de caídas, incluida la compatibilidad entre `pi-ai` local y el host.
+- este registro anterior al cierre dejó aceptación TUI, revisión independiente y matriz de caídas pendientes; el cierre humano posterior está registrado arriba. El informe de aceptación y README conservan discrepancias señaladas en `MIGRATION.md`; no se certifican de nuevo.
 
 ### Gate de salida
 
@@ -136,7 +144,7 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 
 ## Fase 01 — Consulta, listado y espera
 
-Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md).
+Spec normativa: [`01-consulta-listado-espera.md`](001-consulta-listado-espera/spec.md).
 
 ### Gate de entrada
 
@@ -144,7 +152,7 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - almacenamiento y ledger aprobados;
 - política de actor definida para comando, tool y futuras llamadas RPC;
 - conversión v1 → esquema 2 validada en fase 00 y ampliación esquema 2 → 3 diseñada y aprobada;
-- plan de implementación revisado en `docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md`.
+- plan de implementación revisado en `specs/001-consulta-listado-espera/plan.md`.
 
 ### Entregables
 
@@ -171,7 +179,7 @@ Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, car
 
 ## Fase 02 — Control durable del ciclo de vida
 
-Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](02-control-ciclo-de-vida.md). El spike de APIs públicas de Pi Durable `1.0.1` está cerrado: cancelación cooperativa y reconciliación están disponibles; pausa activa no está expuesta y se degrada explícitamente a `PAUSE_ACTIVE_UNSUPPORTED`.
+Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](002-control-ciclo-de-vida/spec.md). El spike de APIs públicas de Pi Durable `1.0.1` está cerrado: cancelación cooperativa y reconciliación están disponibles; pausa activa no está expuesta y se degrada explícitamente a `PAUSE_ACTIVE_UNSUPPORTED`.
 
 ### Gate de entrada
 
@@ -205,7 +213,7 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 
 ## Fase 03 — Eventos y RPC versionado
 
-Índice de spec: [`03-eventos-rpc.md`](03-eventos-rpc.md). Diseño conversacional y [documento escrito de diseño](../docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md) aprobados humanamente el 2026-10-07. El [plan de implementación](../docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) está aprobado. T1–T8 fueron implementadas y T8 quedó fusionada en PR #8; T9 añade el cliente público, caller y gates AC-15–17. La verificación automática final de T9 está registrada; la revisión independiente y aceptación TUI siguen pendientes por separado. Estado actual `en validación`. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
+Índice de spec: [Eventos y RPC](003-eventos-rpc/spec.md). Diseño aprobado humanamente el 2026-10-07; [plan](003-eventos-rpc/plan.md) aprobado y método subagent-driven con pi-durable-subagents registrados en la [fuente de `94288cc`](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md). T1–T9 y el cliente público están implementados en la base seleccionada. La [aceptación](../docs/PHASE-03-ACCEPTANCE.md) registra revisión independiente NO APTO y aceptación humana TUI recibida para todos los bloques guiados del candidato faux local temporal, sin proveedor remoto ni migración real: estado `en validación`, no completada. Se conservan límites de 256 bytes UTF-8 para requestId/callerId/sessionId y 128 caracteres para correlationId. La conciliación documental no es un rerun de sus gates.
 
 ### Gate de entrada
 
@@ -230,16 +238,15 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 - pendientes sin descarte; ventana indexada de los últimos 1000 emitidos, sin prometer limpieza física del histórico;
 - ledger existente sin TTL y canonización de dominio; `correlationId` separado del `requestId` durable;
 - cancelación activa con confirmación humana TUI y protección frente a carreras; migración humana 4 → 5 con backup;
-- plan aprobado y T8 fusionada; T9 se ejecuta inline por decisión humana para esta tarea;
-- el caller de ejemplo solo demuestra aislamiento local de nombres; no se afirma convivencia real con upstream.
+- diseño y plan aprobados; método subagent-driven registrado; revisión independiente inicial NO APTO, N1–N5 corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente y fase 03 completada/promocionada administrativamente por decisión explícita, con informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal; no implementación desde cero.
 
-### Evidencia y estado de validación
+### Gate de salida
 
-La referencia RPC y la matriz [`docs/PHASE-03-ACCEPTANCE.md`](../docs/PHASE-03-ACCEPTANCE.md) registran contratos y evidencia. T9 pasó type-check/sintaxis, 215/215 pruebas no omitidas (1 skip), diff-check, inventario de paquete y smoke offline de carga. La revisión independiente y la aceptación TUI siguen pendientes; por ello la fase permanece `en validación` y no se declara completada.
+Transición y creación de evento ocurren en el mismo commit Durable. Las pruebas cubren duplicación entre emisión y confirmación, reapertura, timeouts, versiones incompatibles y coexistencia con upstream.
 
 ## Fase 04 — Resultados estructurados y gates
 
-Spec normativa: [`04-resultados-estructurados-gates.md`](04-resultados-estructurados-gates.md).
+Spec normativa: [`04-resultados-estructurados-gates.md`](004-resultados-estructurados-gates/spec.md).
 
 ### Gate de entrada
 
@@ -267,7 +274,7 @@ Schemas, corrección, gates, timeouts, señales, caídas y worktree simulado cum
 
 ## Fase 05 — Grupos y join
 
-Spec normativa: [`05-grupos-join.md`](05-grupos-join.md).
+Spec normativa: [`05-grupos-join.md`](005-grupos-join/spec.md).
 
 ### Gate de entrada
 
@@ -291,7 +298,7 @@ La matriz de condiciones, carreras, deadlines vencidos durante cierre, límites 
 
 ## Fase 06 — Aislamiento con worktrees
 
-Spec normativa: [`06-aislamiento-worktrees.md`](06-aislamiento-worktrees.md).
+Spec normativa: [`06-aislamiento-worktrees.md`](006-aislamiento-worktrees/spec.md).
 
 ### Gate de entrada
 
@@ -324,7 +331,7 @@ Las pruebas cubren repos sin Git o HEAD, checkout sucio, fallos por fase, preser
 
 ## Fase 07 — Steering durable
 
-Spec normativa: [`07-steering-durable.md`](07-steering-durable.md).
+Spec normativa: [`07-steering-durable.md`](007-steering-durable/spec.md).
 
 ### Gate de entrada
 
@@ -352,7 +359,7 @@ Orden, deduplicación, aplicación en límite seguro, cierre en cada estado, vis
 
 ## Fase 08 — Scheduling durable
 
-Spec normativa: [`08-scheduling-durable.md`](08-scheduling-durable.md).
+Spec normativa: [`08-scheduling-durable.md`](008-scheduling-durable/spec.md).
 
 ### Gate de entrada
 
@@ -377,7 +384,7 @@ Cron, DST, zonas, ausencias largas, caídas en reserva/creación/enlace y operac
 
 ## Fase 09 — Workflows declarativos
 
-Spec normativa: [`09-workflows-declarativos.md`](09-workflows-declarativos.md).
+Spec normativa: [`09-workflows-declarativos.md`](009-workflows-declarativos/spec.md).
 
 ### Gate de entrada
 
@@ -410,7 +417,7 @@ Validación, recuperación por step, fan-out, approvals, cancelación y ataques 
 
 ## Fase 10 — Interfaz operativa
 
-Spec normativa: [`10-interfaz-operativa.md`](10-interfaz-operativa.md).
+Spec normativa: [`10-interfaz-operativa.md`](010-interfaz-operativa/spec.md).
 
 ### Gate de entrada
 
@@ -421,9 +428,9 @@ Spec normativa: [`10-interfaz-operativa.md`](10-interfaz-operativa.md).
 
 ### Excepción acotada: widget de subagentes A+B
 
-Autorización humana registrada el 2026-10-08 en este roadmap y en [`specs/README.md`](README.md): adelantar solo las etapas A y B de la [spec del widget](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) y su [plan](../docs/superpowers/plans/2026-10-08-widget-subagentes.md). Ambos documentos fueron aprobados y se eligió Native; no habilita el panel ni la fase 10 completa. El 2026-10-09 se autorizó B antes de aceptar A y aplazar la decisión humana hasta revisar ambas juntas.
+Autorización humana registrada el 2026-10-08: adelantar solo A+B de la [spec del widget](011-widget-subagentes/spec.md) y su [plan](011-widget-subagentes/plan.md), aprobados con método Native. La [fuente posterior](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-08-widget-subagentes.md) registra excepción humana del 2026-10-09 para ejecutar B antes de aceptar A y decidir ambas conjuntamente. PR #12 fusionó A+B; [WIDGET-ACCEPTANCE](../docs/WIDGET-ACCEPTANCE.md) registra visto bueno conjunto y límites. No se retira esa aprobación ni se atribuye aceptación a escenarios no observados. No habilita el panel ni fase 10 completa.
 
-Validación histórica de APIs para el widget: Pi **1.1.0**, Pi Durable **1.0.1**. Los tipos públicos exponen `ctx.ui.setWidget()`; un smoke aislado de Harness abrió una conversación y adquirió/inició/detuvo `LiveDoc.watchDoc()` sin modelo. El baseline original daba check verde y 98/99 pruebas por el objetivo fijo 1.0.4 frente al host 1.1.0; el usuario autorizó continuar y esa evidencia se conserva, sin afirmar soporte 1.0.4. Ese resultado histórico no describe la consolidación posterior con main `29905ee`, que conserva la detección/alineación del host presente en main. Ver el [registro actualizado del plan](../docs/superpowers/plans/2026-10-08-widget-subagentes.md#consolidación-posterior-con-revisión-parental--2026-10-09). El visto bueno humano A+B ya se recibió y una prueba real de ejecución/lectura fue completada; la [matriz actualizada](../docs/WIDGET-ACCEPTANCE.md) registra 60/60 focales, 321/321 suite y check verde. Por elección humana no se repitieron escenarios TUI especiales: sus observaciones y la revisión independiente del código siguen pendientes. No se desbloquea la fase 10 completa.
+La validación inicial de APIs en Pi **1.1.0** / Pi Durable **1.0.1** y el baseline **98/99** por host 1.0.4 son históricos. La consolidación posterior incorporó la detección/alineación de peers del host, no un parche de esta sesión para ocultar fallos. La matriz del widget registra **321/321** históricas y aceptación humana acotada, sin prometer Pi 1.0.4. La revalidación actual desde `94288cc` y las correcciones se registran por separado: 328/328 y check verdes, revisión independiente APTO y aceptación humana de la guía TUI local faux el 2026-10-09. Validación de 011 cerrada, no integración/publicación. Compactación de hijo, retry automático/deferred y fallos de lectura/adquisición lenta no fueron inducidos en terminal; no se inventa observación de toda la matriz.
 
 ### Entregables
 
@@ -498,7 +505,7 @@ Componentes, navegación, contenido hostil, resultados grandes, eventos duplicad
 
 | ID | Decisión | Afecta a | Criterio de cierre |
 | --- | --- | --- | --- |
-| RD-001 | Partición elegida en el [diseño 00](00-preparacion-arquitectonica.md#modelo-persistente): índice y familias separadas | 00–10 | Spec aprobada; pendiente de evidencia de consultas compactas/migración con payload grande. |
+| RD-001 | Partición elegida en el [diseño 00](000-preparacion-arquitectonica/spec.md#modelo-persistente): índice y familias separadas | 00–10 | Spec aprobada; pendiente de evidencia de consultas compactas/migración con payload grande. |
 | RD-002 | Entorno actual elegido; no preservar mínimos históricos como promesa | 00–10 | Spec aprobada; pendiente de type-check/smoke con Node `26.10.0`, Pi `1.0.4` y Durable `1.0.1`. |
 | RD-003 | Semántica de pausa activa | 02, 07, 09, 10 | API pública confirmada o degradación estable documentada. |
 | RD-004 | Estrategia de structured output | 04, 05, 09 | Spike público y corpus de validación aprobados. |

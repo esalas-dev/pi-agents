@@ -261,7 +261,7 @@ test('Pi registra RPC, anuncia ready y arranca el outbox en orden; limpia antes 
     cwd: '/tmp/project', mode: 'tui', hasUI: true,
     sessionManager: { getSessionId: () => 'rpc-session' },
     modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true,
-    ui: { notify() {}, confirm: async () => true },
+    ui: { notify() {}, confirm: async () => true, setWidget() {} },
   };
   registerPiAgents(pi, { getAgentDir: () => '/tmp', createModels: async () => ({ registerNativeProvider() {} }), resolveModel: () => ({}), text: value => value, Type: { Object: fields => ({ fields }), String: () => ({ type: 'string' }) }, version: 'test', openRuntime: async () => runtime });
   await handlers.find(item => item.name === 'session_start').handler({}, ctx);
@@ -272,6 +272,54 @@ test('Pi registra RPC, anuncia ready y arranca el outbox en orden; limpia antes 
   await handlers.find(item => item.name === 'session_shutdown').handler({}, ctx);
   assert.ok(order.indexOf('wake-unsubscribe') < order.findIndex(value => value.startsWith('runtime-close:')));
   assert.equal(order.find(value => value.startsWith('runtime-close:')), 'runtime-close:0');
+});
+
+test('sellar generación y endpoint retira el timer de una respuesta antigua', async t => {
+  const timers = makeFakeTimers();
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const fixture = await makeRpcFixture({ runtime: { jobs: { getJob: () => pending } }, timers: timers.api }); t.after(() => fixture.close());
+  const attempt = observeRpc(fixture, 'status', rpcRequest('status', { id: 'job-old' }));
+  await flushRpc();
+  fixture.generation.seal();
+  fixture.server.seal();
+  timers.advance(5000);
+  await flushRpc();
+  assert.equal(attempt.replies.length, 0);
+  release({ success: false, error: { code: 'JOB_NOT_FOUND' } });
+  await flushRpc();
+  assert.equal(attempt.replies.length, 0);
+  assert.equal(timers.pending, 0);
+});
+
+test('switch durante recuperación no anuncia ready de la generación retirada', async () => {
+  const bus = makeEventBus();
+  const ready = [];
+  bus.on('pi-durable-subagents:ready', value => ready.push(value.sessionId));
+  const requested = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let opens = 0;
+  const runtimes = [];
+  const runtime = () => ({
+    jobs: { unnotified: async () => ({ success: true, value: [{ id: 'pending', status: 'completed', agent: { name: 'agent' } }] }), result: async () => { requested.resolve(); await release.promise; return { success: true, value: { result: { finalResponse: 'done' } } }; }, markNotified: async () => {}, seal() {}, },
+    outbox: { pending: async () => [], markEmitted: async () => {} }, subscribeOutboxWake: () => () => {}, seal() {}, async retire() {}, async close() {},
+  });
+  const handlers = [];
+  const errors = [];
+  const pi = {
+    events: bus, on(name, handler) { handlers.push({ name, handler }); }, registerTool() {}, registerCommand() {}, registerEntryRenderer() {}, appendEntry(_type, value) { errors.push(value); },
+  };
+  const context = sessionId => ({ cwd: '/tmp/project', mode: 'rpc', hasUI: false, sessionManager: { getSessionId: () => sessionId }, modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true, ui: { notify() {}, confirm: async () => false } });
+  registerPiAgents(pi, { getAgentDir: () => '/tmp', createModels: async () => ({ registerNativeProvider() {} }), resolveModel: () => ({}), text: value => value, Type: { Object: fields => ({ fields }), String: () => ({ type: 'string' }) }, version: 'test', openRuntime: async () => { const value = runtime(); runtimes.push(value); opens++; return value; } });
+  const start = handlers.find(item => item.name === 'session_start').handler;
+  const first = start({}, context('old'));
+  await requested.promise;
+  const second = start({}, context('new'));
+  release.resolve();
+  await Promise.all([first, second]);
+  assert.deepEqual(ready, ['new'], JSON.stringify(errors));
+  assert.equal(opens, 2);
+  await handlers.find(item => item.name === 'session_shutdown').handler({}, context('new'));
 });
 
 test('close invalida una espera pendiente sin cancelar el trabajo ni publicar tarde', async t => {

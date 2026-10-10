@@ -12,17 +12,28 @@ const job = (id, status = 'queued', extra = {}) => ({
 });
 const cancel = (requestId, actor = { kind: 'human', id: 'tui' }) => ({ requestId, action: 'cancel', actor });
 const admission = { requireActiveConfirmation: true, activeCancellationConfirmed: false };
-test('cancelar queued con confirmación activa ausente no muta job, ledger ni eventos', async () => {
+test('cancelar queued no exige consentimiento de cancelación activa', async () => {
   const fixture = await makeStoreFixture();
   try {
     await fixture.seedJob(job('queued-cancel'));
     const outcome = await createControlService(fixture.repository, () => 2001).control('queued-cancel', cancel('cancel-no-confirm'), admission);
-    assert.equal(outcome.success, false);
-    assert.equal(outcome.error.code, 'ACTIVE_CANCEL_CONFIRMATION_REQUIRED');
-    assert.equal((await fixture.repository.get('queued-cancel')).status, 'queued');
-    assert.equal(await fixture.repository.receipt('cancel-no-confirm'), undefined);
-    assert.equal((await fixture.session.snapshot(JobControlDocFamily, 'queued-cancel', BACKGROUND_CONTEXT)), undefined);
-    assert.deepEqual(await fixture.outbox.pending(10), []);
+    assert.equal(outcome.success, true);
+    assert.equal(outcome.value.status, 'cancelled');
+    assert.equal((await fixture.repository.get('queued-cancel')).status, 'cancelled');
+    assert.equal((await fixture.repository.receipt('cancel-no-confirm')).receipt.status, 'cancelled');
+    assert.deepEqual((await fixture.outbox.pending(10)).map(event => event.type), ['job.cancelled']);
+  } finally { await fixture.close(); }
+});
+
+test('cancelar paused no exige consentimiento de cancelación activa', async () => {
+  const fixture = await makeStoreFixture();
+  try {
+    await fixture.seedJob(job('paused-cancel'));
+    const control = createControlService(fixture.repository, () => 2001);
+    assert.equal((await control.control('paused-cancel', { requestId: 'pause-before-cancel', action: 'pause', actor: { kind: 'human', id: 'tui' } })).success, true);
+    const outcome = await control.control('paused-cancel', cancel('cancel-paused-no-confirm'), admission);
+    assert.equal(outcome.success, true);
+    assert.equal(outcome.value.status, 'cancelled');
   } finally { await fixture.close(); }
 });
 

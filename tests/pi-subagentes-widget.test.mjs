@@ -81,6 +81,51 @@ test('solo una lectura exitosa vacía retira el widget; un error conserva filas 
   assert.ok(component);
 });
 
+test('fallo inicial muestra estado no disponible sin detalles y el éxito vacío lo retira', async () => {
+  const h = setup([{ success: false, error: { message: 'PRIVATE_ERROR_SENTINEL' } }, ...emptyCycle]);
+  try {
+    h.widget.start(); await flush(); const component = h.mount();
+    for (const width of [18, 20, 40, 80]) {
+      const lines = component.render(width);
+      assert.ok(lines.length > 0);
+      for (const line of lines) assert.ok(visibleWidth(line) <= width);
+    }
+    assert.match(component.render(80).join('\n'), /Estado no disponible/);
+    assert.doesNotMatch(component.render(80).join('\n'), /PRIVATE_ERROR_SENTINEL/);
+    assert.equal([...h.timers.tasks.values()].filter(task => task.interval).length, 0);
+    await h.timers.advance(1000);
+    assert.equal(h.registrations.at(-1)[1], undefined);
+  } finally { await h.widget.close(); }
+  assert.equal(h.timers.tasks.size, 0);
+});
+
+test('primera lectura lenta muestra indisponibilidad y recupera filas sin solapar consultas', async () => {
+  const pending = Promise.withResolvers();
+  const h = setup([() => pending.promise, page()]);
+  try {
+    h.widget.start(); await flush();
+    assert.equal(h.registrations.length, 0);
+    await h.timers.advance(5000);
+    const component = h.mount();
+    assert.match(component.render(80).join('\n'), /Estado no disponible/);
+    assert.equal(h.calls.length, 1);
+    pending.resolve(page([job('recovered', 'running')])); await flush();
+    assert.match(component.render(80).join('\n'), /recovere/);
+    assert.doesNotMatch(component.render(80).join('\n'), /Estado no disponible/);
+    assert.equal(h.calls.length, 2);
+  } finally { pending.resolve(page()); await h.widget.close(); }
+  assert.equal(h.timers.tasks.size, 0);
+});
+
+test('fallo después de una lectura exitosa vacía no crea un widget de error', async () => {
+  const h = setup([...emptyCycle, { success: false, error: { message: 'offline' } }]);
+  try {
+    h.widget.start(); await flush();
+    await h.timers.advance(1000);
+    assert.equal(h.registrations.length, 0);
+  } finally { await h.widget.close(); }
+});
+
 test('fallo de la segunda consulta conserva la selección anterior y marca datos desactualizados', async () => {
   const h = setup([page([job('run1', 'running')]), page(), page([job('run2', 'running')]), { success: false, error: { message: 'offline' } }]);
   h.widget.start(); await flush(); const component = h.mount();
@@ -108,8 +153,22 @@ test('duración parte de startedAt, sanitiza secuencias de terminal y adapta lí
   const wide = component.render(80).join('\n');
   assert.match(wide, /2s/); assert.doesNotMatch(wide, /\u001b|PRIVATE_TASK|PRIVATE_CWD/);
   for (const width of [18, 20, 40, 80]) for (const line of component.render(width)) assert.ok(visibleWidth(line) <= width);
-  assert.match(component.render(18).join('\n'), /long-id|ejecutándose/);
+  assert.match(component.render(18).join('\n'), /\/subagents list/);
   await h.widget.close();
+});
+
+test('IDs con prefijo común remiten al listado cuando no caben junto al estado', async () => {
+  const ids = ['psa_1791569755156_a123', 'psa_1791569755156_b123'];
+  const h = setup([page(ids.map(id => job(id, 'running'))), page()]);
+  try {
+    h.widget.start(); await flush(); const component = h.mount();
+    const narrow = component.render(20);
+    assert.match(narrow.join('\n'), /\/subagents list/);
+    for (const line of narrow) assert.ok(visibleWidth(line) <= 20);
+    const wide = component.render(40);
+    assert.match(wide[1], /psa_1791569755156_a ejecutándose/);
+    assert.match(wide[2], /psa_1791569755156_b ejecutándose/);
+  } finally { await h.widget.close(); }
 });
 
 test('queued y paused son estáticos, la cola no inventa posición y no muta jobs', async () => {
@@ -207,6 +266,72 @@ test('compactación de fondo y ausencia de actividad no inventan estado; herrami
   } finally { await h.widget.close(); }
 });
 
+test('adquisición lenta no bloquea el snapshot durable, otros observadores ni el refresco', async () => {
+  const pending = Promise.withResolvers(); const acquisitions = [];
+  const h = setup([page([job('slow', 'running'), job('ready', 'running')]), page(), page([job('slow', 'cancelling'), job('ready', 'running')]), page()], { watchJobActivity: async id => {
+    acquisitions.push(id);
+    return id === 'slow' ? pending.promise : { initial: { tools: [], generation: { attempt: 1 }, compactions: [] }, close: async () => {} };
+  } });
+  try {
+    h.widget.start(); await flush(); const component = h.mount();
+    assert.match(component.render(100)[1], /slow ejecutándose/);
+    assert.match(component.render(100)[1], /actividad aún no disponible/);
+    assert.match(component.render(100)[2], /ready ejecutándose.*generando respuesta/);
+    await h.timers.advance(1000);
+    assert.match(component.render(100)[1], /slow cancelando/);
+    assert.equal(h.calls.length, 4);
+    assert.deepEqual(acquisitions, ['slow', 'ready']);
+  } finally { pending.resolve(undefined); await h.widget.close(); }
+  assert.equal(h.timers.tasks.size, 0);
+});
+
+test('reservas pendientes y cierres lentos mantienen el máximo de cuatro observadores', async () => {
+  const pending = Promise.withResolvers(); const retiring = Promise.withResolvers();
+  const acquisitions = []; let live = 0, maximum = 0, closes = 0;
+  const watch = () => {
+    live++; maximum = Math.max(maximum, live);
+    return { initial: { tools: [], compactions: [] }, close: async () => { await retiring.promise; live--; closes++; } };
+  };
+  const old = page(Array.from({ length: 4 }, (_, i) => job(`old${i}`, 'running')));
+  const next = page(Array.from({ length: 4 }, (_, i) => job(`new${i}`, 'running')));
+  const h = setup([old, page(), next, page(), next, page(), next, page()], { watchJobActivity: async id => {
+    acquisitions.push(id);
+    return id === 'old0' ? pending.promise : watch();
+  } });
+  try {
+    h.widget.start(); await flush(); const component = h.mount();
+    assert.equal(acquisitions.length, 4);
+    await h.timers.advance(1000);
+    assert.match(component.render(80)[1], /new0/);
+    assert.equal(acquisitions.length, 4, 'no adquiere mientras los cuatro slots siguen reservados');
+    retiring.resolve(); await flush(); await h.timers.advance(1000);
+    assert.equal(acquisitions.length, 7, 'reserva el slot de la adquisición antigua pendiente');
+    pending.resolve(watch()); await flush();
+    await h.timers.advance(1000);
+    assert.equal(acquisitions.length, 8);
+    assert.equal(maximum, 4);
+  } finally { retiring.resolve(); pending.resolve(undefined); await h.widget.close(); }
+  assert.equal(live, 0); assert.equal(closes, 8); assert.equal(h.timers.tasks.size, 0);
+});
+
+test('un cierre de observador fallido conserva su reserva y se drena al cerrar el widget', async () => {
+  let acquisitions = 0, live = 0, allowClose = false;
+  const old = page(Array.from({ length: 4 }, (_, i) => job(`old${i}`, 'running')));
+  const next = page(Array.from({ length: 4 }, (_, i) => job(`new${i}`, 'running')));
+  const h = setup([old, page(), next, page(), next, page()], { watchJobActivity: async () => {
+    acquisitions++; live++;
+    return { initial: { tools: [], compactions: [] }, close: async () => { if (!allowClose) throw new Error('PRIVATE_CLOSE_ERROR'); live--; } };
+  } });
+  try {
+    h.widget.start(); await flush(); const component = h.mount();
+    await h.timers.advance(2000);
+    assert.match(component.render(80)[1], /new0/);
+    assert.doesNotMatch(component.render(80).join('\n'), /PRIVATE_CLOSE_ERROR/);
+    assert.equal(acquisitions, 4); assert.equal(live, 4);
+  } finally { allowClose = true; await h.widget.close(); }
+  assert.equal(live, 0); assert.equal(h.timers.tasks.size, 0);
+});
+
 test('observador ausente degrada solo actividad y vuelve a intentarse en la siguiente consulta', async () => {
   let acquisitions = 0;
   const h = setup([page([job('run1', 'running')]), page(), page([job('run1', 'running')]), page()], { watchJobActivity: async () => {
@@ -284,7 +409,8 @@ test('Unicode ancho y combinado conserva columnas y render usa el tema vigente s
       assert.ok(lines.length <= 6);
       assert.match(lines[0], /\u001b\[34m/); assert.doesNotMatch(lines.join('\n'), /\u001b\[31m/);
       for (const line of lines) assert.ok(visibleWidth(line) <= width);
-      assert.match(lines[1], width === 20 ? /^\| unicode- ejecut/ : /ejecutándose/);
+      if (width === 20) assert.match(lines[0], /\/subagents list/);
+      else assert.match(lines[1], /ejecutándose/);
     }
   } finally { await h.widget.close(); }
 });

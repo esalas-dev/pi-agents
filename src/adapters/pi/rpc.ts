@@ -170,10 +170,14 @@ async function perform(operation: RpcOperation, request: RpcRequest, options: Rp
   return outcome.success ? controlResponse(request, state.sessionId, outcome.value) : makeErrorResponse(operation, request.requestId, request.correlationId, state.sessionId, errorCode(outcome));
 }
 
+function publicControlStatus(status: string): RpcData["control"]["previousStatus"] {
+  return (status === "provisioning" ? "running" : status) as RpcData["control"]["previousStatus"];
+}
+
 function controlResponse(request: RpcRequest, sessionId: string, receipt: { jobId: string; requestId: string; action: string; previousStatus: string; status: string; replayed: boolean; appliedAt?: number; retryJobId?: string; retryOf?: string; attemptNumber?: number }): RpcResponse {
   const data: RpcData["control"] = {
     jobId: receipt.jobId, requestId: receipt.requestId, action: receipt.action as RpcData["control"]["action"],
-    previousStatus: receipt.previousStatus as RpcData["control"]["previousStatus"], status: receipt.status as RpcData["control"]["status"],
+    previousStatus: publicControlStatus(receipt.previousStatus), status: publicControlStatus(receipt.status),
     replayed: receipt.replayed, appliedAt: receipt.appliedAt ?? Date.now(),
     ...(receipt.retryJobId ? { retryJobId: receipt.retryJobId } : {}), ...(receipt.retryOf ? { retryOf: receipt.retryOf } : {}),
     ...(receipt.attemptNumber === undefined ? {} : { attemptNumber: receipt.attemptNumber }),
@@ -204,6 +208,7 @@ export function registerRpcServer(options: RpcServerOptions): { seal(): void; cl
   };
   const send = (operation: RpcOperation, requestId: string, correlationId: string, response: RpcResponse, attempt?: Attempt) => {
     if (closed || (attempt?.responded ?? false)) return;
+    if (attempt && !current(options.state)) { attempt.responded = true; forget(correlationId, attempt); return; }
     if (attempt) { attempt.responded = true; forget(correlationId, attempt); }
     try { options.bus.emit(replyChannel(operation, correlationId), response); } catch { /* delivery failure is local to the bus */ }
   };
@@ -262,7 +267,16 @@ export function registerRpcServer(options: RpcServerOptions): { seal(): void; cl
   for (const operation of operations) subscriptions.push(options.bus.on(requestChannel(operation), onRequest(operation)));
 
   return {
-    seal() { sealed = true; },
+    seal() {
+      sealed = true;
+      for (const [key, attempt] of active) {
+        if (attempt.timer !== undefined) timers.clearTimeout(attempt.timer as ReturnType<typeof setTimeout>);
+        attempt.timer = undefined;
+        attempt.responded = true;
+        attempt.abort.abort();
+        active.delete(key);
+      }
+    },
     close() {
       if (closePromise) return closePromise;
       closed = true;

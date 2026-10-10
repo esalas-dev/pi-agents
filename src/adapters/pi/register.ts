@@ -53,9 +53,10 @@ export function registerPiAgents(pi: ExtensionAPI, bindings: LifecycleBindings):
       const pending = await current.runtime.jobs.unnotified();
       if (pending.success && current.generation.isActive()) for (const job of pending.value) {
         const view = await current.runtime.jobs.result(job.id);
-        if (!current.generation.isActive()) break;
+        if (!currentState(current)) break;
         if (view.success && view.value.result) await notify(job, view.value.result, current);
       }
+      if (!currentState(current)) return async () => {};
       const rpc = registerRpcServer({
         bus: pi.events,
         state: current,

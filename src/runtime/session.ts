@@ -104,7 +104,11 @@ export async function openSessionRuntime(options: RuntimeOptions): Promise<Sessi
     const result = createResultService(repository, query, clock);
     const review = createReviewService(repository, clock);
     const controlService = createControlService(repository, clock);
-    const control: ReturnType<typeof createControlService> = { ...controlService, async retry(id, request, parent) {
+    const control: ReturnType<typeof createControlService> = { ...controlService, async control(id, request, admission) {
+      const outcome = await controlService.control(id, request, admission);
+      if (outcome.success && (request.action === "resume" || outcome.value.status === "cancelling")) coordinator.wake();
+      return outcome;
+    }, async retry(id, request, parent) {
       const outcome = await controlService.retry(id, request, parent);
       if (outcome.success) coordinator.wake();
       return outcome;
