@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09 (migración; las fechas originales se conservan en las fuentes)
 
-**Status**: lista para planificar; plan pendiente de revisión y método
+**Status**: implementada en la base `94288cc`; completada y promocionada administrativamente con límites por decisión humana. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; el veredicto favorable posterior fue aceptado humanamente, pero el informe independiente no es recuperable. Aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal, sin proveedor remoto ni migración real; ver [matriz](../../docs/PHASE-03-ACCEPTANCE.md).
 
 **Input**: Migración autorizada de documentación existente a Spec Kit, sin implementación nueva.
 
@@ -47,7 +47,7 @@ migrado. Los límites y bloqueos del roadmap no se resuelven mediante esta conve
 - **Seguridad**: validar entradas/rutas y acotar exposición según el contrato; no prometer sandbox.
 - **Contratos**: usar APIs públicas y servicios comunes; no inventar capacidades de fases posteriores.
 - **Dependencias y alcance**: consultar [roadmap](../ROADMAP.md) y las exclusiones preservadas abajo.
-- **Estado de autorización**: El diseño está aprobado; plan y método pendientes. No ejecutar tareas.
+- **Estado de autorización**: Diseño/plan aprobados; método subagent-driven registrado en la fuente de `94288cc`. No reejecutar tareas históricas; resolver gates pendientes después de 011. Ver [conciliación](../RECONCILIATION.md).
 
 ## Requirements *(mandatory)*
 
@@ -360,4 +360,5 @@ La aceptación TUI debe probar consentimiento de cancelación activa, rechazo y 
 - La migración conserva alcance, IDs, decisiones y evidencia; no certifica ejecución actual.
 - La fecha de creación anterior no se infiere: el archivo conserva el documento y su cronología.
 - El estado operativo procede del roadmap y evidencia enlazada, no de frases antiguas de planificación.
-- El diseño está aprobado; plan y método pendientes. No ejecutar tareas.
+- Diseño/plan aprobados; método subagent-driven registrado. Implementación en validación;
+  revisión independiente inicial NO APTO; N1–N5 corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente, informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal. No reejecutar tareas históricas.

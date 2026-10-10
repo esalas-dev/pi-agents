@@ -89,14 +89,14 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
 | 02 | `completada` | Cancelación, pausa, reanudación y retry durables | 01 | Cierre por aprobación humana y PR #4/#5 fusionados; main `f87d77e` revalidado con 99/99 pruebas. Mantener la pausa activa como no soportada y conservar los límites de evidencia del informe de aceptación. |
-| 03 | `lista para planificar` | RPC versionado, capacidades, eventos y outbox | 01–02 | Documento escrito aprobado humanamente (`e0d0a99`, 2026-10-07). Revisar el [plan de fase 03](003-eventos-rpc/plan.md) y elegir método de ejecución; sin implementación autorizada. |
+| 03 | `completada` | RPC versionado, capacidades, eventos, outbox y cliente caller | 01–02 | Implementación fusionada en la base `94288cc`; plan aprobado y método subagent-driven registrados. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; la persona aceptó el veredicto favorable posterior y ordenó completar/promocionar la fase, aunque su informe independiente no es recuperable; excepción humana explícita registrada en `phase03-promotion.md`. Aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal, sin proveedor remoto ni migración real. Promoción administrativa, sin publicar/integrar ni habilitar automáticamente 004–010; ver [matriz](../docs/PHASE-03-ACCEPTANCE.md). No reejecutar las tareas importadas. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
 | 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
 | 07 | `bloqueada` | Steering durable, ordenado y auditable | 01–06 | Resolver steering sobre jobs pausados sin conversación activa. |
 | 08 | `bloqueada` | Scheduling por sesión con misfire y deduplicación | 01–07 | Elegir parser temporal y retención de ocurrencias. |
 | 09 | `bloqueada` | Workflows declarativos y recuperables | 01–08 | Fijar una única fuente de verdad para runs y steps. |
-| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | La interfaz completa sigue bloqueada; excepción limitada al widget A+B autorizada y aprobada el 2026-10-08, con ejecución Native en worktree aislado. A requiere aceptación TUI antes de iniciar B. |
+| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | La interfaz completa sigue bloqueada. Widget A+B implementado y fusionado por PR #12; visto bueno humano conjunto registrado. Revalidación de 011 en `011-cierre-widget`: 328/328, check y segunda revisión independiente APTO. Candidato local faux aceptado humanamente el 2026-10-09 tras pasar la guía TUI; validación 011 cerrada con límites registrados, sin publicar/integrar correcciones ni promover fase 10. |
 
 ## Fase 00 — Preparación arquitectónica
 
@@ -213,7 +213,7 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 
 ## Fase 03 — Eventos y RPC versionado
 
-Índice de spec: [`03-eventos-rpc.md`](003-eventos-rpc/spec.md). Diseño conversacional y [documento escrito de diseño](003-eventos-rpc/spec.md) aprobados humanamente el 2026-10-07; habilitada la planificación, no la ejecución. Fase aún no implementada. [Plan de implementación](003-eventos-rpc/plan.md) redactado y revisado inline, pendiente de revisión humana y método de ejecución. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
+Índice de spec: [Eventos y RPC](003-eventos-rpc/spec.md). Diseño aprobado humanamente el 2026-10-07; [plan](003-eventos-rpc/plan.md) aprobado y método subagent-driven con pi-durable-subagents registrados en la [fuente de `94288cc`](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md). T1–T9 y el cliente público están implementados en la base seleccionada. La [aceptación](../docs/PHASE-03-ACCEPTANCE.md) registra revisión independiente NO APTO y aceptación humana TUI recibida para todos los bloques guiados del candidato faux local temporal, sin proveedor remoto ni migración real: estado `en validación`, no completada. Se conservan límites de 256 bytes UTF-8 para requestId/callerId/sessionId y 128 caracteres para correlationId. La conciliación documental no es un rerun de sus gates.
 
 ### Gate de entrada
 
@@ -238,7 +238,7 @@ Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia
 - pendientes sin descarte; ventana indexada de los últimos 1000 emitidos, sin prometer limpieza física del histórico;
 - ledger existente sin TTL y canonización de dominio; `correlationId` separado del `requestId` durable;
 - cancelación activa con confirmación humana TUI y protección frente a carreras; migración humana 4 → 5 con backup;
-- documento escrito aprobado; pendientes revisión del plan y elección del método de ejecución.
+- diseño y plan aprobados; método subagent-driven registrado; revisión independiente inicial NO APTO, N1–N5 corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente y fase 03 completada/promocionada administrativamente por decisión explícita, con informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados del candidato faux local temporal; no implementación desde cero.
 
 ### Gate de salida
 
@@ -428,9 +428,9 @@ Spec normativa: [`10-interfaz-operativa.md`](010-interfaz-operativa/spec.md).
 
 ### Excepción acotada: widget de subagentes A+B
 
-Autorización humana registrada el 2026-10-08 en este roadmap y en [`specs/README.md`](README.md): adelantar solo las etapas A y B de la [spec del widget](011-widget-subagentes/spec.md) y su [plan](011-widget-subagentes/plan.md). Ambos documentos fueron aprobados y se eligió Native; no habilita el panel ni la fase 10 completa. La aceptación interactiva de A precede a B.
+Autorización humana registrada el 2026-10-08: adelantar solo A+B de la [spec del widget](011-widget-subagentes/spec.md) y su [plan](011-widget-subagentes/plan.md), aprobados con método Native. La [fuente posterior](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-08-widget-subagentes.md) registra excepción humana del 2026-10-09 para ejecutar B antes de aceptar A y decidir ambas conjuntamente. PR #12 fusionó A+B; [WIDGET-ACCEPTANCE](../docs/WIDGET-ACCEPTANCE.md) registra visto bueno conjunto y límites. No se retira esa aprobación ni se atribuye aceptación a escenarios no observados. No habilita el panel ni fase 10 completa.
 
-Validación de APIs en el host instalado: Pi **1.1.0**, Pi Durable **1.0.1**. Los tipos públicos exponen `ctx.ui.setWidget()`; un smoke aislado de Harness abrió una conversación, adquirió `LiveDoc` con `watchDoc()`, inició y detuvo la observación sin invocar un modelo. No se ha probado interacción TUI humana ni compatibilidad con el host objetivo del README, Pi **1.0.4**. Baseline: `npm run check` pasa; `npm test` da 98/99 porque `tests/host-resolution.test.mjs` exige 1.0.4 y el host instalado es 1.1.0. El usuario autorizó continuar en 1.1.0; no se altera ni se oculta la prueba, y no se afirma compatibilidad 1.0.4. La aceptación TUI de A sigue pendiente.
+La validación inicial de APIs en Pi **1.1.0** / Pi Durable **1.0.1** y el baseline **98/99** por host 1.0.4 son históricos. La consolidación posterior incorporó la detección/alineación de peers del host, no un parche de esta sesión para ocultar fallos. La matriz del widget registra **321/321** históricas y aceptación humana acotada, sin prometer Pi 1.0.4. La revalidación actual desde `94288cc` y las correcciones se registran por separado: 328/328 y check verdes, revisión independiente APTO y aceptación humana de la guía TUI local faux el 2026-10-09. Validación de 011 cerrada, no integración/publicación. Compactación de hijo, retry automático/deferred y fallos de lectura/adquisición lenta no fueron inducidos en terminal; no se inventa observación de toda la matriz.
 
 ### Entregables
 

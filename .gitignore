@@ -6,3 +6,5 @@ node_modules
 !.pi/prompts/
 .pi/prompts/*
 !.pi/prompts/speckit.*.md
+.specify/feature.json
+.specify/extensions/.cache/

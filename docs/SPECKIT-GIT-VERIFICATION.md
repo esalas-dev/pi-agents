@@ -2,7 +2,7 @@
 
 Fecha: 2026-10-09. Entorno observado: Spec Kit 0.11.9, Node 26.10.0, Pi 1.1.0.
 
-## Resultado
+## Resultado inicial (antes de instalar la extensión Git)
 
 El core de Spec Kit funciona dentro de un repositorio Git y de un linked worktree,
 pero **no crea ni selecciona ramas Git**. `BRANCH_NAME` en la salida de
@@ -66,9 +66,38 @@ Se requiere elegir la base de continuación y reconciliar specs/planes/tareas co
 nueva evidencia sin borrar la migración, modificaciones de producto ni archivos históricos.
 No se ha cambiado ninguna aprobación ni cerrado una fase.
 
+## Instalación autorizada y revalidación
+
+Después de la verificación, la persona responsable eligió un worktree desde
+`origin/main` e instalar la extensión Git. Se creó `.worktrees/cierre-widget-011`,
+rama `011-cierre-widget`, desde `94288cc`. El checkout principal y sus cambios
+preexistentes no se actualizaron ni se copiaron como cambios de producto.
+
+En ese worktree se ejecutó `specify extension add git`: exit 0, instalación del
+paquete oficial **bundled 1.0.0** de Spec Kit 0.11.9, sin descarga. El catálogo
+anuncia 1.0.1, pero esa versión no se instaló ni se atribuye al entorno probado.
+`specify extension list` confirma `agent-context` 1.0.0 y `git` 1.0.0 habilitadas.
+
+- Hook obligatorio `before_specify` registrado para `speckit.git.feature`.
+- Cinco prompts Git generados; los prompts `speckit.*.md` quedan permitidos en Git.
+- Settings, agentes y otros prompts Pi continúan ignorados; también `feature.json`.
+- Auto-commit permanece desactivado en todos los eventos. La instalación no
+  autoriza stage, commits, push, merge ni recreación de features históricas.
+- Para 011 y 003 se selecciona su directorio existente: no se invoca el hook de
+  nueva feature ni se regenera su spec por cambiar de rama.
+
+Una segunda autocomprobación Node en sandbox obtuvo **8/8**, exit 0: prompts y
+sintaxis; reglas de ignore; dry-run 012; creación de rama mediante script Git y
+spec mediante core con el mismo ID; rechazo de rama duplicada sin cambiar HEAD;
+selección explícita en linked worktree; auto-commit sin stage/commit; registro,
+hook y HEAD/rama reales conservados. `git diff --check` volvió a pasar.
+
 ## Límites
 
 No se ejecutó fetch ni se consultó GitHub: `origin/main` es la ref ya disponible,
-no una comprobación de la punta remota actual. No se instalaron extensiones, cambiaron
-ramas, crearon worktrees reales, staged archivos, hicieron commits del proyecto,
-modificaron settings Pi ni migraron bases. Las suites históricas no se reejecutaron.
+no una comprobación de la punta remota actual. La segunda etapa instaló la extensión
+solo en el worktree autorizado; no actualizó el checkout principal. No se staged
+archivos, hicieron commits del proyecto, modificaron settings Pi ni migraron bases.
+Las suites históricas de producto no se reejecutaron en esta verificación inicial de
+Spec Kit. La [revalidación posterior de 011](../specs/RECONCILIATION.md) registra sus
+gates de producto por separado, sin sustituir revisión independiente ni aceptación TUI.

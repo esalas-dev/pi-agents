@@ -4,7 +4,7 @@
 
 **Input**: Conversión del plan existente, no planificación nueva ni ejecución.
 
-**Status**: spec y plan aprobados; ejecución Native; aceptación A/B pendiente según fuentes. Excepción humana A+B aprobada el 2026-10-08, método Native. A requiere aceptación antes de B; no habilita la fase 10 completa.
+**Status**: A+B fusionadas en PR #12. Método Native. Validación del candidato `011-cierre-widget` aceptada humanamente el 2026-10-09 tras pasar la guía TUI local faux; 328/328, check y revisión independiente APTO. Límites en [aceptación](../../docs/WIDGET-ACCEPTANCE.md). Correcciones sin publicar/integrar; no reejecutar implementación histórica ni habilitar fase 10.
 
 **No ejecutar por la migración.** Se conservan el estado de autorización y los gates originales;
 la aprobación de la spec no aprueba el plan ni autoriza commits, publicación o migraciones reales.
@@ -49,7 +49,9 @@ La ratificación sigue pendiente. Los gates de ejecución no se consideran verde
 | IV. Seguridad | Datos sensibles y límites de exposición preservados | Inputs hostiles, allowlists y contenido centinela |
 | V. Contratos | Servicios comunes y APIs públicas; no se agregan dependencias | Type-check, integración y degradaciones explícitas |
 
-Excepción humana A+B aprobada el 2026-10-08, método Native. A requiere aceptación antes de B; no habilita la fase 10 completa.
+Excepción humana A+B aprobada el 2026-10-08, método Native. La fuente posterior registra
+el 2026-10-09 autorización de B antes de aceptar A y decisión conjunta; ver
+[conciliación](../RECONCILIATION.md) y [aceptación](../../docs/WIDGET-ACCEPTANCE.md).
 Antes de investigar o cambiar diseño se reevalúan dependencias del roadmap; antes de implementar,
 se verifica spec, plan, método y alcance humano. Los controles no aplicables se justifican; no se
 saltan fallos conocidos ni se afirma compatibilidad no probada.
@@ -97,7 +99,7 @@ retrospectiva de implementación; una nueva desviación requiere necesidad y alt
 - Cleanup idempotente en cambio/reapertura/cierre; no aborta conversaciones ni cambia estados, resultados, aprobaciones o notificaciones.
 - No cambiar manifest, dependencias, storage, schema, outbox, RPC ni semántica de jobs.
 - El host instalado comprobado es Pi 1.1.0; no afirmar compatibilidad con Pi objetivo 1.0.4 ni aceptación TUI hasta comprobarlos separadamente.
-- Baseline local: `npm test` da 98/99 porque `tests/host-resolution.test.mjs` exige 1.0.4 y el host instalado es 1.1.0; el usuario autorizó continuar. `npm run check` pasa en Pi 1.1.0. No modificar ni ocultar esa prueba; mientras la suite completa permanezca roja, no marcar tareas de implementación como completadas.
+- Baseline inicial histórico: 98/99 por Pi instalado 1.1.0 frente a 1.0.4 esperado. La base fusionada posterior ya descubre/alinea peers del host; no se modificó esa prueba en este cierre. Exigir suite completa/check verdes y no ocultar fallos actuales.
 
 ## Review Focus
 
@@ -122,9 +124,30 @@ Todos los pasos, scopes, pruebas y comandos pasan a [tasks.md](tasks.md), con la
 Las notas siguientes se conservan como contexto del plan original. En fases cerradas no reabren
 trabajo ni reemplazan el estado del encabezado; en trabajo abierto conservan sus condiciones.
 
-### Handoff y estado
+### Handoff y estado conciliado
 
-Spec y plan aprobados humanamente el 2026-10-08; método elegido: Native. El smoke de APIs no equivale a aceptación TUI ni a soporte Pi 1.0.4. La tarea 1 empieza en worktree aislado; no iniciar B hasta la aceptación TUI humana de A.
+Spec/plan aprobados el 2026-10-08, método Native. El handoff original que exigía
+aceptar A antes de B quedó sustituido por excepción humana del 2026-10-09.
+A+B están implementadas en `94288cc`; el candidato de cierre corrigió hallazgos y
+su segunda revisión independiente es APTO. El 2026-10-09 la persona confirmó que
+todos los escenarios de la guía TUI local pasaron; aceptación del candidato registrada,
+con los límites explícitos de la matriz. No rehacer los bloques ni confundir aceptación
+con publicación/integración. El smoke por sí solo no acredita TUI ni Pi 1.0.4.
+
+### Corrección de cierre dentro del alcance
+
+La revalidación encontró que la primera consulta fallida/lenta no mostraba
+«Estado no disponible», exigido por §5 de la spec. Se añaden pruebas antes del
+cambio y se corrige el controlador compartido, conservando retirada por éxito
+vacío, allowlist, modos y cleanup. Alcance: `subagents-widget.ts`, sus tests y
+mocks TUI de adaptadores; sin cambio de storage, dominio, RPC ni dependencias.
+
+La revisión CLI independiente encontró dos incumplimientos adicionales del contrato:
+adquisición lenta de B bloqueaba A, y truncado eliminaba IDs inequívocos/estado.
+Se añaden regresiones RED y se desacopla observación del refresco durable: publicar
+filas primero, reservar también adquisiciones/cierres pendientes dentro del máximo
+cuatro y drenarlos al cerrar. Si ID+estado no caben, usar remisión compacta al listado.
+Sin nuevas APIs/configuración/dependencias ni cambio de criterios de aceptación.
 
 ## Procedencia
 

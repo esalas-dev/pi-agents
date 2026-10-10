@@ -3,6 +3,7 @@ import type { ExtensionContext, ModelRuntime } from "@earendil-works/pi-coding-a
 import { discoverAgents, SUPPORTED_TOOLS, unsupportedTools, type AgentDefinition } from "../../agents.ts";
 import type { JobAgentSnapshot, ResolvedJobInput } from "../../domain/jobs.ts";
 import type { StartIntent } from "../../domain/requests.ts";
+import type { createSubagentsWidget } from "./subagents-widget.ts";
 
 export type PiBindings = {
   getAgentDir: () => string;
@@ -11,6 +12,7 @@ export type PiBindings = {
   text: (content: string) => unknown;
   Type: unknown;
   version: string;
+  createWidget?: typeof createSubagentsWidget;
 };
 
 function selected(ctx: ExtensionContext, bindings: PiBindings, name: string): AgentDefinition {

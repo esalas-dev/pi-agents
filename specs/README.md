@@ -20,14 +20,15 @@ Esta migración no actualiza resultados de pruebas, estados de entrega ni acepta
 
 Los identificadores 000–010 conservan los números de fase 00–10; 011 identifica el widget A+B,
 **no una fase 11**. La excepción humana del 2026-10-08 adelanta solo el widget, no la interfaz
-completa ni las capacidades de fases posteriores. A requiere aceptación antes de B.
+completa ni las capacidades de fases posteriores. La excepción humana posterior del 2026-10-09
+permitió B antes de aceptar A y aceptación conjunta; ver [conciliación](RECONCILIATION.md).
 
 | Fase/entrega | Spec canónica | Planificación existente | Estado documental |
 | --- | --- | --- | --- |
 | 00 | [Preparación arquitectónica](000-preparacion-arquitectonica/spec.md) | [plan](000-preparacion-arquitectonica/plan.md) · [tareas](000-preparacion-arquitectonica/tasks.md) | completada según el roadmap; aceptación documental contradictoria |
 | 01 | [Consulta, listado y espera](001-consulta-listado-espera/spec.md) | [plan](001-consulta-listado-espera/plan.md) · [tareas](001-consulta-listado-espera/tasks.md) | completada según roadmap e informe de aceptación |
 | 02 | [Control durable del ciclo de vida](002-control-ciclo-de-vida/spec.md) | [plan](002-control-ciclo-de-vida/plan.md) · [tareas](002-control-ciclo-de-vida/tasks.md) | completada según roadmap e informe de aceptación |
-| 03 | [Eventos y RPC versionado](003-eventos-rpc/spec.md) | [plan](003-eventos-rpc/plan.md) · [tareas](003-eventos-rpc/tasks.md) | lista para planificar; plan pendiente de revisión y método |
+| 03 | [Eventos y RPC versionado](003-eventos-rpc/spec.md) | [plan](003-eventos-rpc/plan.md) · [tareas](003-eventos-rpc/tasks.md) | implementada en la base 94288cc; en validación; revisión independiente NO APTO, hallazgos por resolver; aceptación TUI recibida, alcance por precisar |
 | 04 | [Resultados estructurados y gates](004-resultados-estructurados-gates/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
 | 05 | [Grupos y join durable](005-grupos-join/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
 | 06 | [Aislamiento durable con worktrees](006-aislamiento-worktrees/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
@@ -35,7 +36,7 @@ completa ni las capacidades de fases posteriores. A requiere aceptación antes d
 | 08 | [Scheduling durable](008-scheduling-durable/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; parser y políticas pendientes |
 | 09 | [Workflows declarativos y recuperables](009-workflows-declarativos/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; scheduler y decisiones de alcance pendientes |
 | 10 | [Interfaz operativa y observabilidad humana](010-interfaz-operativa/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; la excepción widget A+B no habilita la fase completa |
-| A+B | [Widget de subagentes A+B](011-widget-subagentes/spec.md) | [plan](011-widget-subagentes/plan.md) · [tareas](011-widget-subagentes/tasks.md) | spec y plan aprobados; ejecución Native; aceptación A/B pendiente según fuentes |
+| A+B | [Widget de subagentes A+B](011-widget-subagentes/spec.md) | [plan](011-widget-subagentes/plan.md) · [tareas](011-widget-subagentes/tasks.md) | A+B fusionadas; validación del candidato local faux aceptada humanamente el 2026-10-09; 328/328, check y revisión APTO. Correcciones sin publicar/integrar; fase 10 sigue bloqueada |
 
 ## Uso con Spec Kit
 
@@ -51,12 +52,21 @@ SPECIFY_FEATURE_DIRECTORY=specs/003-eventos-rpc \
 El script persiste esa selección en `.specify/feature.json`; usar otra ruta de la tabla para
 otra feature. Leer primero sus artefactos y el roadmap. `/speckit.analyze` es revisión, no ejecución;
 `/speckit.implement` exige aprobación, plan revisado y método humano elegido. No reutilizar planes
-históricos 000–002 como backlog nuevo ni ejecutar tareas de 003 antes de su autorización.
+históricos 000–003 como backlog nuevo. 003 ya tiene plan aprobado y método registrado;
+se continúa con sus gates pendientes después de cerrar 011, sin reimplementar sus entregas.
 En 004–010 no existen plan ni tasks: la ausencia mantiene el bloqueo, no se rellena automáticamente.
 
 Los IDs T001… identifican **pasos** importados por feature. Los bloques T1… del texto original
 conservan su significado mediante las tablas de trazabilidad. Las casillas de 001–002 no se
 rellenaron a partir de la palabra «completada»; deben reconciliarse antes de reutilizar el registro.
+
+### Integración Git instalada
+
+En el worktree de conciliación se instaló la extensión oficial bundled `git` **1.0.0**
+con Spec Kit **0.11.9**. El hook de `/speckit.specify` crea ramas para features nuevas;
+no cambia la selección explícita de features existentes. Auto-commit desactivado,
+selector local ignorado y solo prompts `speckit.*.md` permitidos en Git. Ver
+[verificación y límites](../docs/SPECKIT-GIT-VERIFICATION.md).
 
 ## Principios transversales
 

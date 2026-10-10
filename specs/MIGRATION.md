@@ -2,6 +2,12 @@
 
 Fecha: **2026-10-09**. Estructura y scripts locales: **Spec Kit 0.11.9**, integración Pi.
 
+> Este informe describe la importación inicial desde el checkout local anterior, no el
+> estado vigente de entregas fusionadas. La [conciliación con `94288cc`](RECONCILIATION.md)
+> añade fuentes posteriores verificadas sin reescribir este registro ni `MIGRATION.json`.
+> Sus conclusiones posteriores prevalecen para 003/011: implementación ya existente,
+> aprobación de plan/método de 003 y excepción de aceptación conjunta del widget.
+
 ## Alcance y autoridad
 
 La persona responsable autorizó migrar **todas las fases 00–10 y el widget A+B**, realizar
@@ -116,7 +122,7 @@ habilita reejecutar migraciones, recrear código ni repetir commits descritos en
 | Plan widget usa Pi 1.1.0; README conserva host probado 1.0.4 | Se conservan ambas versiones y el alcance de la evidencia | Verificar API/host real antes de aceptación; no anunciar compatibilidad por documentación |
 | Fases 04–10 tienen dependencias y decisiones sin cerrar | Solo specs, sin planes/tareas inventados | Autorizar la siguiente fase y resolver sus gates antes de planificar |
 | El baseline 00 enlazaba `src/jobs.ts`, ya ausente | Se conserva como referencia histórica en texto, no como enlace roto | No reconstruir el archivo ni atribuir su inspección al árbol actual |
-| Ratificación constitucional pendiente | Constitución intacta, pendiente existente conservada | Decisión humana y fecha de ratificación |
+| Ratificación constitucional pendiente | Constitución intacta, TODO existente conservado | Decisión humana y fecha de ratificación |
 
 Estos hallazgos no se arreglan marcando casillas ni declarando pruebas verdes.
 La migración tampoco audita cambios de runtime que ya estuvieran en el árbol de trabajo.

@@ -66,6 +66,15 @@ test('claimNext comprueba concurrencia y configura conversación dentro del comm
   } finally { await f.close(); }
 });
 
+test('seal del repositorio rechaza commits nuevos antes de llegar a la sesión', async () => {
+  const f = await makeStoreFixture();
+  try {
+    f.repository.seal();
+    await assert.rejects(f.repository.markNotified('missing'), error => error?.error?.code === 'RUNTIME_CLOSING');
+    assert.equal(await f.repository.get('missing'), undefined);
+  } finally { await f.close(); }
+});
+
 test('fallo al crear conversación no publica transición ni consume cola', async () => {
   const f = await makeStoreFixture();
   try {

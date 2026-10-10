@@ -1,94 +1,95 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createControlService } from '../src/application/control.ts';
-import { JobControlDocFamily } from '../src/infrastructure/durable/documents.ts';
+import { JobControlDocFamily, RequestLedgerDocFamily } from '../src/infrastructure/durable/documents.ts';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { makeStoreFixture } from './helpers/store.mjs';
 import { legacyInput } from './helpers/legacy.mjs';
 
-const queuedJob = (id, createdBy = { kind: 'human', id: 'tui' }, overrides = {}) => ({
-  id, ...legacyInput(`task-${id}`), status: 'queued', createdAt: 1000, updatedAt: 1000,
-  notified: false, createdBy, ...overrides,
+const job = (id, status = 'queued', extra = {}) => ({
+  id, ...legacyInput(`tarea ${id}`), status, createdAt: 1000, updatedAt: 1000, notified: false,
+  createdBy: { kind: 'human', id: 'tui' }, ...extra,
 });
-const request = (requestId, actor = { kind: 'human', id: 'tui' }) => ({
-  requestId, action: 'cancel', actor,
-});
-const admission = (confirmed) => ({ requireActiveConfirmation: true, activeCancellationConfirmed: confirmed });
-
-async function requestCell(fixture, requestId) {
-  return fixture.repository.receipt(requestId);
-}
-
-
-test('cancelar queued sin consentimiento no muta estado, ledger ni eventos', async () => {
-  const fixture = await makeStoreFixture({ createId: () => 'unused' });
+const cancel = (requestId, actor = { kind: 'human', id: 'tui' }) => ({ requestId, action: 'cancel', actor });
+const admission = { requireActiveConfirmation: true, activeCancellationConfirmed: false };
+test('cancelar queued no exige consentimiento de cancelación activa', async () => {
+  const fixture = await makeStoreFixture();
   try {
-    await fixture.seedJob(queuedJob('queued-no-consent'));
-    const control = createControlService(fixture.repository, () => 2001);
-    const outcome = await control.control('queued-no-consent', request('cancel:no-consent'), admission(false));
-    assert.equal(outcome.success, false);
-    assert.equal(outcome.error.code, 'ACTIVE_CANCEL_CONFIRMATION_REQUIRED');
-    assert.equal((await fixture.repository.get('queued-no-consent')).status, 'queued');
-    assert.equal(await requestCell(fixture, 'cancel:no-consent'), undefined);
-    const history = await fixture.session.snapshot(JobControlDocFamily, 'queued-no-consent', BACKGROUND_CONTEXT);
-    assert.equal(history, undefined);
+    await fixture.seedJob(job('queued-cancel'));
+    const outcome = await createControlService(fixture.repository, () => 2001).control('queued-cancel', cancel('cancel-no-confirm'), admission);
+    assert.equal(outcome.success, true);
+    assert.equal(outcome.value.status, 'cancelled');
+    assert.equal((await fixture.repository.get('queued-cancel')).status, 'cancelled');
+    assert.equal((await fixture.repository.receipt('cancel-no-confirm')).receipt.status, 'cancelled');
+    assert.deepEqual((await fixture.outbox.pending(10)).map(event => event.type), ['job.cancelled']);
   } finally { await fixture.close(); }
 });
 
-test('la carrera queued a running se rechaza en la aplicación transaccional sin intención cancel', async () => {
-  const fixture = await makeStoreFixture({ createId: () => 'unused' });
+test('cancelar paused no exige consentimiento de cancelación activa', async () => {
+  const fixture = await makeStoreFixture();
   try {
-    await fixture.seedJob(queuedJob('race'));
-    let raced = false;
-    const repository = new Proxy(fixture.repository, {
-      get(target, property, receiver) {
-        if (property === 'get') return async id => {
-          const value = await target.get(id);
-          if (!raced) {
-            raced = true;
-            await target.claimNext(1, async () => 7);
-            await target.markRunning(id, 8, 2002);
-          }
-          return value;
-        };
-        return Reflect.get(target, property, receiver);
+    await fixture.seedJob(job('paused-cancel'));
+    const control = createControlService(fixture.repository, () => 2001);
+    assert.equal((await control.control('paused-cancel', { requestId: 'pause-before-cancel', action: 'pause', actor: { kind: 'human', id: 'tui' } })).success, true);
+    const outcome = await control.control('paused-cancel', cancel('cancel-paused-no-confirm'), admission);
+    assert.equal(outcome.success, true);
+    assert.equal(outcome.value.status, 'cancelled');
+  } finally { await fixture.close(); }
+});
+
+test('la carrera queued a running rechaza cancelación no confirmada sin intención', async () => {
+  const fixture = await makeStoreFixture();
+  try {
+    await fixture.seedJob(job('race-cancel'));
+    let firstRead = true;
+    const repository = {
+      ...fixture.repository,
+      get: async id => {
+        const current = await fixture.repository.get(id);
+        if (firstRead) {
+          firstRead = false;
+          await fixture.repository.claimNext(1, async () => 7);
+          await fixture.repository.markRunning(id, 8, 2002);
+        }
+        return current;
       },
-    });
-    const control = createControlService(repository, () => 2003);
-    const outcome = await control.control('race', request('cancel:race'), admission(false));
+    };
+    const outcome = await createControlService(repository, () => 2003).control('race-cancel', cancel('cancel-race'), admission);
     assert.equal(outcome.success, false);
     assert.equal(outcome.error.code, 'ACTIVE_CANCEL_CONFIRMATION_REQUIRED');
-    assert.equal((await fixture.repository.get('race')).status, 'running');
-    assert.equal(await requestCell(fixture, 'cancel:race'), undefined);
-    const history = await fixture.session.snapshot(JobControlDocFamily, 'race', BACKGROUND_CONTEXT);
-    assert.equal(history, undefined);
+    assert.equal((await fixture.repository.get('race-cancel')).status, 'running');
+    assert.equal(await fixture.repository.receipt('cancel-race'), undefined);
+    assert.equal((await fixture.session.snapshot(JobControlDocFamily, 'race-cancel', BACKGROUND_CONTEXT)), undefined);
+    assert.deepEqual((await fixture.outbox.pending(10)).map(event => event.type), ['job.provisioning', 'job.started']);
   } finally { await fixture.close(); }
 });
 
-test('consentimiento admite una intención y su replay no solicita consentimiento nuevo', async () => {
-  const fixture = await makeStoreFixture({ createId: () => 'unused' });
+test('tras consentimiento cancelación crea intención y su replay no requiere otro consentimiento', async () => {
+  const fixture = await makeStoreFixture();
   try {
-    await fixture.seedJob(queuedJob('replay'));
+    await fixture.seedJob(job('confirmed-cancel'));
     const control = createControlService(fixture.repository, () => 2001);
-    const first = await control.control('replay', request('cancel:replay'), admission(true));
+    const request = cancel('cancel-confirmed');
+    const first = await control.control('confirmed-cancel', request, { requireActiveConfirmation: true, activeCancellationConfirmed: true });
     assert.equal(first.success, true);
-    assert.equal(first.value.replayed, false);
-    const replay = await control.control('replay', request('cancel:replay'), admission(false));
+    assert.equal(first.value.status, 'cancelled');
+    const replay = await control.control('confirmed-cancel', request, admission);
     assert.equal(replay.success, true);
     assert.equal(replay.value.replayed, true);
-    const history = await fixture.session.snapshot(JobControlDocFamily, 'replay', BACKGROUND_CONTEXT);
-    assert.equal(history.events.length, 1);
+    assert.equal((await fixture.repository.consumption('confirmed-cancel')), undefined);
+    assert.equal((await fixture.outbox.pending(10)).length, 1);
   } finally { await fixture.close(); }
 });
 
-test('model o extension de otro propietario no reciben recibo de control', async () => {
-  const fixture = await makeStoreFixture({ createId: () => 'unused' });
+test('actor model o extension de otro propietario no recibe recibo de control', async () => {
+  const fixture = await makeStoreFixture();
   try {
-    await fixture.seedJob(queuedJob('owned', { kind: 'model', id: 'owner-a' }));
-    const control = createControlService(fixture.repository, () => 2001);
-    const outcome = await control.control('owned', request('cancel:other', { kind: 'model', id: 'owner-b' }), admission(true));
-    assert.equal(outcome.success, false);
-    assert.equal(outcome.error.code, 'CONTROL_NOT_AUTHORIZED');
-    assert.equal(await requestCell(fixture, 'cancel:other'), undefined);
+    await fixture.seedJob(job('owned', 'queued', { createdBy: { kind: 'model', id: 'owner' } }));
+    for (const actor of [{ kind: 'model', id: 'other' }, { kind: 'extension', id: 'other' }]) {
+      const outcome = await createControlService(fixture.repository, () => 2001).control('owned', { requestId: `control-${actor.kind}`, action: 'pause', actor });
+      assert.equal(outcome.success, false);
+      assert.equal(outcome.error.code, 'CONTROL_NOT_AUTHORIZED');
+      assert.equal(await fixture.repository.receipt(`control-${actor.kind}`), undefined);
+    }
   } finally { await fixture.close(); }
 });

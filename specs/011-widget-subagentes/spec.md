@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09 (migración; las fechas originales se conservan en las fuentes)
 
-**Status**: spec y plan aprobados; ejecución Native; aceptación A/B pendiente según fuentes
+**Status**: A+B fusionadas (PR #12, base `94288cc`); Cierre de validación de 011 aceptado por la persona el 2026-10-09 tras declarar «listo, todos los escenerios pasaron correctamente» sobre la guía TUI del candidato. 328/328 y check verdes; segunda revisión independiente APTO. Solo entorno local faux, sin certificar compactación/retry automático del proveedor, fallos de lectura/adquisición lenta en terminal ni Pi 1.0.4. Correcciones no publicadas ni integradas; no habilita fase 10.
 
 **Input**: Migración autorizada de documentación existente a Spec Kit, sin implementación nueva.
 
@@ -33,10 +33,10 @@ esas pruebas de producto durante la migración.
 
 ### User Story 2 - Observar actividad técnica allowlisted (B) (Priority: P2)
 
-Después de aceptar A, la persona observa actividad técnica de los jobs activos visibles mediante
+Con A+B implementadas y la excepción humana de aceptación conjunta registrada, la persona observa actividad técnica de los jobs activos visibles mediante
 LiveDoc, sin confundirla con estado durable ni porcentaje de avance.
 
-**Why this priority**: B depende de la aceptación de A y añade observación, no reglas de negocio.
+**Why this priority**: B se apoya en A y añade observación, no reglas de negocio. La decisión humana del 2026-10-09 permitió validar ambas conjuntamente.
 
 **Independent Test**: Integración con Harness/SQLite real, contenido centinela y cleanup; comprobar
 los criterios AC-W-11 a AC-W-16 y los gates comunes sin abortar conversaciones.
@@ -61,7 +61,7 @@ migrado. Los límites y bloqueos del roadmap no se resuelven mediante esta conve
 - **Seguridad**: validar entradas/rutas y acotar exposición según el contrato; no prometer sandbox.
 - **Contratos**: usar APIs públicas y servicios comunes; no inventar capacidades de fases posteriores.
 - **Dependencias y alcance**: consultar [roadmap](../ROADMAP.md) y las exclusiones preservadas abajo.
-- **Estado de autorización**: Excepción humana A+B aprobada el 2026-10-08, método Native. A requiere aceptación antes de B; no habilita la fase 10 completa.
+- **Estado de autorización**: Spec/plan aprobados el 2026-10-08, método Native. Excepción humana del 2026-10-09: B antes de aceptar A y decisión conjunta; visto bueno A+B registrado en [WIDGET-ACCEPTANCE](../../docs/WIDGET-ACCEPTANCE.md). No habilita fase 10 completa.
 
 ## Requirements *(mandatory)*
 
@@ -131,7 +131,7 @@ Política de visibilidad común con fase 10: montar el widget automáticamente c
 
 ### 3. Presentación y selección de filas
 
-Ejemplo de B, ilustrativo y no una función disponible:
+Ejemplo ilustrativo de B; el formato exacto depende del ancho:
 
 ```text
 Subagentes · 3 visibles
@@ -196,7 +196,7 @@ Etapa B: observador de LiveDoc ─► actividad técnica compacta
 | Controlador de widget | Refresco, selección, generación activa, errores y cierre | Consume servicios; nunca ejecuta transiciones |
 | Componente TUI | Formato por ancho/tema y líneas acotadas | Sin SQLite, herramientas, modelos ni foco de teclado |
 
-`src/runtime/session.ts` actualmente expone `jobs` y `close()`. B añadirá una capacidad interna acotada para observar actividad por ID de job y detener esa observación. No se entrega el Harness, `JobRecord`, contexto Chord ni `conversationId` al componente o a otras extensiones. Los nombres y archivos nuevos se decidirán en el plan, no se consideran existentes.
+`src/runtime/session.ts` expone `jobs`, lifecycle y `watchJobActivity()` como capacidad interna acotada para observar actividad por ID de job y detener esa observación. No se entrega el Harness, `JobRecord`, contexto Chord ni `conversationId` al componente o a otras extensiones. Los nombres y archivos nuevos se decidirán en el plan, no se consideran existentes.
 
 #### Integración con Pi
 
@@ -351,11 +351,11 @@ Pruebas con reloj/temporizadores y UI controlados para selección, coalescing, l
 
 La aceptación humana usa Pi desde un cwd no relacionado, varios subagentes activos, una cola y un job completado; verifica que puede continuar escribiendo, consultar el resultado y cambiar/reabrir sesión sin mezclar filas. Debe registrar host/versiones y separar pruebas automatizadas de observación interactiva.
 
-Estos gates son **requisitos futuros**, no pruebas ya ejecutadas ni aceptación obtenida.
+Estos gates son requisitos de aceptación. La [matriz](../../docs/WIDGET-ACCEPTANCE.md) distingue pruebas ejecutadas, visto bueno humano y escenarios no observados; no se infiere cierre completo desde tests. La [conciliación](../RECONCILIATION.md) conserva las fuentes posteriores a la migración.
 
 ## Assumptions
 
 - La migración conserva alcance, IDs, decisiones y evidencia; no certifica ejecución actual.
 - La fecha de creación anterior no se infiere: el archivo conserva el documento y su cronología.
 - El estado operativo procede del roadmap y evidencia enlazada, no de frases antiguas de planificación.
-- Excepción humana A+B aprobada el 2026-10-08, método Native. A requiere aceptación antes de B; no habilita la fase 10 completa.
+- Excepción humana A+B aprobada el 2026-10-08, método Native; aceptación conjunta autorizada el 2026-10-09. No habilita la fase 10 completa.

@@ -2,9 +2,16 @@
 
 **Input**: [spec.md](spec.md) y [plan.md](plan.md).
 
-**Prerequisites**: El diseño está aprobado; plan y método pendientes. No ejecutar tareas.
+**Prerequisites**: Diseño/plan aprobados y método subagent-driven registrados en `94288cc`.
+Fase implementada y en validación; no reejecutar los pasos históricos. Los gates finales
+se retomaron después de 011: revisión independiente inicial NO APTO; N1–N5 revalidados y
+corregidos localmente, con nueva revisión aún pendiente. Aceptación TUI recibida, alcance por
+precisar. Ver [conciliación](../RECONCILIATION.md).
 
-**Estado del registro**: 53 pasos importados; 0 marcados en el original.
+**Estado del registro histórico**: 53 pasos importados del plan anterior; 0 marcados
+entonces. Sus casillas no son el progreso vigente: `94288cc` incorpora T1–T9. Se conservan
+sin rellenar desde un resumen de implementación; la matriz actual es
+[PHASE-03-ACCEPTANCE](../../docs/PHASE-03-ACCEPTANCE.md).
 **No ejecutar por la migración.** Se conservan el estado de autorización y los gates originales;
 la aprobación de la spec no aprueba el plan ni autoriza commits, publicación o migraciones reales.
 

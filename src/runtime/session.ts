@@ -1,8 +1,9 @@
 import { mkdir } from "node:fs/promises";
 import * as path from "node:path";
 import type { Context } from "@earendil-works/chord";
+import { withCancel } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
-import { createRegistry, Harness, type ToolRegistration } from "@earendil-works/pi-durable";
+import { createRegistry, Harness, LiveDoc, type ConversationId, type LiveState, type ToolRegistration } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 import { createSession } from "@earendil-works/pi-durable";
@@ -11,7 +12,9 @@ import type { JobRecord, JobResult } from "../domain/jobs.ts";
 import type { Clock, CreateId } from "../domain/requests.ts";
 import { DomainError } from "../domain/errors.ts";
 import { JobsIndexDoc, StorageMetaDoc } from "../infrastructure/durable/documents.ts";
-import { createJobRepository } from "../infrastructure/durable/repository.ts";
+import { OutboxMetaDoc } from "../infrastructure/durable/outbox-documents.ts";
+import { createOutboxRepository, type OutboxRepository } from "../infrastructure/durable/outbox.ts";
+import { createJobRepository, type JobRepository } from "../infrastructure/durable/repository.ts";
 import { inspectStorage } from "../infrastructure/storage/inspect.ts";
 import { acquireLease, type Lease } from "../infrastructure/storage/lease.ts";
 import { createExecution } from "../infrastructure/durable/execution.ts";
@@ -23,37 +26,161 @@ import { createWaitService } from "../application/wait.ts";
 import { createResultService } from "../application/result.ts";
 import { createReviewService } from "../application/review.ts";
 import { createControlService } from "../application/control.ts";
+import { createParentJobsService, type ParentJobsService } from "../application/parent.ts";
 
-export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
-export type SessionRuntime = { jobs: JobsService; close(): Promise<void> };
+export type RuntimeOptions = { storagePath: string; models: Models; context: Context; defaultCwd: string; maxConcurrency: number; sessionId: string; isParentActive?: () => boolean; now?: Clock; createId?: CreateId; onSettled?: (job: JobRecord, result: JobResult) => Promise<void>; onReport?: (error: unknown) => void };
+export type JobActivity = { tools: { callId: string; name: string }[]; generation?: { attempt: number; retryAt?: number; pollAt?: number }; compactions: { blocking: boolean; attempt: number; retryAt?: number }[] };
+type JobActivityWatch = { initial: JobActivity; closed: Promise<void>; close(): Promise<void> };
+export type SessionRuntime = { jobs: JobsService; parent?: ParentJobsService; outbox: OutboxRepository; subscribeOutboxWake(listener: () => void): () => void; watchJobActivity(jobId: string, onUpdate: (activity: JobActivity) => void): Promise<JobActivityWatch | undefined>; seal(): void; retire(): Promise<void>; close(): Promise<void> };
+
+function projectActivity(live: Readonly<LiveState> | null): JobActivity {
+  const generation = live?.generation;
+  return {
+    tools: (live?.tools ?? []).filter(slot => slot.status === "running").map(({ callId, name }) => ({ callId, name })),
+    ...(generation ? { generation: { attempt: generation.attempt, ...(generation.retry ? { retryAt: generation.retry.at } : {}), ...(generation.deferred ? { pollAt: generation.deferred.pollAt } : {}) } } : {}),
+    compactions: (live?.compactions ?? []).map(({ blocking, attempt, retry }) => ({ blocking, attempt, ...(retry ? { retryAt: retry.at } : {}) })),
+  };
+}
+
+export async function createJobActivityWatcher(options: { jobId: string; repository: Pick<JobRepository, "get">; harness: Pick<Awaited<ReturnType<typeof Harness.open>>, "watchDoc">; context: Context; onUpdate: (activity: JobActivity) => void }): Promise<JobActivityWatch | undefined> {
+  const job = await options.repository.get(options.jobId);
+  if (!job || !["provisioning", "running", "cancelling"].includes(job.status) || job.conversationId === undefined) return undefined;
+  const watch = await options.harness.watchDoc(LiveDoc, job.conversationId as ConversationId, options.context);
+  if (!watch) return undefined;
+  const initial = projectActivity(watch.value);
+  let closed = false;
+  let callbackTail = Promise.resolve();
+  watch.start(async value => {
+    if (closed) return;
+    const activity = projectActivity(value);
+    callbackTail = callbackTail.then(() => { if (!closed) options.onUpdate(activity); }).catch(() => {});
+    await callbackTail;
+  });
+  let closePromise: Promise<void> | undefined;
+  return { initial, closed: watch.closed.then(() => {}), close() {
+    if (!closePromise) closePromise = (async () => { closed = true; await watch.stop(); await callbackTail; })();
+    return closePromise;
+  } };
+}
 
 export async function openSessionRuntime(options: RuntimeOptions): Promise<SessionRuntime> {
-  const report = options.onReport ?? (() => {}); const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
+  if (typeof options.sessionId !== "string" || !options.sessionId) throw new DomainError("INVALID_REQUEST");
+  const report = (error: unknown) => { try { options.onReport?.(error); } catch {} };
+  const clock = options.now ?? Date.now; let lease: Lease | undefined; let harness: Awaited<ReturnType<typeof Harness.open>> | undefined;
+  let retireOpening: (() => Promise<void>) | undefined;
   try {
     await mkdir(path.dirname(options.storagePath), { recursive: true, mode: 0o700 });
     lease = await acquireLease(options.storagePath); const inspection = await inspectStorage(lease, options.context);
-    if (inspection.kind === "legacy-v1" || (inspection.kind === "current" && inspection.schemaVersion !== 4)) throw new DomainError("MIGRATION_REQUIRED");
+    if (inspection.kind === "legacy-v1" || (inspection.kind === "current" && inspection.schemaVersion !== 5)) throw new DomainError("MIGRATION_REQUIRED");
     if (inspection.kind === "empty") {
       const storage = await openNodeSqliteStorage(lease.dbPath); const session = createSession(storage);
-      try { await session.commit(async tx => { const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = 4; const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = 4; }, options.context); }
+      try { await session.commit(async tx => { const meta = await tx.doc(StorageMetaDoc); meta.storageSchemaVersion = 5; const index = await tx.doc(JobsIndexDoc); index.storageSchemaVersion = 5; await tx.doc(OutboxMetaDoc); }, options.context); }
       finally { await session.close(options.context); }
     }
     const registry = createRegistry(); registry.install(CodingTools);
     const tools = new Map((CodingTools.tools ?? []).map(tool => [tool.name, tool as ToolRegistration]));
     harness = await Harness.open(await openNodeSqliteStorage(lease.dbPath), { models: options.models, registry, settings: { extensions: [CodingTools] }, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? options.defaultCwd }), onReport: report }, options.context);
-    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`));
-    const execution = createExecution(harness, options.context, tools, clock);
+    const outbox = createOutboxRepository(harness, options.context);
+    const wakeListeners = new Set<() => void>();
+    const unsubscribeCommits = harness.subscribeCommits(() => {
+      queueMicrotask(() => {
+        for (const listener of [...wakeListeners]) {
+          try { listener(); } catch (error) { report(error); }
+        }
+      });
+    });
+    const subscribeOutboxWake = (listener: () => void): (() => void) => {
+      wakeListeners.add(listener);
+      return () => wakeListeners.delete(listener);
+    };
+    let closed = false;
+    const authority = options.sessionId === undefined ? undefined : Object.freeze({ sessionId: options.sessionId, isActive: () => !closed && (options.isParentActive?.() ?? true) });
+    const repository = createJobRepository(harness, options.context, clock, options.createId ?? (() => `psa_${Date.now()}_${Math.random().toString(16).slice(2)}`), options.sessionId, authority);
+    const observation = withCancel(options.context);
+    const execution = createExecution(harness, options.context, tools, clock, observation.context);
     let coordinator: ReturnType<typeof createCoordinator>;
     const query = createQueryService(repository);
     const wait = createWaitService(query, harness, options.context);
     const result = createResultService(repository, query, clock);
     const review = createReviewService(repository, clock);
-    const control = createControlService(repository, clock);
+    const controlService = createControlService(repository, clock);
+    const control: ReturnType<typeof createControlService> = { ...controlService, async control(id, request, admission) {
+      const outcome = await controlService.control(id, request, admission);
+      if (outcome.success && (request.action === "resume" || outcome.value.status === "cancelling")) coordinator.wake();
+      return outcome;
+    }, async retry(id, request, parent) {
+      const outcome = await controlService.retry(id, request, parent);
+      if (outcome.success) coordinator.wake();
+      return outcome;
+    } };
     const start = createStartService(repository, () => coordinator.wake(), report);
     const jobs = createJobsService(repository, start, wait, result, review, query, control);
+    const parent = authority ? createParentJobsService(authority, start, control, review) : undefined;
     coordinator = createCoordinator({ repository, execution, maxConcurrency: options.maxConcurrency, clock, onSettled: options.onSettled, report });
+    const activityWatches = new Set<JobActivityWatch>();
+    const activityAcquisitions = new Set<Promise<JobActivityWatch | undefined>>();
+    let retiring: Promise<void> | undefined;
+    let completion: Promise<void> | undefined;
+    let closing: Promise<void> | undefined;
+    const seal = () => {
+      if (closed) return;
+      closed = true;
+      jobs.seal();
+      coordinator.stop();
+      observation.cancel();
+      unsubscribeCommits(); wakeListeners.clear();
+    };
+    const retire = () => {
+      if (!retiring) {
+        seal();
+        retiring = (async () => {
+          await Promise.allSettled([...activityAcquisitions]);
+          await Promise.allSettled([...activityWatches].map(watch => watch.close()));
+          await repository.drainParent();
+          await coordinator.drain();
+          // shortcut: SDK 1.0.1 puede retener el lease; simplificar solo con una API de cierre verificada.
+          completion = (async () => {
+            await harness?.close(options.context);
+            harness = undefined;
+            await lease?.release();
+            lease = undefined;
+          })();
+          void completion.catch(report);
+        })();
+      }
+      return retiring;
+    };
+    retireOpening = retire;
     await coordinator.recover();
-    let closed = false;
-    return { jobs, async close() { if (closed) return; closed = true; start.seal(); coordinator.stop(); await coordinator.drain(); await harness?.close(options.context); harness = undefined; await lease?.release(); lease = undefined; } };
-  } catch (error) { try { await harness?.close(options.context); } finally { await lease?.release(); } throw error; }
+    return { jobs, ...(parent ? { parent } : {}), outbox, subscribeOutboxWake, seal, retire,
+      async watchJobActivity(jobId, onUpdate) {
+        if (closed) return undefined;
+        const acquisition = (async () => {
+          const watch = await createJobActivityWatcher({ jobId, repository, harness: harness!, context: options.context, onUpdate: activity => { if (!closed) onUpdate(activity); } });
+          if (!watch) return undefined;
+          if (closed) { await watch.close(); return undefined; }
+          let watchClose: Promise<void> | undefined;
+          const managed: JobActivityWatch = { initial: watch.initial, closed: watch.closed, close() {
+            return watchClose ??= watch.close().finally(() => activityWatches.delete(managed));
+          } };
+          activityWatches.add(managed);
+          void managed.closed.then(() => activityWatches.delete(managed));
+          return managed;
+        })();
+        activityAcquisitions.add(acquisition);
+        try { return await acquisition; } finally { activityAcquisitions.delete(acquisition); }
+      },
+      close() { return closing ??= retire().then(() => completion); } };
+  } catch (error) {
+    if (retireOpening) {
+      try { await retireOpening(); } catch (cleanupError) { report(cleanupError); }
+    } else if (harness) {
+      // Opening failed before any application observer existed; SDK still owns its storage.
+      const failedHarness = harness;
+      void (async () => { await failedHarness.close(options.context); await lease?.release(); })().catch(report);
+    } else {
+      await lease?.release();
+    }
+    throw error;
+  }
 }

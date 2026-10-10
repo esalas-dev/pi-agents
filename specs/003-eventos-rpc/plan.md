@@ -4,7 +4,7 @@
 
 **Input**: Conversión del plan existente, no planificación nueva ni ejecución.
 
-**Status**: lista para planificar; plan pendiente de revisión y método. El diseño está aprobado; plan y método pendientes. No ejecutar tareas.
+**Status**: plan aprobado y ejecutado históricamente con método subagent-driven; implementación fusionada en la base `94288cc`, fase completada y promocionada administrativamente con límites por decisión humana. No reejecutar tareas. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente, informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados en el candidato faux local temporal, sin proveedor remoto ni migración real.
 
 **No ejecutar por la migración.** Se conservan el estado de autorización y los gates originales;
 la aprobación de la spec no aprueba el plan ni autoriza commits, publicación o migraciones reales.
@@ -49,7 +49,8 @@ La ratificación sigue pendiente. Los gates de ejecución no se consideran verde
 | IV. Seguridad | Datos sensibles y límites de exposición preservados | Inputs hostiles, allowlists y contenido centinela |
 | V. Contratos | Servicios comunes y APIs públicas; no se agregan dependencias | Type-check, integración y degradaciones explícitas |
 
-El diseño está aprobado; plan y método pendientes. No ejecutar tareas.
+Diseño/plan aprobados y método subagent-driven registrados; fase implementada en validación.
+No reejecutar tareas históricas. Los gates de cierre se retoman después de 011.
 Antes de investigar o cambiar diseño se reevalúan dependencias del roadmap; antes de implementar,
 se verifica spec, plan, método y alcance humano. Los controles no aplicables se justifican; no se
 saltan fallos conocidos ni se afirma compatibilidad no probada.
@@ -175,14 +176,21 @@ trabajo ni reemplazan el estado del encabezado; en trabajo abierto conservan sus
 
 Self-review realizada antes de handoff: cobertura de las secciones de spec y AC-03-01..17, interfaces/DTO/códigos entre tareas, pasos accionables y tests para las cinco clases de Review Focus. Se corrigieron callsites de sessionId en T3, tests de migraciones escalonadas en T5, ownership del hook ready/emisor en T8 y gates del entrypoint público en T9. La validación estructural de links/tablas/fences se registra aparte; no equivale a ejecutar tests de fase 03. Las tareas comparten las interfaces del mapa; cualquier cambio durante implementación requiere actualizar consumidores y tests conjuntamente, no inventar una segunda API.
 
-### Handoff humano
+### Handoff humano original (superado)
+
+La [fuente posterior de `94288cc`](../_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md)
+registra aprobación humana del plan y método subagent-driven. El texto siguiente
+es el handoff anterior, no un bloqueo vigente ni autorización de ejecución nueva.
+
 
 Revisar este plan y confirmar que captura lo deseado antes de ejecutar. Elegir:
 
 - **Subagent-driven (recomendado):** implementador y reviewer nuevos por tarea, más revisión completa final; más coste/contextos, gates independientes tempranos para atomicidad, autoridad y lifecycle.
 - **Native:** implementación en esta sesión con gates por tarea y una revisión independiente final; menor coste, sin revisión independiente intermedia.
 
-No hay método elegido todavía. La recomendación subagent-driven responde al coste de un fallo en persistencia/autoridad y a las nueve entregas revisables; no autoriza despacho ni implementación. Si los agentes disponibles no pueden usar una rama/worktree autorizados o entregar revisión obtenible humanamente, explicar la limitación antes de elegir o cambiar método.
+En el handoff original no había método elegido. La fuente posterior registra
+subagent-driven para la ejecución ya realizada; la recomendación histórica no autoriza
+nuevo despacho ni reimplementación. Si los agentes disponibles no pueden usar una rama/worktree autorizados o entregar revisión obtenible humanamente, explicar la limitación antes de elegir o cambiar método.
 
 ## Procedencia
 

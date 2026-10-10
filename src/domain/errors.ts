@@ -4,8 +4,7 @@ export type ErrorCode =
   | "MIGRATION_DECLINED" | "BACKUP_FAILED" | "STORAGE_VERSION_UNSUPPORTED" | "STORAGE_INCONSISTENT"
   | "STORAGE_BUSY" | "STORAGE_ERROR" | "INVALID_FILTER" | "WAIT_TIMEOUT" | "WAIT_ABORTED"
   | "RESULT_NOT_READY" | "RESULT_REVIEW_REQUIRED" | "RESULT_REJECTED"
-  | "PAUSE_ACTIVE_UNSUPPORTED" | "CONTROL_INVALID_STATE" | "CONTROL_NOT_AUTHORIZED" | "CONTROL_CONFLICT" | "RETRY_NOT_ALLOWED"
-  | "ACTIVE_CANCEL_CONFIRMATION_REQUIRED";
+  | "PAUSE_ACTIVE_UNSUPPORTED" | "CONTROL_INVALID_STATE" | "CONTROL_NOT_AUTHORIZED" | "CONTROL_CONFLICT" | "RETRY_NOT_ALLOWED" | "ACTIVE_CANCEL_CONFIRMATION_REQUIRED";
 
 export type AppError = {
   code: ErrorCode;
@@ -29,6 +28,8 @@ const messages: Record<ErrorCode, string> = {
   RESULT_REVIEW_REQUIRED: "El resultado requiere revisión humana.", RESULT_REJECTED: "El resultado fue rechazado.",
   PAUSE_ACTIVE_UNSUPPORTED: "La pausa activa no está soportada por la API pública de Pi Durable.", CONTROL_INVALID_STATE: "El trabajo no admite esta operación de control en su estado actual.", CONTROL_NOT_AUTHORIZED: "El actor no está autorizado para controlar este trabajo.", CONTROL_CONFLICT: "La operación de control entra en conflicto con una solicitud existente.", RETRY_NOT_ALLOWED: "El trabajo no admite retry en su estado actual.", ACTIVE_CANCEL_CONFIRMATION_REQUIRED: "La cancelación requiere confirmación activa.",
 };
+
+export const runtimeErrorCodes: readonly ErrorCode[] = Object.freeze(Object.keys(messages).filter(code => code !== "ACTIVE_CANCEL_CONFIRMATION_REQUIRED") as ErrorCode[]);
 
 export class DomainError extends Error {
   readonly error: AppError;

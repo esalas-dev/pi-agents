@@ -1,0 +1,151 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "94288cc12151b25ba84c76b2854c1f21c8256355",
+  "reason": "Reconciliar migración local anterior con entregas ya fusionadas, sin alterar archivo pre-specify.",
+  "sources": [
+    {
+      "original": "specs/00-preparacion-arquitectonica.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/00-preparacion-arquitectonica.md",
+      "bytes": 30205,
+      "sha256": "b17f789b50cbc96a84de76f479336d0203df5258c4e71a0f04103dae0dc54eb6"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md",
+      "bytes": 44139,
+      "sha256": "fa98b0a12da379a19e83384a0dc1c0fd727adc080f2a44c8606091db1f703b26"
+    },
+    {
+      "original": "specs/01-consulta-listado-espera.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/01-consulta-listado-espera.md",
+      "bytes": 13775,
+      "sha256": "d381408a0a23ae652d98d706261ccc787f9a7b81df4e5ad0eb2660e3eb2b4959"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md",
+      "bytes": 22665,
+      "sha256": "6a5004b7a9a5937942ecca25dab8f812d1671eaae45e7b039674ef3af332de68"
+    },
+    {
+      "original": "specs/02-control-ciclo-de-vida.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/02-control-ciclo-de-vida.md",
+      "bytes": 9593,
+      "sha256": "53512ebc5a6927ad39cd30458af8ed0a0b840d9d922c4810bcc5345a488853cc"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-07-fase-02-control-ciclo-vida.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-02-control-ciclo-vida.md",
+      "bytes": 19501,
+      "sha256": "3e3d5bd3b8ff8b805ebf9644ac9b20bfa270cd7f3127d83b5f41b814065f8bda"
+    },
+    {
+      "original": "specs/03-eventos-rpc.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/03-eventos-rpc.md",
+      "bytes": 8063,
+      "sha256": "9746f6b69480fb8d0f4d82258d3f982722619f23eb2a47c5013b9f16de13b3f1"
+    },
+    {
+      "original": "docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md",
+      "bytes": 32354,
+      "sha256": "86f7bdc10f549d9fb5b491fb25dfad8ea03fc05f731ef9c612368f1ed08af488"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md",
+      "bytes": 42762,
+      "sha256": "130df3b65fa306e47c5870c57d581363f4ce54fa3948be028d04f374a69fe1f1"
+    },
+    {
+      "original": "specs/04-resultados-estructurados-gates.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/04-resultados-estructurados-gates.md",
+      "bytes": 7469,
+      "sha256": "c1842d7d8bc5998ebc6a3b7a0fdaf7ae4b37a5d3dd6512b3aedfb6536aa1d2f0"
+    },
+    {
+      "original": "specs/05-grupos-join.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/05-grupos-join.md",
+      "bytes": 7114,
+      "sha256": "25c0607c17fcb466b40126b19bbea2c24fba2573585095a86d866f7bd871f333"
+    },
+    {
+      "original": "specs/06-aislamiento-worktrees.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/06-aislamiento-worktrees.md",
+      "bytes": 7888,
+      "sha256": "fd7652891fb834aaa07c693080224da846eea949f07bba48d984791357b3efac"
+    },
+    {
+      "original": "specs/07-steering-durable.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/07-steering-durable.md",
+      "bytes": 6327,
+      "sha256": "504f2c3ea94c9ab6cec210e46eebad906d0d963ee014cfb313d36f7471832b83"
+    },
+    {
+      "original": "specs/08-scheduling-durable.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/08-scheduling-durable.md",
+      "bytes": 7054,
+      "sha256": "a7645fc4eac9dfba4cb2e2af08adcb8b36288b9ce2edeffdb591216771281fd0"
+    },
+    {
+      "original": "specs/09-workflows-declarativos.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/09-workflows-declarativos.md",
+      "bytes": 8028,
+      "sha256": "b63396c1bb587264447c1083152600ace5310042e2e8ef1e303a9f61636395a0"
+    },
+    {
+      "original": "specs/10-interfaz-operativa.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/10-interfaz-operativa.md",
+      "bytes": 9692,
+      "sha256": "d954d9554f81fe691339966b5c9cc602cf7c2ea0a2ceba16635f76d56be7a81d"
+    },
+    {
+      "original": "docs/superpowers/specs/2026-10-08-widget-subagentes-design.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/specs/2026-10-08-widget-subagentes-design.md",
+      "bytes": 31208,
+      "sha256": "4aae0e1c4f721abf17370ae3f0a0ed50dc48d4953f2024901dbb798abf107887"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-08-widget-subagentes.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-08-widget-subagentes.md",
+      "bytes": 19323,
+      "sha256": "9f2514170b761a1912a65e42bae898ff559428961ace5faeb224f8f22a164474"
+    },
+    {
+      "original": "README.md",
+      "archive": "specs/_archive/origin-main-94288cc/README.md",
+      "bytes": 16111,
+      "sha256": "340f36c2bf152514d3fc0ab2a9dfa2aaf382e36b52ec6de8a60ec8dcebaca4fd"
+    },
+    {
+      "original": "specs/README.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/README.md",
+      "bytes": 9251,
+      "sha256": "412886d6e3685d1e4f7e650fa6bd6f4155b8c607100edc12ac3ab362823c6780"
+    },
+    {
+      "original": "specs/ROADMAP.md",
+      "archive": "specs/_archive/origin-main-94288cc/specs/ROADMAP.md",
+      "bytes": 30308,
+      "sha256": "8af31e2ca44259d934cb8d89ab8c083d4b88075e4f31aaae6c0fdfcade7742f8"
+    },
+    {
+      "original": "docs/ARCHITECTURE.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/ARCHITECTURE.md",
+      "bytes": 16479,
+      "sha256": "f247d2d0fcb50699ba2010338daf2f892104254bcef2637c8c6c707a65791d2c"
+    },
+    {
+      "original": "docs/WIDGET-ACCEPTANCE.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/WIDGET-ACCEPTANCE.md",
+      "bytes": 10538,
+      "sha256": "71880e58cfda1e5fa63d209c897cbdadd975444fd86040fc5fb69d13be8d6a5f"
+    },
+    {
+      "original": "docs/PHASE-03-ACCEPTANCE.md",
+      "archive": "specs/_archive/origin-main-94288cc/docs/PHASE-03-ACCEPTANCE.md",
+      "bytes": 4142,
+      "sha256": "21cea412c17d3d501fb96240eac9ed5b40bc45c0e68286fbf86b7c863b643646"
+    }
+  ]
+}

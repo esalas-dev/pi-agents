@@ -6,6 +6,14 @@
 
 **Status**: completada según roadmap e informe de aceptación
 
+> El contrato base importado a continuación es anterior a las enmiendas padre-hijos.
+> La [spec posterior de `94288cc`](../_archive/origin-main-94288cc/specs/01-consulta-listado-espera.md)
+> y el [diseño aprobado de comunicación](../../docs/superpowers/specs/2026-10-08-comunicacion-padre-hijos-design.md)
+> precisan lectura/entrega al padre verificado; el [diseño de review nativa](../../docs/superpowers/specs/2026-10-07-aprobacion-padre-design.md)
+> documenta la autoridad delegada del padre ya implementada. No aplicar las frases
+> históricas «ninguna tool puede aprobar» a esa excepción nativa. RPC review sigue prohibido.
+> Conciliación detallada de esta feature fuera del cierre 011; no se reejecuta 001.
+
 **Input**: Migración autorizada de documentación existente a Spec Kit, sin implementación nueva.
 
 **Origen**: [documento original archivado](../_archive/pre-specify-2026-10-09/specs/01-consulta-listado-espera.md).
