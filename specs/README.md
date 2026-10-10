@@ -28,7 +28,7 @@ permitió B antes de aceptar A y aceptación conjunta; ver [conciliación](RECON
 | 00 | [Preparación arquitectónica](000-preparacion-arquitectonica/spec.md) | [plan](000-preparacion-arquitectonica/plan.md) · [tareas](000-preparacion-arquitectonica/tasks.md) | completada según el roadmap; aceptación documental contradictoria |
 | 01 | [Consulta, listado y espera](001-consulta-listado-espera/spec.md) | [plan](001-consulta-listado-espera/plan.md) · [tareas](001-consulta-listado-espera/tasks.md) | completada según roadmap e informe de aceptación |
 | 02 | [Control durable del ciclo de vida](002-control-ciclo-de-vida/spec.md) | [plan](002-control-ciclo-de-vida/plan.md) · [tareas](002-control-ciclo-de-vida/tasks.md) | completada según roadmap e informe de aceptación |
-| 03 | [Eventos y RPC versionado](003-eventos-rpc/spec.md) | [plan](003-eventos-rpc/plan.md) · [tareas](003-eventos-rpc/tasks.md) | implementada en la base 94288cc; en validación; revisión independiente NO APTO, hallazgos por resolver; aceptación TUI recibida, alcance por precisar |
+| 03 | [Eventos y RPC versionado](003-eventos-rpc/spec.md) | [plan](003-eventos-rpc/plan.md) · [tareas](003-eventos-rpc/tasks.md) | fase 03 completada e integrada en `main` (`9c87c77`/PR #13 y `54e095a`); cierre humano con límites, informe independiente posterior no recuperable y aceptación TUI faux local; ver [matriz](../docs/PHASE-03-ACCEPTANCE.md) |
 | 04 | [Resultados estructurados y gates](004-resultados-estructurados-gates/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
 | 05 | [Grupos y join durable](005-grupos-join/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
 | 06 | [Aislamiento durable con worktrees](006-aislamiento-worktrees/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
@@ -53,7 +53,8 @@ El script persiste esa selección en `.specify/feature.json`; usar otra ruta de 
 otra feature. Leer primero sus artefactos y el roadmap. `/speckit.analyze` es revisión, no ejecución;
 `/speckit.implement` exige aprobación, plan revisado y método humano elegido. No reutilizar planes
 históricos 000–003 como backlog nuevo. 003 ya tiene plan aprobado y método registrado;
-se continúa con sus gates pendientes después de cerrar 011, sin reimplementar sus entregas.
+su cierre y los fixes están integrados en `main`, sin reimplementar sus entregas. La aceptación
+conserva los límites y la excepción humana documentados; no habilita automáticamente 004–010.
 En 004–010 no existen plan ni tasks: la ausencia mantiene el bloqueo, no se rellena automáticamente.
 
 Los IDs T001… identifican **pasos** importados por feature. Los bloques T1… del texto original

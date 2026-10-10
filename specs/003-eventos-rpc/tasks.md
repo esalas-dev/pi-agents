@@ -3,10 +3,12 @@
 **Input**: [spec.md](spec.md) y [plan.md](plan.md).
 
 **Prerequisites**: Diseño/plan aprobados y método subagent-driven registrados en `94288cc`.
-Fase implementada y en validación; no reejecutar los pasos históricos. Los gates finales
-se retomaron después de 011: revisión independiente inicial NO APTO; N1–N5 revalidados y
-corregidos localmente, con nueva revisión aún pendiente. Aceptación TUI recibida, alcance por
-precisar. Ver [conciliación](../RECONCILIATION.md).
+Fase 03 completada e integrada en `main`; no reejecutar los pasos históricos. Base `94288cc`,
+fixes de cierre `9c87c77`/PR #13 e integración `54e095a`. Revisión independiente inicial NO APTO;
+N1–N5 corregidos y N6 cubierta por fixture v4 válida. Veredicto favorable posterior aceptado
+humanamente con excepción por informe no recuperable; aceptación TUI de todos los bloques guiados
+del candidato faux local, sin proveedor remoto ni migración real. Ver [matriz de cierre](../../docs/PHASE-03-ACCEPTANCE.md)
+y [conciliación](../RECONCILIATION.md).
 
 **Estado del registro histórico**: 53 pasos importados del plan anterior; 0 marcados
 entonces. Sus casillas no son el progreso vigente: `94288cc` incorpora T1–T9. Se conservan

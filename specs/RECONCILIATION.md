@@ -1,5 +1,18 @@
 # Conciliación de la migración con entregas fusionadas
 
+## Registro vigente de integración de 003
+
+La persona solicitó «integra y deja cerrado fase 03». Los fixes de `9c87c77` fueron
+fusionados por PR #13 (`7f460a4`); `54e095a` integra además `4cffcdc`. Tras fetch se
+comprobó que ambos commits de cambios son ancestros de `main` y `origin/main`.
+**Fase 03 completada e integrada en `main` con límites**, sin repetir tareas históricas,
+migrar bases reales, publicar un paquete ni habilitar 004–010. Ver [registro vigente](../docs/PHASE-03-ACCEPTANCE.md#integración-en-main--registro-vigente).
+
+Este registro sustituye las restricciones anteriores de «sin integrar» para 003.
+Las secciones siguientes conservan la cronología de la conciliación: sus afirmaciones de
+checkout sin commits/merge y gates entonces pendientes no describen el estado vigente.
+Las referencias locales `.cache/` históricas no son evidencia recuperada en este checkout.
+
 ## Base y autoridad
 
 Continuación autorizada en `.worktrees/cierre-widget-011`, rama `011-cierre-widget`,
@@ -29,7 +42,7 @@ Esta conciliación no ratifica la constitución ni concede aprobaciones nuevas.
 | Feature | Fuente posterior | Seguimiento vigente |
 | --- | --- | --- |
 | 011 | PR #12 fusiona A+B; [matriz del widget](../docs/WIDGET-ACCEPTANCE.md) registra visto bueno humano conjunto. El [plan posterior](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-08-widget-subagentes.md) registra excepción humana del 2026-10-09 para B antes de aceptar A. | Correcciones revalidadas; segunda revisión independiente APTO para solicitar aceptación humana. Guía TUI del candidato local faux aceptada humanamente el 2026-10-09; validación 011 cerrada, con límites conservados. Correcciones sin publicar/integrar; no se retira el visto bueno recibido. |
-| 003 | [Plan posterior](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) registra aprobación/método subagent-driven y entregas T1–T9. [Aceptación](../docs/PHASE-03-ACCEPTANCE.md) registra fase completada/promocionada administrativamente con límites. | Revisión independiente inicial NO APTO; N1–N5 corregidos y N6 revisada con fixture v4 válida para recuperación/replay. La persona aceptó el veredicto favorable posterior y ordenó la promoción; el informe independiente no es recuperable. Aceptación TUI humana explícita recibida, limitada al candidato faux local. No publicar/integrar ni reimplementar tareas históricas. |
+| 003 | [Plan posterior](_archive/origin-main-94288cc/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md) registra aprobación/método subagent-driven y entregas T1–T9. [Aceptación](../docs/PHASE-03-ACCEPTANCE.md) registra fase completada/promocionada administrativamente con límites. | Revisión independiente inicial NO APTO; N1–N5 corregidos y N6 revisada con fixture v4 válida para recuperación/replay. La persona aceptó el veredicto favorable posterior y ordenó la promoción; el informe independiente no es recuperable. Aceptación TUI humana explícita recibida, limitada al candidato faux local. Fixes integrados en `main` por `9c87c77`/PR #13 y `54e095a`; no publicar paquete ni reimplementar tareas históricas. |
 | 004–010 | Propuestas bloqueadas y dependencias abiertas. | Sin nuevos planes, tareas ni implementación. El widget no promociona fase 10. |
 
 Las 16 casillas de 011 se conciliaron con las **14 marcadas** en su fuente posterior:
@@ -174,6 +187,6 @@ quedó registrado con sus límites. No se alteran las 53 casillas históricas ni
   veredicto favorable posterior aceptado humanamente, pero sin informe independiente recuperable.
   La aceptación TUI propia queda limitada al candidato faux local temporal sin proveedor remoto
   ni migración real. No hereda evidencia del widget ni se presenta como evidencia independiente.
-- Sin stage, commits, push, merge, migraciones de bases reales ni cambios de settings
+- Durante aquella validación, sin stage, commits, push, merge, migraciones de bases reales ni cambios de settings
   privados/instalación del paquete Pi. La extensión Git de Spec Kit sí se instaló
   por decisión separada; [verificación](../docs/SPECKIT-GIT-VERIFICATION.md).

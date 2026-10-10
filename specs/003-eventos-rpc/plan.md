@@ -4,7 +4,7 @@
 
 **Input**: Conversión del plan existente, no planificación nueva ni ejecución.
 
-**Status**: plan aprobado y ejecutado históricamente con método subagent-driven; implementación fusionada en la base `94288cc`, fase completada y promocionada administrativamente con límites por decisión humana. No reejecutar tareas. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente, informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados en el candidato faux local temporal, sin proveedor remoto ni migración real.
+**Status**: plan aprobado y ejecutado históricamente con método subagent-driven; fase 03 completada e integrada en `main` con límites por decisión humana; base `94288cc`, fixes de cierre `9c87c77`/PR #13 e integración `54e095a`. No reejecutar tareas. Revisión independiente inicial NO APTO; N1–N5 revalidados y corregidos localmente, N6 cubierta por fixture v4 válida de recuperación/replay; veredicto favorable posterior aceptado humanamente, informe independiente no recuperable; aceptación TUI recibida para todos los bloques guiados en el candidato faux local temporal, sin proveedor remoto ni migración real.
 
 **No ejecutar por la migración.** Se conservan el estado de autorización y los gates originales;
 la aprobación de la spec no aprueba el plan ni autoriza commits, publicación o migraciones reales.
@@ -49,8 +49,8 @@ La ratificación sigue pendiente. Los gates de ejecución no se consideran verde
 | IV. Seguridad | Datos sensibles y límites de exposición preservados | Inputs hostiles, allowlists y contenido centinela |
 | V. Contratos | Servicios comunes y APIs públicas; no se agregan dependencias | Type-check, integración y degradaciones explícitas |
 
-Diseño/plan aprobados y método subagent-driven registrados; fase implementada en validación.
-No reejecutar tareas históricas. Los gates de cierre se retoman después de 011.
+Diseño/plan aprobados y método subagent-driven registrados; fase completada e integrada con
+límites documentados en [aceptación](../../docs/PHASE-03-ACCEPTANCE.md). No reejecutar tareas históricas.
 Antes de investigar o cambiar diseño se reevalúan dependencias del roadmap; antes de implementar,
 se verifica spec, plan, método y alcance humano. Los controles no aplicables se justifican; no se
 saltan fallos conocidos ni se afirma compatibilidad no probada.
