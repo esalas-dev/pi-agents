@@ -84,6 +84,54 @@ test('aprueba y consume con replay idempotente y consumidores distintos', async 
   } finally { await current.fixture.close(); }
 });
 
+test('review sin razón aprueba/rechaza con replay persistido, conflictos y autoridad humana', async () => {
+  for (const status of ['approved', 'rejected']) for (const optional of [{}, { reason: undefined }]) {
+    const current = await setup();
+    try {
+      const request = { requestId: 'optional-review', status, actor: { kind: 'human' }, ...optional };
+      const denied = await current.reviewService.decideReview('job-review', { ...request, actor: { kind: 'model', id: 'm' } });
+      assert.equal(denied.success, false); assert.equal(denied.error.code, 'INVALID_REQUEST');
+      assert.equal((await current.fixture.repository.review('job-review')).status, 'pending');
+      const first = await current.reviewService.decideReview('job-review', request);
+      assert.equal(first.success, true, JSON.stringify(first)); assert.equal(first.value.status, status);
+      assert.equal(first.value.reason, undefined); assert.equal(first.value.decidedBy, undefined);
+      const replay = await current.reviewService.decideReview('job-review', { ...request, reason: undefined });
+      assert.deepEqual(replay, first);
+      await current.fixture.reopen();
+      const reviews = createReviewService(current.fixture.repository, () => 3000);
+      assert.deepEqual(await reviews.decideReview('job-review', request), first);
+      const stored = await current.fixture.repository.review('job-review');
+      assert.equal(stored.status, status); assert.equal(stored.reason, undefined);
+      const changed = await reviews.decideReview('job-review', { ...request, reason: 'changed payload' });
+      assert.equal(changed.success, false); assert.equal(changed.error.code, 'REQUEST_ID_CONFLICT');
+      assert.equal((await current.fixture.repository.review('job-review')).status, status);
+      const results = createResultService(current.fixture.repository, createQueryService(current.fixture.repository));
+      const access = await results.getResult('job-review', { mode: 'tool', operation: 'peek', actor: { kind: 'model', id: 'm' } });
+      if (status === 'approved') { assert.equal(access.success, true); assert.equal(access.value.result.finalResponse, 'resultado completo'); }
+      else { assert.equal(access.success, false); assert.equal(access.error.code, 'RESULT_REJECTED'); }
+      assert.equal(await current.fixture.repository.consumption('job-review'), undefined);
+    } finally { await current.fixture.close(); }
+  }
+});
+
+test('omitir reason elimina la razón anterior sin relajar canonicalJson', async () => {
+  const current = await setup();
+  try {
+    const request = { requestId: 'reason-first', status: 'approved', actor: { kind: 'human', id: 'u' }, reason: 'previous reason' };
+    assert.equal((await current.reviewService.decideReview('job-review', request)).success, true);
+    const next = { requestId: 'reason-next', status: 'rejected', actor: request.actor };
+    const rejected = await current.reviewService.decideReview('job-review', next);
+    assert.equal(rejected.success, true, JSON.stringify(rejected));
+    await current.fixture.reopen();
+    const stored = await current.fixture.repository.review('job-review');
+    assert.equal(stored.status, 'rejected'); assert.equal(stored.reason, undefined);
+    const reviews = createReviewService(current.fixture.repository, () => 3000);
+    const invalid = await reviews.decideReview('job-review', { ...next, requestId: 'invalid-reason', reason: () => {} });
+    assert.equal(invalid.success, false); assert.equal(invalid.error.code, 'INVALID_REQUEST');
+    assert.equal((await current.fixture.repository.review('job-review')).status, 'rejected');
+  } finally { await current.fixture.close(); }
+});
+
 test('la admisión de un actor model crea revisión pending', async () => {
   const fixture = await makeStoreFixture({ createId: () => 'admitted-model' });
   try {
@@ -92,6 +140,43 @@ test('la admisión de un actor model crea revisión pending', async () => {
     });
     assert.equal(receipt.jobId, 'admitted-model');
     assert.equal((await fixture.repository.review(receipt.jobId)).status, 'pending');
+  } finally { await fixture.close(); }
+});
+
+test('replay de consume vuelve a comprobar revisión y no aumenta consumo tras rechazo', async () => {
+  const current = await setup({ status: 'approved' });
+  try {
+    const first = await current.resultService.consumeResult('job-review', { requestId: 'consume-revision', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' });
+    assert.equal(first.success, true);
+    await current.reviewService.decideReview('job-review', { requestId: 'review-reject-after-consume', status: 'rejected', actor: { kind: 'human', id: 'u' }, reason: 'changed' });
+    const replay = await current.resultService.consumeResult('job-review', { requestId: 'consume-revision', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' });
+    assert.equal(replay.success, false);
+    assert.equal(replay.error.code, 'RESULT_REJECTED');
+    assert.equal((await current.fixture.repository.consumption('job-review')).count, 1);
+  } finally { await current.fixture.close(); }
+});
+
+test('consume también bloquea una revisión pending sin crear consumo', async () => {
+  const current = await setup({ status: 'pending' });
+  try {
+    const denied = await current.resultService.consumeResult('job-review', { requestId: 'consume-pending', actor: { kind: 'model', id: 'm' }, consumer: 'model:m' });
+    assert.equal(denied.success, false);
+    assert.equal(denied.error.code, 'RESULT_REVIEW_REQUIRED');
+    assert.equal(await current.fixture.repository.consumption('job-review'), undefined);
+  } finally { await current.fixture.close(); }
+});
+
+test('peek usa la lectura autorizada y no consulta jobs.result sin revisión coherente', async () => {
+  const fixture = await makeStoreFixture();
+  try {
+    await fixture.seedJob(job('job-coherent'), result);
+    await seedReview(fixture, 'job-coherent', { status: 'approved' });
+    const repository = { ...fixture.repository, result: async () => { throw new Error('unrestricted result read'); } };
+    const query = createQueryService(repository);
+    const results = createResultService(repository, query);
+    const peek = await results.getResult('job-coherent', { mode: 'tool', operation: 'peek', actor: { kind: 'model', id: 'm' } });
+    assert.equal(peek.success, true);
+    assert.equal(peek.value.result.finalResponse, 'resultado completo');
   } finally { await fixture.close(); }
 });
 

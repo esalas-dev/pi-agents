@@ -1,16 +1,76 @@
-# 10 — Interfaz operativa y observabilidad humana
+# Feature Specification: Interfaz operativa y observabilidad humana
 
-## Estado y dependencias
+**Feature Branch**: `010-interfaz-operativa` (identificador documental; no se creó una rama Git)
 
-Propuesta. Última fase; depende de 01–09. La UI consume contratos existentes y no introduce semántica de negocio nueva.
+**Created**: 2026-10-09 (migración; las fechas originales se conservan en las fuentes)
 
-La [spec acotada del widget de subagentes](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md) propone dos etapas: estado/duración y actividad observada. Está pendiente de revisión humana y no implementada. No sustituye esta fase ni altera su orden: adelantar el widget requiere una excepción humana explícita registrada en el roadmap y el índice normativo.
+**Status**: propuesta bloqueada; la excepción widget A+B no habilita la fase completa
 
-## Objetivo
+**Input**: Migración autorizada de documentación existente a Spec Kit, sin implementación nueva.
+
+**Origen**: [documento original archivado](../_archive/pre-specify-2026-10-09/specs/10-interfaz-operativa.md).
+El [informe de migración](../MIGRATION.md) registra autoridad, precedencia y discrepancias.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Supervisar capacidades durables desde una TUI coherente (Priority: P1)
+
+Operar jobs, grupos, schedules y workflows sin nueva semántica de negocio ni exposición al modelo.
+
+**Why this priority**: Es el caso de uso central del alcance existente; no añade capacidades.
+
+**Independent Test**: Ejecutar los escenarios y criterios preservados en Success Criteria sobre
+fixtures controladas, incluyendo recuperación y autoridad donde corresponda. No se ejecutaron
+esas pruebas de producto durante la migración.
+
+**Acceptance Scenarios**:
+
+1. **Given** las dependencias satisfechas y el alcance autorizado, **When** la persona navega, consulta un resultado y cierra el panel,
+   **Then** las vistas reflejan estado durable y cerrar o leer no cancela ni aprueba trabajos.
+2. **Given** entradas inválidas, límites excedidos o autoridad insuficiente, **When** se solicita
+   la operación definida, **Then** se aplica el rechazo o degradación explícitos del contrato,
+   sin efectos ocultos ni exposición de contenido no autorizado.
+
+### Edge Cases
+
+Se conservan los casos de error, carreras, versiones, privacidad y recuperación del contrato
+migrado. Los límites y bloqueos del roadmap no se resuelven mediante esta conversión documental.
+
+## Alcance y controles constitucionales *(mandatory)*
+
+- **Persistencia e idempotencia**: aplicar la fuente durable, requestId y recuperación definidos en
+  los requisitos de dominio; una proyección no sustituye a SQLite.
+- **Autoridad**: ejecutar o verificar no aprueba; lectura, consumo y promoción siguen separados.
+- **Seguridad**: validar entradas/rutas y acotar exposición según el contrato; no prometer sandbox.
+- **Contratos**: usar APIs públicas y servicios comunes; no inventar capacidades de fases posteriores.
+- **Dependencias y alcance**: consultar [roadmap](../ROADMAP.md) y las exclusiones preservadas abajo.
+- **Estado de autorización**: Propuesta bloqueada. No hay plan ni tareas aprobados y no se generan en esta migración.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: El sistema DEBE reconstruir vistas desde servicios y snapshots, con carga diferida de resultados grandes.
+- **FR-002**: El sistema DEBE exigir confirmaciones proporcionales, sin aprobar al leer ni cancelar al cerrar panel o espera.
+- **FR-003**: El sistema DEBE sanitizar contenido hostil y mantener modos headless; conservar la excepción A+B como feature independiente.
+
+Los FR anteriores son el índice del alcance, no sustituyen sus reglas detalladas. Los IDs RF,
+AC y nombres de API originales se conservan para trazabilidad; no se reinterpretan como evidencia.
+
+### Key Entities
+
+- Vistas de job, grupo, schedule y workflow proyectan servicios existentes.
+- Detalle, confirmación y contenido grande son presentación; no crean autoridad ni estado de negocio.
+
+Los campos y relaciones detallados se preservan abajo; las propuestas no se consideran código local.
+
+### Requisitos de dominio preservados
+
+### Objetivo
 
 Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedules y workflows, con confirmaciones y trazabilidad adecuadas. Debe mejorar la supervisión sin ocultar estados durables ni enviar datos al modelo.
 
-## Principios
+### Principios
 
 - La UI es una proyección; nunca la fuente de verdad.
 - Todas las acciones llaman servicios de dominio usados por comandos/tools/RPC.
@@ -19,7 +79,7 @@ Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedule
 - La vista diferencia éxito técnico, gate, revisión y promoción.
 - No se usa `/agents` para evitar colisión con upstream. Comando raíz: `/subagents`.
 
-## Navegación
+### Navegación
 
 ```text
 /subagents
@@ -37,7 +97,7 @@ Ofrecer una interfaz TUI coherente para observar y operar jobs, grupos, schedule
 
 La UI debe funcionar con teclado, terminal estrecha y temas claros/oscuros. Ninguna funcionalidad esencial depende del ratón.
 
-## Vista de trabajos
+### Vista de trabajos
 
 Columnas adaptativas:
 
@@ -53,7 +113,7 @@ Columnas adaptativas:
 
 Filtros reutilizan `listJobs`. El orden y paginación son del servicio, no reimplementados en el componente.
 
-### Detalle
+#### Detalle
 
 Pestañas o secciones:
 
@@ -67,9 +127,9 @@ Pestañas o secciones:
 
 Resultados pendientes se pueden leer humanamente. Botones separados `Aprobar` y `Rechazar`; leer no aprueba.
 
-## Acciones y confirmación
+### Acciones y confirmación
 
-### Sin confirmación adicional
+#### Sin confirmación adicional
 
 - refrescar;
 - filtrar;
@@ -78,14 +138,14 @@ Resultados pendientes se pueden leer humanamente. Botones separados `Aprobar` y 
 - esperar/seguir estado;
 - volver/cerrar.
 
-### Confirmación simple
+#### Confirmación simple
 
 - pausar/reanudar job;
 - sellar grupo;
 - pausar/reanudar schedule;
 - enviar steering, mostrando que no revierte efectos previos.
 
-### Confirmación fuerte
+#### Confirmación fuerte
 
 Requiere mostrar objeto afectado y consecuencia, y escribir/seleccionar confirmación:
 
@@ -99,7 +159,7 @@ Requiere mostrar objeto afectado y consecuencia, y escribir/seleccionar confirma
 
 No se agrupan aprobación y promoción en una misma acción.
 
-## Actualización en vivo
+### Actualización en vivo
 
 - Suscripción a eventos de fase 03 para refresco eficiente.
 - Relectura durable periódica como respaldo, con intervalo adaptativo.
@@ -109,19 +169,23 @@ No se agrupan aprobación y promoción en una misma acción.
 
 Objetivo de render: no recorrer resultados completos ni transcripts en cada frame. Listados trabajan con vistas compactas. Contenido grande se carga al abrir detalle y se pagina.
 
-## Widget opcional
+### Widget opcional
 
-Después de validar la interfaz principal puede añadirse un widget compacto encima del editor:
+El widget compacto de la [spec acotada](../011-widget-subagentes/spec.md) se adelanta solo por la
+excepción humana A+B del 2026-10-08, encima del editor. No requiere completar esta interfaz ni
+habilita sus otras capacidades:
 
 ```text
-Subagentes: 2 activos · 3 en cola · 1 revisión · 1 workflow esperando aprobación
+Subagentes · 2 visibles
+| psa_7ab… reviewer     ejecutándose  42 s
+○ psa_318… tester       en cola        —
 ```
 
-Predeterminado: apagado o resumen de una línea. Se incluye un spinner para jobs activos conforme a la [spec del widget](../docs/superpowers/specs/2026-10-08-widget-subagentes-design.md#animación-de-ejecución): frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. En modo resumen hay como máximo un spinner; en filas individuales, todas comparten el mismo frame. No representa porcentaje ni prueba de avance efectivo.
+Su política de visibilidad es automática: se muestra mientras una consulta exitosa devuelva jobs no terminales visibles y se retira si una consulta exitosa no devuelve ninguno. No aparece vacío ni necesita un ajuste para activarse. Se incluye un spinner para jobs activos: frames de una columna, un único reloj compartido de 250 ms y texto de estado permanente. No representa porcentaje ni prueba de avance efectivo.
 
-Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. No se incluyen conversaciones en vivo. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
+Queued/paused y terminales no animan; datos desactualizados, ausencia de filas activas o widget retirado detienen el reloj. Los ticks no disparan consultas ni llamadas al modelo; animación y actividad comparten el presupuesto de render. `PI_AGENTS_ANIMATION=0` permitirá movimiento reducido sin perder información ni refresco. La etapa B de la spec acotada muestra solo señales técnicas allowlisted; no presenta una vista de conversación ni el transcript. El widget abre `/subagents` y no captura flechas del editor de forma invasiva.
 
-## Recursos y recuperación
+### Recursos y recuperación
 
 Vista diagnóstica:
 
@@ -137,7 +201,7 @@ Vista diagnóstica:
 
 Acciones de reparación deben ser explícitas, conservadoras y documentadas. Nunca «limpiar todo» sin listar artefactos.
 
-## Schedules
+### Schedules
 
 La UI muestra:
 
@@ -150,7 +214,7 @@ La UI muestra:
 
 Crear schedule por wizard humano valida cada paso antes del resumen final. No preselecciona `catch_up` ni frecuencias agresivas.
 
-## Workflows
+### Workflows
 
 Dos niveles:
 
@@ -159,7 +223,7 @@ Dos niveles:
 
 Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista específica con hash de artefactos y enlaces a evidencia. La UI no resume hallazgos mediante otro modelo salvo futura función explícita.
 
-## Accesibilidad y formato
+### Accesibilidad y formato
 
 - Estado no depende solo de color ni de animación; usa texto/símbolo.
 - Permite movimiento reducido con símbolos estáticos, sin destellos ni saltos de layout.
@@ -170,14 +234,14 @@ Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista e
 - Copiar secretos o resultados completos requiere acción consciente.
 - Mensajes y comandos de usuario se presentan en español; códigos de error se conservan.
 
-## Headless y compatibilidad
+### Headless y compatibilidad
 
 - La extensión sigue funcionando en `--print`, JSON y RPC sin UI interactiva.
 - `/subagents` existente conserva subcomandos.
 - `/subagents` abre panel solo cuando existe TUI; en headless devuelve ayuda textual o error estable.
 - Deshabilitar UI no deshabilita ejecución, consultas ni RPC.
 
-## Configuración propuesta
+### Configuración propuesta
 
 ```json
 {
@@ -193,7 +257,7 @@ Un step muestra sus jobs/grupo/gate y dependencias. `approval` ocupa una vista e
 
 La ubicación definitiva de configuración debe seguir convenciones de Pi y documentar precedencia global/proyecto. El proyecto solo puede influir después de confianza.
 
-## Telemetría local
+### Telemetría local
 
 Sin enviar datos externos, medir opcionalmente:
 
@@ -205,7 +269,24 @@ Sin enviar datos externos, medir opcionalmente:
 
 Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resultados.
 
-## Criterios de aceptación
+### Fuera de alcance inicial
+
+- Réplica exacta de FleetView upstream.
+- Clon invisible de conversaciones y menciones `@agente`.
+- Streaming completo de cada token.
+- Editor visual de workflows.
+- Promoción, merge, push o publicación.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: Se satisfacen todos los criterios de aceptación originales preservados a continuación,
+  con evidencia por escenario y sin convertir resultados técnicos en aprobación humana.
+- **SC-002**: Para una entrega de código, `npm run check` y `npm test` pasan; integración Pi añade
+  smoke, y cambios TUI añaden aceptación humana aplicable. Un fallo conocido no cierra el gate.
+
+### Criterios de aceptación
 
 1. Todas las vistas se reconstruyen desde servicios y snapshots.
 2. Cerrar panel o espera no cancela jobs.
@@ -219,7 +300,7 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 10. Workflows pendientes de aprobación son visibles y no avanzan solos.
 11. Animación comparte un reloj de 250 ms, no incrementa consultas y se detiene ante datos desactualizados, retirada o cierre; modo estático conserva información y no deja ticks tardíos.
 
-## Pruebas
+### Pruebas
 
 - Componentes con anchos, alturas y temas variados.
 - Navegación y foco; Escape/Ctrl+C sin cancelar job.
@@ -232,10 +313,9 @@ Estas métricas sirven para pruebas y diagnóstico, no contienen prompts ni resu
 - Frames con reloj simulado, movimiento reducido, render agrupado, ausencia de consultas por tick y limpieza de animación en reload/cambio de sesión.
 - Integración de cada capacidad 01–09.
 
-## Fuera de alcance inicial
+## Assumptions
 
-- Réplica exacta de FleetView upstream.
-- Clon invisible de conversaciones y menciones `@agente`.
-- Streaming completo de cada token.
-- Editor visual de workflows.
-- Promoción, merge, push o publicación.
+- La migración conserva alcance, IDs, decisiones y evidencia; no certifica ejecución actual.
+- La fecha de creación anterior no se infiere: el archivo conserva el documento y su cronología.
+- El estado operativo procede del roadmap y evidencia enlazada, no de frases antiguas de planificación.
+- Propuesta bloqueada. No hay plan ni tareas aprobados y no se generan en esta migración.

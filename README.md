@@ -147,6 +147,20 @@ La carpeta de estado puede contener instrucciones, respuestas, rutas, argumentos
 - Un mismo archivo SQLite debe pertenecer a un solo proceso. La separación por ID de sesión reduce el riesgo, pero no permite abrir deliberadamente la misma sesión principal en dos procesos concurrentes.
 - Pi Durable es experimental. Antes de actualizarlo hay que revisar su changelog, recompilar conceptualmente los contratos y repetir las pruebas de recuperación.
 
+## Gobernanza del desarrollo
+
+La [constitución](.specify/memory/constitution.md) consolida los límites de persistencia,
+idempotencia, autoridad humana, seguridad y contratos públicos; su ratificación está pendiente.
+El [roadmap](specs/ROADMAP.md) registra gates y excepciones de fase. Una spec aprobada no autoriza
+implementar sin plan revisado y método elegido; pruebas verdes no sustituyen aceptación humana.
+
+## Especificaciones y planificación
+
+El [índice Spec Kit](specs/README.md) enlaza las specs de fases 00–10 y el widget A+B, con planes
+y tareas donde ya existían. El [roadmap](specs/ROADMAP.md) conserva estados y gates; el
+[informe de migración](specs/MIGRATION.md) distingue fuentes canónicas, originales archivados
+y discrepancias históricas. Migrar documentos no implementa propuestas ni concede aprobación.
+
 ## Desarrollo y pruebas
 
 ```sh

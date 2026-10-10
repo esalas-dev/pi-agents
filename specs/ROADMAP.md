@@ -13,6 +13,14 @@ El roadmap no sustituye las especificaciones de fase:
 
 La estrategia es **roadmap global y plan detallado fase por fase**. No se mantiene un plan ejecutable único para todas las fases.
 
+## Organización Spec Kit
+
+Specs, planes y tareas operativos viven en `specs/<feature>/`. El [índice](README.md) permite
+seleccionarlos y el [informe de migración](MIGRATION.md) registra precedencia y discrepancias.
+Los originales archivados no son un segundo backlog. Los pasajes de baseline y planificación
+antigua que contradicen el mapa global se conservan como antecedentes, no como estado actual.
+La migración no modifica gates ni acredita nuevas pruebas o aprobaciones.
+
 ## Reglas de uso
 
 1. Una fase no comienza hasta que sus dependencias hayan superado sus gates de salida.
@@ -72,7 +80,7 @@ Evidencia del análisis inicial:
 - Pi Durable está fijado en `1.0.1` y su API es experimental;
 - el código fue documentado como validado con Pi `1.0.1`, mientras el entorno inspeccionado usa Pi `1.0.4`.
 
-Estas observaciones son históricas y no autorizan cambios de código. El baseline se creó después, con autorización humana, en `efc690ffdf15c3157eb7167a02dac12f6668843a`. Al iniciar el diseño de fase 00 se verificaron árbol limpio, `npm run check` y 9/9 pruebas. El resto de la preparación continúa sin implementar; véase la [spec de fase 00](00-preparacion-arquitectonica.md).
+Estas observaciones son históricas y no autorizan cambios de código. El baseline se creó después, con autorización humana, en `efc690ffdf15c3157eb7167a02dac12f6668843a`. Al iniciar el diseño de fase 00 se verificaron árbol limpio, `npm run check` y 9/9 pruebas. Esa observación corresponde al baseline histórico; el cierre posterior figura en el mapa global y en la [spec de fase 00](000-preparacion-arquitectonica/spec.md).
 
 ## Mapa global
 
@@ -80,19 +88,19 @@ Estas observaciones son históricas y no autorizan cambios de código. El baseli
 | ---: | --- | --- | --- | --- |
 | 00 | `completada` | Base versionada, tipada, modular y preparada para migraciones y recuperación | Base actual | Continuar con el diseño de la fase 01. |
 | 01 | `completada` | Consulta, listado, espera, resultados, revisión y consumo | 00 | Continuar con el plan de implementación de fase 02. |
-| 02 | `en validación` | Cancelación, pausa, reanudación y retry durables | 01 | Pruebas humanas aprobadas explícitamente. Revisar el informe independiente, decidir la promoción del PR #5 y revalidar main; corrección con 99/99 pruebas y host Pi 1.0.4. Mantener la pausa activa como no soportada. |
-| 03 | `bloqueada` | RPC versionado, capacidades, eventos y outbox | 01–02 | Estabilizar servicios de dominio y lifecycle de listeners. |
+| 02 | `completada` | Cancelación, pausa, reanudación y retry durables | 01 | Cierre por aprobación humana y PR #4/#5 fusionados; main `f87d77e` revalidado con 99/99 pruebas. Mantener la pausa activa como no soportada y conservar los límites de evidencia del informe de aceptación. |
+| 03 | `lista para planificar` | RPC versionado, capacidades, eventos y outbox | 01–02 | Documento escrito aprobado humanamente (`e0d0a99`, 2026-10-07). Revisar el [plan de fase 03](003-eventos-rpc/plan.md) y elegir método de ejecución; sin implementación autorizada. |
 | 04 | `bloqueada` | Resultado JSON validado y gates deterministas | 01–03 | Elegir estrategia pública de structured output y ejecutor de gates. |
 | 05 | `bloqueada` | Grupos y join durable sin síntesis automática | 01–04 | Cerrar atomicidad de membresía y predicados de éxito. |
 | 06 | `bloqueada` | Aislamiento con worktrees y ramas candidatas | 01–05 | Decidir política de hooks, firma y limpieza; el baseline Git ya existe. |
 | 07 | `bloqueada` | Steering durable, ordenado y auditable | 01–06 | Resolver steering sobre jobs pausados sin conversación activa. |
 | 08 | `bloqueada` | Scheduling por sesión con misfire y deduplicación | 01–07 | Elegir parser temporal y retención de ocurrencias. |
 | 09 | `bloqueada` | Workflows declarativos y recuperables | 01–08 | Fijar una única fuente de verdad para runs y steps. |
-| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | Estabilizar todos los servicios consumidos por la UI. |
+| 10 | `bloqueada` | TUI operativa y observabilidad humana | 01–09 | La interfaz completa sigue bloqueada; excepción limitada al widget A+B autorizada y aprobada el 2026-10-08, con ejecución Native en worktree aislado. A requiere aceptación TUI antes de iniciar B. |
 
 ## Fase 00 — Preparación arquitectónica
 
-Spec aprobada: [`00-preparacion-arquitectonica.md`](00-preparacion-arquitectonica.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
+Spec aprobada: [`00-preparacion-arquitectonica.md`](000-preparacion-arquitectonica/spec.md), aprobación humana del documento `c6fc78b` el 2026-10-06. Se eligió rediseño completo, migración humana por base con backup y compatibilidad limitada al entorno actual. El plan se ejecutó nativamente, tarea por tarea, hasta el commit `1200e33`; la aceptación TUI y la revisión independiente fueron confirmadas humanamente.
 
 ### Objetivo
 
@@ -117,13 +125,13 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 - política de versiones soportadas de Pi y Pi Durable;
 - README y arquitectura actualizados solo con comportamiento real.
 
-### Diseño implementado y verificación pendiente
+### Diseño y verificación: registro histórico
 
 - índice compacto, familias de jobs/resultados/solicitudes y metadatos de esquema;
 - conversión atómica v1 → esquema 2 mediante mantenimiento humano y backup obligatorio;
 - entorno objetivo: macOS arm64, Node `26.10.0`, Pi `1.0.4` y Pi Durable `1.0.1`, sin promesa sobre mínimos históricos;
 - TypeScript estricto con declaraciones públicas del host, sin añadir copias directas de sus peers;
-- spec y plan ejecutados; queda aceptación TUI humana, revisión independiente y completar la matriz de caídas, incluida la compatibilidad entre `pi-ai` local y el host.
+- este registro anterior al cierre dejó aceptación TUI, revisión independiente y matriz de caídas pendientes; el cierre humano posterior está registrado arriba. El informe de aceptación y README conservan discrepancias señaladas en `MIGRATION.md`; no se certifican de nuevo.
 
 ### Gate de salida
 
@@ -136,7 +144,7 @@ Preparar la base para que las fases posteriores no multipliquen rutas de transic
 
 ## Fase 01 — Consulta, listado y espera
 
-Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md).
+Spec normativa: [`01-consulta-listado-espera.md`](001-consulta-listado-espera/spec.md).
 
 ### Gate de entrada
 
@@ -144,7 +152,7 @@ Spec normativa: [`01-consulta-listado-espera.md`](01-consulta-listado-espera.md)
 - almacenamiento y ledger aprobados;
 - política de actor definida para comando, tool y futuras llamadas RPC;
 - conversión v1 → esquema 2 validada en fase 00 y ampliación esquema 2 → 3 diseñada y aprobada;
-- plan de implementación revisado en `docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md`.
+- plan de implementación revisado en `specs/001-consulta-listado-espera/plan.md`.
 
 ### Entregables
 
@@ -171,7 +179,7 @@ Todos los criterios de aceptación de la spec 01 pasan, incluida reapertura, car
 
 ## Fase 02 — Control durable del ciclo de vida
 
-Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](02-control-ciclo-de-vida.md). El spike de APIs públicas de Pi Durable `1.0.1` está cerrado: cancelación cooperativa y reconciliación están disponibles; pausa activa no está expuesta y se degrada explícitamente a `PAUSE_ACTIVE_UNSUPPORTED`.
+Spec normativa aprobada para planificación: [`02-control-ciclo-de-vida.md`](002-control-ciclo-de-vida/spec.md). El spike de APIs públicas de Pi Durable `1.0.1` está cerrado: cancelación cooperativa y reconciliación están disponibles; pausa activa no está expuesta y se degrada explícitamente a `PAUSE_ACTIVE_UNSUPPORTED`.
 
 ### Gate de entrada
 
@@ -201,9 +209,11 @@ Pi Durable `1.0.1` expone abort de submission, conversación y task, pero no una
 
 Las transiciones válidas, conflictos, abortos inseguros, retries e idempotencia pasan tras cierre y reapertura. Una capacidad degradada queda visible en documentación y RPC posterior.
 
+**Cierre registrado:** PR #4 y corrección PR #5 fusionados; `main` en `f87d77e` revalidado con `npm run check`, `npm test` (99/99) y smoke offline verdes. La persona responsable aprobó explícitamente las pruebas humanas y confirmó «PR validado». La revisión independiente se ejecutó, pero su resultado no fue recuperado por el asistente; no se afirma un veredicto favorable del informe. Véanse la decisión humana de cierre y los límites de evidencia en [`docs/PHASE-02-ACCEPTANCE.md`](../docs/PHASE-02-ACCEPTANCE.md).
+
 ## Fase 03 — Eventos y RPC versionado
 
-Spec normativa: [`03-eventos-rpc.md`](03-eventos-rpc.md).
+Índice de spec: [`03-eventos-rpc.md`](003-eventos-rpc/spec.md). Diseño conversacional y [documento escrito de diseño](003-eventos-rpc/spec.md) aprobados humanamente el 2026-10-07; habilitada la planificación, no la ejecución. Fase aún no implementada. [Plan de implementación](003-eventos-rpc/plan.md) redactado y revisado inline, pendiente de revisión humana y método de ejecución. Se aprobó durante planificación un máximo de 256 bytes UTF-8 para requestId/callerId/sessionId; correlationId conserva 128 caracteres.
 
 ### Gate de entrada
 
@@ -221,11 +231,14 @@ Spec normativa: [`03-eventos-rpc.md`](03-eventos-rpc.md).
 - eventos sin tareas, resultados, stdout ni secretos;
 - cierre de listeners y rechazo durante shutdown.
 
-### Decisiones abiertas
+### Decisiones acordadas en el diseño
 
-- representación escalable del outbox y retención de eventos recientes;
-- canonización de payloads para idempotencia RPC;
-- política de callers confiables, reconociendo que `pi.events` no autentica identidad.
+- RPC fino para extensiones locales de confianza; actor `extension` y caller declarativo, sin autenticación ni revisión RPC habilitable por allowlist;
+- outbox con documentos por evento e índices paginados, atomicidad obligatoria con transiciones y secuencia por sesión;
+- pendientes sin descarte; ventana indexada de los últimos 1000 emitidos, sin prometer limpieza física del histórico;
+- ledger existente sin TTL y canonización de dominio; `correlationId` separado del `requestId` durable;
+- cancelación activa con confirmación humana TUI y protección frente a carreras; migración humana 4 → 5 con backup;
+- documento escrito aprobado; pendientes revisión del plan y elección del método de ejecución.
 
 ### Gate de salida
 
@@ -233,7 +246,7 @@ Transición y creación de evento ocurren en el mismo commit Durable. Las prueba
 
 ## Fase 04 — Resultados estructurados y gates
 
-Spec normativa: [`04-resultados-estructurados-gates.md`](04-resultados-estructurados-gates.md).
+Spec normativa: [`04-resultados-estructurados-gates.md`](004-resultados-estructurados-gates/spec.md).
 
 ### Gate de entrada
 
@@ -261,7 +274,7 @@ Schemas, corrección, gates, timeouts, señales, caídas y worktree simulado cum
 
 ## Fase 05 — Grupos y join
 
-Spec normativa: [`05-grupos-join.md`](05-grupos-join.md).
+Spec normativa: [`05-grupos-join.md`](005-grupos-join/spec.md).
 
 ### Gate de entrada
 
@@ -285,7 +298,7 @@ La matriz de condiciones, carreras, deadlines vencidos durante cierre, límites 
 
 ## Fase 06 — Aislamiento con worktrees
 
-Spec normativa: [`06-aislamiento-worktrees.md`](06-aislamiento-worktrees.md).
+Spec normativa: [`06-aislamiento-worktrees.md`](006-aislamiento-worktrees/spec.md).
 
 ### Gate de entrada
 
@@ -318,7 +331,7 @@ Las pruebas cubren repos sin Git o HEAD, checkout sucio, fallos por fase, preser
 
 ## Fase 07 — Steering durable
 
-Spec normativa: [`07-steering-durable.md`](07-steering-durable.md).
+Spec normativa: [`07-steering-durable.md`](007-steering-durable/spec.md).
 
 ### Gate de entrada
 
@@ -346,7 +359,7 @@ Orden, deduplicación, aplicación en límite seguro, cierre en cada estado, vis
 
 ## Fase 08 — Scheduling durable
 
-Spec normativa: [`08-scheduling-durable.md`](08-scheduling-durable.md).
+Spec normativa: [`08-scheduling-durable.md`](008-scheduling-durable/spec.md).
 
 ### Gate de entrada
 
@@ -371,7 +384,7 @@ Cron, DST, zonas, ausencias largas, caídas en reserva/creación/enlace y operac
 
 ## Fase 09 — Workflows declarativos
 
-Spec normativa: [`09-workflows-declarativos.md`](09-workflows-declarativos.md).
+Spec normativa: [`09-workflows-declarativos.md`](009-workflows-declarativos/spec.md).
 
 ### Gate de entrada
 
@@ -404,7 +417,7 @@ Validación, recuperación por step, fan-out, approvals, cancelación y ataques 
 
 ## Fase 10 — Interfaz operativa
 
-Spec normativa: [`10-interfaz-operativa.md`](10-interfaz-operativa.md).
+Spec normativa: [`10-interfaz-operativa.md`](010-interfaz-operativa/spec.md).
 
 ### Gate de entrada
 
@@ -412,6 +425,12 @@ Spec normativa: [`10-interfaz-operativa.md`](10-interfaz-operativa.md).
 - servicios de dominio y vistas compactas estables;
 - contratos headless comprobados;
 - APIs públicas de TUI y keybindings confirmadas.
+
+### Excepción acotada: widget de subagentes A+B
+
+Autorización humana registrada el 2026-10-08 en este roadmap y en [`specs/README.md`](README.md): adelantar solo las etapas A y B de la [spec del widget](011-widget-subagentes/spec.md) y su [plan](011-widget-subagentes/plan.md). Ambos documentos fueron aprobados y se eligió Native; no habilita el panel ni la fase 10 completa. La aceptación interactiva de A precede a B.
+
+Validación de APIs en el host instalado: Pi **1.1.0**, Pi Durable **1.0.1**. Los tipos públicos exponen `ctx.ui.setWidget()`; un smoke aislado de Harness abrió una conversación, adquirió `LiveDoc` con `watchDoc()`, inició y detuvo la observación sin invocar un modelo. No se ha probado interacción TUI humana ni compatibilidad con el host objetivo del README, Pi **1.0.4**. Baseline: `npm run check` pasa; `npm test` da 98/99 porque `tests/host-resolution.test.mjs` exige 1.0.4 y el host instalado es 1.1.0. El usuario autorizó continuar en 1.1.0; no se altera ni se oculta la prueba, y no se afirma compatibilidad 1.0.4. La aceptación TUI de A sigue pendiente.
 
 ### Entregables
 
@@ -486,7 +505,7 @@ Componentes, navegación, contenido hostil, resultados grandes, eventos duplicad
 
 | ID | Decisión | Afecta a | Criterio de cierre |
 | --- | --- | --- | --- |
-| RD-001 | Partición elegida en el [diseño 00](00-preparacion-arquitectonica.md#modelo-persistente): índice y familias separadas | 00–10 | Spec aprobada; pendiente de evidencia de consultas compactas/migración con payload grande. |
+| RD-001 | Partición elegida en el [diseño 00](000-preparacion-arquitectonica/spec.md#modelo-persistente): índice y familias separadas | 00–10 | Spec aprobada; pendiente de evidencia de consultas compactas/migración con payload grande. |
 | RD-002 | Entorno actual elegido; no preservar mínimos históricos como promesa | 00–10 | Spec aprobada; pendiente de type-check/smoke con Node `26.10.0`, Pi `1.0.4` y Durable `1.0.1`. |
 | RD-003 | Semántica de pausa activa | 02, 07, 09, 10 | API pública confirmada o degradación estable documentada. |
 | RD-004 | Estrategia de structured output | 04, 05, 09 | Spike público y corpus de validación aprobados. |

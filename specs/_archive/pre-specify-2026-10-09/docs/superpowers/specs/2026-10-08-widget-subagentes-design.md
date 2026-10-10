@@ -2,11 +2,11 @@
 
 ## Estado y autoridad del documento
 
-**Propuesta escrita pendiente de revisión humana.** Fecha de redacción: 2026-10-08, fecha local del entorno. El usuario eligió visualizar dentro de Pi y solicitó una spec de la propuesta analizada. Esa solicitud autoriza redactar este documento, no implementar, instalar dependencias ni modificar almacenamiento. Durante la revisión el usuario solicitó incluir animación; se incorpora un spinner desde la etapa A. El documento completo sigue pendiente de aprobación.
+**Spec y plan aprobados humanamente el 2026-10-08; método de ejecución: Native.** Fecha de redacción: 2026-10-08, fecha local del entorno. El usuario eligió visualizar dentro de Pi, autorizó adelantar A+B como excepción y aprobó ambos documentos antes de implementar. Durante la revisión solicitó incluir animación; se incorpora un spinner desde A.
 
 Esta spec define una entrega acotada de observabilidad en dos etapas. No sustituye la interfaz operativa completa de [fase 10](../../../specs/10-interfaz-operativa.md), ni da por implementados los eventos y RPC de [fase 03](2026-10-07-fase-03-eventos-rpc-design.md).
 
-El [roadmap](../../../specs/ROADMAP.md) y el [índice normativo](../../../specs/README.md) mantienen la secuencia vigente: fase 10 depende de 01–09 y su widget es posterior a la interfaz principal. **Adelantar este widget requiere una excepción humana explícita y su registro en esos documentos antes de planificarlo.** Aprobar únicamente el contenido técnico no cambia ese orden. Mientras no exista excepción, esta spec puede conservarse para su integración en fase 10.
+El [roadmap](../../../specs/ROADMAP.md) y el [índice normativo](../../../specs/README.md) conservan la dependencia de fase 10 respecto de 01–09 para la interfaz operativa completa. El 2026-10-08 el usuario autorizó una excepción limitada a las etapas A y B de este widget y aprobó esta spec y su plan. No adelanta el resto de fase 10.
 
 Base inspeccionada: HEAD `e0d0a990038ab41e3826f5b4031e8a2f663817d7`, con cambios locales preexistentes; no se considera un checkout limpio ni una nueva aceptación del runtime. Pi instalado: `1.1.0`; Pi Durable local: `1.0.1`; Node observado durante el análisis: `26.10.0`. El README mantiene Pi `1.0.4` como host objetivo. No se amplía la compatibilidad declarada mediante este documento.
 
@@ -54,7 +54,7 @@ Panel interactivo, nuevas acciones de control, configuración persistente, nuevo
 
 No se añade una dependencia runtime, migración de SQLite ni cambio de los estados públicos para ninguna etapa.
 
-Para esta entrega acotada se propone montaje automático solo cuando existen jobs visibles, sin configuración persistente adicional. El valor predeterminado apagado/resumen propuesto en fase 10 no cambia por redactar esta spec; al integrar ambas propuestas deberá aprobarse y documentarse la política de visibilidad definitiva.
+Política de visibilidad común con fase 10: montar el widget automáticamente cuando una consulta exitosa devuelva al menos un job no terminal visible y retirarlo cuando una consulta exitosa no devuelva ninguno. No se muestra un widget vacío ni se añade configuración persistente para activarlo o elegir resumen.
 
 ## 3. Presentación y selección de filas
 
@@ -243,7 +243,7 @@ No cambiar manifest, concurrencia, políticas de control, migraciones, ledger, o
 | AC-W-15 | B | Máximo 4 observadores; actividad y animación comparten el presupuesto de render de 250 ms; render no consulta SQLite ni recorre transcript |
 | AC-W-16 | B | Estado durable terminal prevalece sobre actividad tardía; retirar UI/observadores no aborta ni cancela un job |
 | AC-W-17 | Ambas | npm run check y npm test verdes, smoke de carga y verificación TUI humana documentados para cada etapa entregada |
-| AC-W-18 | Ambas | Entorno objetivo comprobado y límites experimentales registrados; no se infiere compatibilidad de 1.0.4 desde inspección de 1.1.0 |
+| AC-W-18 | Ambas | Validación contra Pi instalado 1.1.0 y Pi Durable 1.0.1 documentada; límites registrados y sin inferir compatibilidad con Pi 1.0.4 |
 | AC-W-19 | A | Frames de una columna en ciclo de 250 ms, un solo reloj para hasta 4 filas; ticks no aumentan consultas, observadores ni llamadas al modelo |
 | AC-W-20 | A | Queued/paused, datos desactualizados y widget vacío no animan; running/cancelling frescos sí; detener/reanudar no altera estados ni layout |
 | AC-W-21 | Ambas | PI_AGENTS_ANIMATION=0 mantiene información y refresco sin reloj continuo de animación; cleanup deja cero ticks tardíos y coalescing respeta 4 Hz |
@@ -269,4 +269,4 @@ Los enlaces upstream usan main y pueden cambiar; no se identificó un commit ups
 
 El análisis ejecutó un self-check de imports para `watchEvents`, `Harness.open`, `truncateToWidth` y `visibleWidth` en Node `26.10.0`/Pi `1.1.0`. Una primera comprobación falló porque trató la fábrica `Harness` como clase; tras inspeccionar su export, la comprobación corregida pasó. La elección de `LiveDoc` se basa en exports y declaraciones públicas inspeccionados durante la redacción, no en una prueba TUI ni de observación real del widget.
 
-Antes de planificar: revisión humana de esta spec, decisión explícita sobre su posición en el roadmap y spike de las APIs necesarias en el host objetivo sin consumir un modelo real cuando baste un proveedor de pruebas. Después, redactar un plan por etapa que requiera revisión y elección del método de ejecución. Ninguna aprobación de la spec autoriza implementar B, alterar otras fases o actualizar dependencias implícitamente.
+El usuario aprobó expresamente la spec y el plan A+B y eligió ejecución Native el 2026-10-08. La implementación puede comenzar según el plan y sus gates; la excepción de roadmap ya está registrada. Las APIs públicas de TUI y `LiveDoc.watchDoc()` se comprobaron contra Pi instalado 1.1.0 y Pi Durable 1.0.1 mediante inspección de contratos y smoke sin modelo; esto no certifica TUI interactiva ni compatibilidad con el host objetivo Pi 1.0.4. Mantener ese límite visible y no afirmar compatibilidad no probada. No se alteran otras fases ni se actualizan dependencias implícitamente.

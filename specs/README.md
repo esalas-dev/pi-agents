@@ -2,39 +2,61 @@
 
 ## Estado y propósito
 
-Este directorio describe una evolución **propuesta y aún no implementada** de la extensión durable local. Las especificaciones no describen funciones disponibles hoy ni autorizan por sí solas cambios de código.
+Este directorio usa la estructura de Spec Kit: `specs/<feature>/spec.md`, y `plan.md`/`tasks.md`
+solo donde ya existía planificación. Incluye fases documentadas como completadas y propuestas
+bloqueadas; una spec no implica disponibilidad en runtime ni autorización para implementarla.
+
+La [constitución](../.specify/memory/constitution.md) consolida reglas transversales y mantiene
+ratificación pendiente. El [informe de migración](MIGRATION.md) documenta fuentes, discrepancias
+y casillas importadas; los [originales](_archive/pre-specify-2026-10-09/ARCHIVE.md) son históricos.
 
 ## Roadmap operativo
 
-El seguimiento global de fases, dependencias, bloqueos, gates y decisiones abiertas vive en [`ROADMAP.md`](ROADMAP.md). Este índice y las especificaciones definen el alcance normativo; el roadmap registra cuándo una fase está realmente lista para planificarse o completada.
-
-La base existente permanece como punto de partida:
-
-- un trabajo ejecuta un agente y una tarea;
-- la ejecución ocurre en una conversación Pi Durable `ownerless`;
-- `JobsDoc` y las conversaciones se almacenan en SQLite por sesión principal;
-- `queued`, `provisioning` y `running` sobreviven al cierre y se reconcilian al reabrir;
-- solo se admiten `read`, `write`, `edit` y `bash`;
-- las notificaciones de finalización no se envían automáticamente al modelo principal;
-- una autoridad distinta del ejecutor decide si acepta o promueve sus resultados.
+[ROADMAP.md](ROADMAP.md) conserva la secuencia, dependencias, gates, excepciones y evidencia.
+README y arquitectura describen comportamiento implementado; las specs definen contratos de fase.
+Esta migración no actualiza resultados de pruebas, estados de entrega ni aceptación humana.
 
 ## Secuencia obligatoria
 
-Las fases deben diseñarse, implementarse y validarse en este orden. La [spec de fase 00](00-preparacion-arquitectonica.md), aprobada y aún no implementada, diseña la preparación de la base técnica antes de ejecutar las especificaciones funcionales. Su [plan de implementación](../docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md) requiere revisión y elección del método de ejecución. Una fase no debe depender de contratos definidos únicamente en una fase posterior.
+Los identificadores 000–010 conservan los números de fase 00–10; 011 identifica el widget A+B,
+**no una fase 11**. La excepción humana del 2026-10-08 adelanta solo el widget, no la interfaz
+completa ni las capacidades de fases posteriores. A requiere aceptación antes de B.
 
-| Orden | Especificación | Resultado principal | Depende de |
-|---:|---|---|---|
-| 00 | [Preparación arquitectónica](00-preparacion-arquitectonica.md) | Rediseñar y tipar la base; migrar almacenamiento con autorización y verificar recuperación | Baseline `efc690f` |
-| 01 | [Consulta, listado y espera](01-consulta-listado-espera.md) | Consultar trabajos y resultados con contratos comunes | 00 |
-| 02 | [Control del ciclo de vida](02-control-ciclo-de-vida.md) | Cancelar, pausar, reanudar y reintentar | 01 |
-| 03 | [Eventos y RPC](03-eventos-rpc.md) | Integración versionada con otras extensiones | 01–02 |
-| 04 | [Resultados estructurados y gates](04-resultados-estructurados-gates.md) | Validar salidas y verificaciones deterministas | 01–03 |
-| 05 | [Grupos y join](05-grupos-join.md) | Coordinar conjuntos sin sintetizarlos automáticamente | 01–04 |
-| 06 | [Aislamiento con worktrees](06-aislamiento-worktrees.md) | Separar cambios y producir ramas candidatas | 01–05 |
-| 07 | [Steering durable](07-steering-durable.md) | Redirigir trabajos activos con auditoría y recuperación | 01–06 |
-| 08 | [Scheduling durable](08-scheduling-durable.md) | Crear ejecuciones programadas sin duplicarlas | 01–07 |
-| 09 | [Workflows declarativos](09-workflows-declarativos.md) | Componer agentes, gates, joins y aprobaciones | 01–08 |
-| 10 | [Interfaz operativa](10-interfaz-operativa.md) | Operar las capacidades anteriores desde una UI coherente | 01–09 |
+| Fase/entrega | Spec canónica | Planificación existente | Estado documental |
+| --- | --- | --- | --- |
+| 00 | [Preparación arquitectónica](000-preparacion-arquitectonica/spec.md) | [plan](000-preparacion-arquitectonica/plan.md) · [tareas](000-preparacion-arquitectonica/tasks.md) | completada según el roadmap; aceptación documental contradictoria |
+| 01 | [Consulta, listado y espera](001-consulta-listado-espera/spec.md) | [plan](001-consulta-listado-espera/plan.md) · [tareas](001-consulta-listado-espera/tasks.md) | completada según roadmap e informe de aceptación |
+| 02 | [Control durable del ciclo de vida](002-control-ciclo-de-vida/spec.md) | [plan](002-control-ciclo-de-vida/plan.md) · [tareas](002-control-ciclo-de-vida/tasks.md) | completada según roadmap e informe de aceptación |
+| 03 | [Eventos y RPC versionado](003-eventos-rpc/spec.md) | [plan](003-eventos-rpc/plan.md) · [tareas](003-eventos-rpc/tasks.md) | lista para planificar; plan pendiente de revisión y método |
+| 04 | [Resultados estructurados y gates](004-resultados-estructurados-gates/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
+| 05 | [Grupos y join durable](005-grupos-join/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
+| 06 | [Aislamiento durable con worktrees](006-aislamiento-worktrees/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; sin plan aprobado |
+| 07 | [Steering durable y auditable](007-steering-durable/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; elegibilidad de paused pendiente |
+| 08 | [Scheduling durable](008-scheduling-durable/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; parser y políticas pendientes |
+| 09 | [Workflows declarativos y recuperables](009-workflows-declarativos/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; scheduler y decisiones de alcance pendientes |
+| 10 | [Interfaz operativa y observabilidad humana](010-interfaz-operativa/spec.md) | Sin plan/tareas; bloqueada | propuesta bloqueada; la excepción widget A+B no habilita la fase completa |
+| A+B | [Widget de subagentes A+B](011-widget-subagentes/spec.md) | [plan](011-widget-subagentes/plan.md) · [tareas](011-widget-subagentes/tasks.md) | spec y plan aprobados; ejecución Native; aceptación A/B pendiente según fuentes |
+
+## Uso con Spec Kit
+
+Spec Kit 0.11.9 resuelve la feature mediante `SPECIFY_FEATURE_DIRECTORY` o
+`.specify/feature.json`, no por la rama Git. La migración no selecciona una feature por defecto,
+no crea ramas y no regenera contratos aprobados. Para seleccionar **fase 03 para análisis**:
+
+```sh
+SPECIFY_FEATURE_DIRECTORY=specs/003-eventos-rpc \
+  .specify/scripts/bash/check-prerequisites.sh --json --paths-only
+```
+
+El script persiste esa selección en `.specify/feature.json`; usar otra ruta de la tabla para
+otra feature. Leer primero sus artefactos y el roadmap. `/speckit.analyze` es revisión, no ejecución;
+`/speckit.implement` exige aprobación, plan revisado y método humano elegido. No reutilizar planes
+históricos 000–002 como backlog nuevo ni ejecutar tareas de 003 antes de su autorización.
+En 004–010 no existen plan ni tasks: la ausencia mantiene el bloqueo, no se rellena automáticamente.
+
+Los IDs T001… identifican **pasos** importados por feature. Los bloques T1… del texto original
+conservan su significado mediante las tablas de trazabilidad. Las casillas de 001–002 no se
+rellenaron a partir de la palabra «completada»; deben reconciliarse antes de reutilizar el registro.
 
 ## Principios transversales
 
@@ -61,7 +83,7 @@ Las consultas desde tools respetarán la política de exposición definida en la
 
 ### Compatibilidad y migraciones
 
-`JobsDoc` tiene actualmente versión 1. La fase 00 propone convertirlo al esquema global 2 con documentos separados; aún no está implementado. La fase 01 ampliará ese esquema, sin duplicar la conversión estructural. Cada cambio de forma persistida debe incluir:
+La evolución de esquemas 1 → 2 → 3 → 4 y el comportamiento implementado se documentan en `README.md` y `docs/ARCHITECTURE.md`. Las specs posteriores describen cambios propuestos, no el esquema actual. La migración documental no abre ni inspecciona bases reales. Cada cambio de forma persistida debe incluir:
 
 1. nueva versión del documento;
 2. migración determinista desde todas las versiones soportadas;

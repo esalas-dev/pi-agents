@@ -14,6 +14,7 @@ export async function makeStoreFixture({ createId = (() => `psa_${Math.random().
   let storage;
   let session;
   let repository;
+  let failNextCommit = false;
   const open = async () => {
     storage = await openNodeSqliteStorage(database);
     const observed = new Proxy(storage, {
@@ -22,6 +23,13 @@ export async function makeStoreFixture({ createId = (() => `psa_${Math.random().
         if (property === 'document' || property === 'findDocument') return async (...args) => {
           const token = args[0];
           readKinds.push(token?.definition?.kind);
+          return value.apply(target, args);
+        };
+        if (property === 'commit') return async (...args) => {
+          if (failNextCommit) {
+            failNextCommit = false;
+            throw new Error('injected commit failure after transaction staging');
+          }
           return value.apply(target, args);
         };
         return typeof value === 'function' ? value.bind(target) : value;
@@ -51,5 +59,6 @@ export async function makeStoreFixture({ createId = (() => `psa_${Math.random().
     }, context);
   };
   const seedRequest = async (key, record) => session.commit(async tx => { const cell = await tx.doc(RequestLedgerDocFamily, key, record); cell.record = structuredClone(record); }, context);
-  return { database, session, get repository() { return repository; }, close, reopen, readKinds, seedJob, seedRequest };
+  return { database, session, get repository() { return repository; }, close, reopen, readKinds, seedJob, seedRequest,
+    failNextCommitAfterStaging() { failNextCommit = true; } };
 }

@@ -2,3 +2,7 @@ node_modules
 .DS_Store
 .worktrees/
 .cache/pi-agents/
+.pi/*
+!.pi/prompts/
+.pi/prompts/*
+!.pi/prompts/speckit.*.md
