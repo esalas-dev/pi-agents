@@ -1,0 +1,578 @@
+{
+  "formatVersion": 1,
+  "date": "2026-10-09",
+  "archive": "specs/_archive/pre-specify-2026-10-09",
+  "scope": "fases 00–10 y widget A+B; históricos .superpowers excluidos",
+  "sources": [
+    {
+      "original": "specs/00-preparacion-arquitectonica.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/00-preparacion-arquitectonica.md",
+      "sha256": "b17f789b50cbc96a84de76f479336d0203df5258c4e71a0f04103dae0dc54eb6",
+      "bytes": 30205,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md",
+      "sha256": "fa98b0a12da379a19e83384a0dc1c0fd727adc080f2a44c8606091db1f703b26",
+      "bytes": 44139,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/01-consulta-listado-espera.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/01-consulta-listado-espera.md",
+      "sha256": "e501223e361a06973fcd6d58c2704b30c16c735739015307108693ff76972439",
+      "bytes": 10618,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md",
+      "sha256": "6a5004b7a9a5937942ecca25dab8f812d1671eaae45e7b039674ef3af332de68",
+      "bytes": 22665,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/02-control-ciclo-de-vida.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/02-control-ciclo-de-vida.md",
+      "sha256": "53512ebc5a6927ad39cd30458af8ed0a0b840d9d922c4810bcc5345a488853cc",
+      "bytes": 9593,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-07-fase-02-control-ciclo-vida.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/plans/2026-10-07-fase-02-control-ciclo-vida.md",
+      "sha256": "3e3d5bd3b8ff8b805ebf9644ac9b20bfa270cd7f3127d83b5f41b814065f8bda",
+      "bytes": 19501,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/03-eventos-rpc.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/03-eventos-rpc.md",
+      "sha256": "369cd158d6d13f95615978ae4c308c9f3d9ea9d800ccc8937960c21b9d5d010f",
+      "bytes": 7562,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md",
+      "sha256": "3651caea387b51451aa0b1f226967239931d066ec8f1c9503e89502abb5d03ac",
+      "bytes": 31257,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md",
+      "sha256": "aed665664fc3d67f39426f732af0b3c4e377d57bc8d170cf218b3cce3910ca4e",
+      "bytes": 42404,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/04-resultados-estructurados-gates.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/04-resultados-estructurados-gates.md",
+      "sha256": "c1842d7d8bc5998ebc6a3b7a0fdaf7ae4b37a5d3dd6512b3aedfb6536aa1d2f0",
+      "bytes": 7469,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/05-grupos-join.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/05-grupos-join.md",
+      "sha256": "25c0607c17fcb466b40126b19bbea2c24fba2573585095a86d866f7bd871f333",
+      "bytes": 7114,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/06-aislamiento-worktrees.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/06-aislamiento-worktrees.md",
+      "sha256": "fd7652891fb834aaa07c693080224da846eea949f07bba48d984791357b3efac",
+      "bytes": 7888,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/07-steering-durable.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/07-steering-durable.md",
+      "sha256": "504f2c3ea94c9ab6cec210e46eebad906d0d963ee014cfb313d36f7471832b83",
+      "bytes": 6327,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/08-scheduling-durable.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/08-scheduling-durable.md",
+      "sha256": "a7645fc4eac9dfba4cb2e2af08adcb8b36288b9ce2edeffdb591216771281fd0",
+      "bytes": 7054,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/09-workflows-declarativos.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/09-workflows-declarativos.md",
+      "sha256": "b63396c1bb587264447c1083152600ace5310042e2e8ef1e303a9f61636395a0",
+      "bytes": 8028,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/10-interfaz-operativa.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/10-interfaz-operativa.md",
+      "sha256": "72f8602e95c7a63b37666b9468b569596d1f7ce4ef0e9305f7c5fa3e5d215380",
+      "bytes": 9225,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/specs/2026-10-08-widget-subagentes-design.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/specs/2026-10-08-widget-subagentes-design.md",
+      "sha256": "e04c46cf18af17637868c580edda8d09bea2041440f0a81eb854aebaaa18056e",
+      "bytes": 29336,
+      "kind": "migrated"
+    },
+    {
+      "original": "docs/superpowers/plans/2026-10-08-widget-subagentes.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/superpowers/plans/2026-10-08-widget-subagentes.md",
+      "sha256": "1981c0a51ebbf47037aa8fcc6532c29c49d672cd8f5765b1ccb0e47ad2f4440d",
+      "bytes": 13785,
+      "kind": "migrated"
+    },
+    {
+      "original": "specs/README.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/README.md",
+      "sha256": "2743456f30fbb994116a2550702ad6be7bdbe4fe48d21b54d591ca9436ee0c68",
+      "bytes": 8510,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "specs/ROADMAP.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/specs/ROADMAP.md",
+      "sha256": "8b55e33e94c2106e9c5ad04a7ca86b92e3c372aec543ddc487f328327f808b72",
+      "bytes": 29219,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "README.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/README.md",
+      "sha256": "7ae24313acc271305243bf2d7cb09ffc66af003a71bc21aeab60a1a36fb8b451",
+      "bytes": 10665,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "AGENTS.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/AGENTS.md",
+      "sha256": "9041f2197d98487df9c45174f1ea0cd8152aad175e3e3d2bf4a44ae253b43989",
+      "bytes": 577,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "docs/ARCHITECTURE.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/ARCHITECTURE.md",
+      "sha256": "2d0283fe345a7f0ccb7e3ad4ea4c8baffb53ef42cbf57b764af3a3d004991f3f",
+      "bytes": 9805,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "docs/PHASE-00-ACCEPTANCE.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/PHASE-00-ACCEPTANCE.md",
+      "sha256": "6dfed2a3cb3e103d3554d2b47f89d641743457eeab8fade18eb5a4fc75836342",
+      "bytes": 3261,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "docs/PHASE-01-ACCEPTANCE.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/PHASE-01-ACCEPTANCE.md",
+      "sha256": "31813af926378b2231d6c4bfd52a03cf166de1d28be6dc2a0de48e17bd2b7ec5",
+      "bytes": 4111,
+      "kind": "context-snapshot"
+    },
+    {
+      "original": "docs/PHASE-02-ACCEPTANCE.md",
+      "archive": "specs/_archive/pre-specify-2026-10-09/docs/PHASE-02-ACCEPTANCE.md",
+      "sha256": "7132450c732d7637fb2509705d398025f9631fb57c0938d4f1a615daaecffc9f",
+      "bytes": 8713,
+      "kind": "context-snapshot"
+    }
+  ],
+  "features": [
+    {
+      "feature": "000-preparacion-arquitectonica",
+      "specSource": "specs/00-preparacion-arquitectonica.md",
+      "planSource": "docs/superpowers/plans/2026-10-06-fase-00-preparacion-arquitectonica.md",
+      "status": "completada según el roadmap; aceptación documental contradictoria",
+      "tasks": 71,
+      "done": 71,
+      "blocks": [
+        {
+          "legacy": 1,
+          "title": "Congelar v1 y caracterizar el contrato existente",
+          "first": 1,
+          "last": 5,
+          "story": "US1"
+        },
+        {
+          "legacy": 2,
+          "title": "Type-check real y grafo de módulos comprobable",
+          "first": 6,
+          "last": 12,
+          "story": "US1"
+        },
+        {
+          "legacy": 3,
+          "title": "Contratos de dominio, errores y canonización",
+          "first": 13,
+          "last": 17,
+          "story": "US1"
+        },
+        {
+          "legacy": 4,
+          "title": "Documentos separados y repositorio transaccional",
+          "first": 18,
+          "last": 23,
+          "story": "US1"
+        },
+        {
+          "legacy": 5,
+          "title": "Admisión idempotente y servicios de consulta actuales",
+          "first": 24,
+          "last": 29,
+          "story": "US1"
+        },
+        {
+          "legacy": 6,
+          "title": "Propiedad, inspección segura y backup SQLite",
+          "first": 30,
+          "last": 36,
+          "story": "US1"
+        },
+        {
+          "legacy": 7,
+          "title": "Conversión v1 autorizada y atómica",
+          "first": 37,
+          "last": 43,
+          "story": "US1"
+        },
+        {
+          "legacy": 8,
+          "title": "Ejecución Durable y coordinador recuperable",
+          "first": 44,
+          "last": 49,
+          "story": "US1"
+        },
+        {
+          "legacy": 9,
+          "title": "Runtime por sesión y ownership de recursos",
+          "first": 50,
+          "last": 55,
+          "story": "US1"
+        },
+        {
+          "legacy": 10,
+          "title": "Adaptadores Pi, mantenimiento TUI y sustitución del monolito",
+          "first": 56,
+          "last": 63,
+          "story": "US1"
+        },
+        {
+          "legacy": 11,
+          "title": "Caídas reales, aceptación y documentación de operación",
+          "first": 64,
+          "last": 71,
+          "story": "US1"
+        }
+      ]
+    },
+    {
+      "feature": "001-consulta-listado-espera",
+      "specSource": "specs/01-consulta-listado-espera.md",
+      "planSource": "docs/superpowers/plans/2026-10-06-fase-01-consulta-listado-espera.md",
+      "status": "completada según roadmap e informe de aceptación",
+      "tasks": 48,
+      "done": 0,
+      "blocks": [
+        {
+          "legacy": 1,
+          "title": "Extender contratos y documentos al esquema 3",
+          "first": 1,
+          "last": 5,
+          "story": "US1"
+        },
+        {
+          "legacy": 2,
+          "title": "Implementar vistas, filtros y paginación estable",
+          "first": 6,
+          "last": 10,
+          "story": "US1"
+        },
+        {
+          "legacy": 3,
+          "title": "Implementar espera durable y cancelable",
+          "first": 11,
+          "last": 15,
+          "story": "US1"
+        },
+        {
+          "legacy": 4,
+          "title": "Implementar resultado, revisión y consumo idempotente",
+          "first": 16,
+          "last": 20,
+          "story": "US1"
+        },
+        {
+          "legacy": 5,
+          "title": "Migrar esquema 2 a esquema 3",
+          "first": 21,
+          "last": 25,
+          "story": "US1"
+        },
+        {
+          "legacy": 6,
+          "title": "Ampliar parser y presentación de comandos",
+          "first": 26,
+          "last": 30,
+          "story": "US1"
+        },
+        {
+          "legacy": 7,
+          "title": "Registrar servicios de consulta en Pi",
+          "first": 31,
+          "last": 35,
+          "story": "US1"
+        },
+        {
+          "legacy": 8,
+          "title": "Integrar lifecycle y bloqueo de esquema",
+          "first": 36,
+          "last": 40,
+          "story": "US1"
+        },
+        {
+          "legacy": 9,
+          "title": "Actualizar documentación y pruebas de aceptación",
+          "first": 41,
+          "last": 45,
+          "story": "US1"
+        },
+        {
+          "legacy": 10,
+          "title": "Gate final de fase 01",
+          "first": 46,
+          "last": 48,
+          "story": "US1"
+        }
+      ]
+    },
+    {
+      "feature": "002-control-ciclo-de-vida",
+      "specSource": "specs/02-control-ciclo-de-vida.md",
+      "planSource": "docs/superpowers/plans/2026-10-07-fase-02-control-ciclo-vida.md",
+      "status": "completada según roadmap e informe de aceptación",
+      "tasks": 38,
+      "done": 0,
+      "blocks": [
+        {
+          "legacy": 1,
+          "title": "Extender contratos y documentos al control durable",
+          "first": 1,
+          "last": 5,
+          "story": "US1"
+        },
+        {
+          "legacy": 2,
+          "title": "Implementar mutaciones atómicas de cola y control",
+          "first": 6,
+          "last": 10,
+          "story": "US1"
+        },
+        {
+          "legacy": 3,
+          "title": "Implementar retry enlazado e idempotente",
+          "first": 11,
+          "last": 15,
+          "story": "US1"
+        },
+        {
+          "legacy": 4,
+          "title": "Añadir aborto público y reconciliación del coordinador",
+          "first": 16,
+          "last": 20,
+          "story": "US1"
+        },
+        {
+          "legacy": 5,
+          "title": "Migrar esquema 3 a esquema 4 y componer runtime",
+          "first": 21,
+          "last": 25,
+          "story": "US1"
+        },
+        {
+          "legacy": 6,
+          "title": "Exponer comandos, tool y autoridad TUI",
+          "first": 26,
+          "last": 30,
+          "story": "US1"
+        },
+        {
+          "legacy": 7,
+          "title": "Actualizar documentación y matriz de aceptación",
+          "first": 31,
+          "last": 35,
+          "story": "US1"
+        },
+        {
+          "legacy": 8,
+          "title": "Ejecutar gates y aceptación de fase 02",
+          "first": 36,
+          "last": 38,
+          "story": "US1"
+        }
+      ]
+    },
+    {
+      "feature": "003-eventos-rpc",
+      "specSource": "docs/superpowers/specs/2026-10-07-fase-03-eventos-rpc-design.md",
+      "planSource": "docs/superpowers/plans/2026-10-07-fase-03-eventos-rpc.md",
+      "status": "lista para planificar; plan pendiente de revisión y método",
+      "tasks": 53,
+      "done": 0,
+      "blocks": [
+        {
+          "legacy": 1,
+          "title": "Contratos y proyecciones públicas (AC-01,02,07,13)",
+          "first": 5,
+          "last": 9,
+          "story": "US1"
+        },
+        {
+          "legacy": 2,
+          "title": "Almacenamiento transaccional del outbox (AC-04,06)",
+          "first": 10,
+          "last": 14,
+          "story": "US1"
+        },
+        {
+          "legacy": 3,
+          "title": "Eventos en cada commit observable (AC-03,04,13)",
+          "first": 15,
+          "last": 19,
+          "story": "US1"
+        },
+        {
+          "legacy": 4,
+          "title": "Autoridad transaccional y replay de resultados (AC-08,09,10)",
+          "first": 20,
+          "last": 24,
+          "story": "US1"
+        },
+        {
+          "legacy": 5,
+          "title": "Esquema 5 y migración humana 4→5 (AC-14)",
+          "first": 25,
+          "last": 29,
+          "story": "US1"
+        },
+        {
+          "legacy": 6,
+          "title": "Emisor ordenado con confirmación posterior (AC-05,06,13)",
+          "first": 30,
+          "last": 34,
+          "story": "US1"
+        },
+        {
+          "legacy": 7,
+          "title": "Lifecycle compartido y cierre por generación (AC-01,11,12)",
+          "first": 35,
+          "last": 39,
+          "story": "US1"
+        },
+        {
+          "legacy": 8,
+          "title": "Servidor RPC sobre servicios y consentimiento real (AC-01,02,03,07–13)",
+          "first": 40,
+          "last": 45,
+          "story": "US1"
+        },
+        {
+          "legacy": 9,
+          "title": "Cliente público, integración caller y gates de aceptación (AC-15–17)",
+          "first": 46,
+          "last": 53,
+          "story": "US1"
+        }
+      ]
+    },
+    {
+      "feature": "004-resultados-estructurados-gates",
+      "specSource": "specs/04-resultados-estructurados-gates.md",
+      "status": "propuesta bloqueada; sin plan aprobado",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "005-grupos-join",
+      "specSource": "specs/05-grupos-join.md",
+      "status": "propuesta bloqueada; sin plan aprobado",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "006-aislamiento-worktrees",
+      "specSource": "specs/06-aislamiento-worktrees.md",
+      "status": "propuesta bloqueada; sin plan aprobado",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "007-steering-durable",
+      "specSource": "specs/07-steering-durable.md",
+      "status": "propuesta bloqueada; elegibilidad de paused pendiente",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "008-scheduling-durable",
+      "specSource": "specs/08-scheduling-durable.md",
+      "status": "propuesta bloqueada; parser y políticas pendientes",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "009-workflows-declarativos",
+      "specSource": "specs/09-workflows-declarativos.md",
+      "status": "propuesta bloqueada; scheduler y decisiones de alcance pendientes",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "010-interfaz-operativa",
+      "specSource": "specs/10-interfaz-operativa.md",
+      "status": "propuesta bloqueada; la excepción widget A+B no habilita la fase completa",
+      "plan": null,
+      "tasks": 0
+    },
+    {
+      "feature": "011-widget-subagentes",
+      "specSource": "docs/superpowers/specs/2026-10-08-widget-subagentes-design.md",
+      "planSource": "docs/superpowers/plans/2026-10-08-widget-subagentes.md",
+      "status": "spec y plan aprobados; ejecución Native; aceptación A/B pendiente según fuentes",
+      "tasks": 16,
+      "done": 3,
+      "blocks": [
+        {
+          "legacy": 1,
+          "title": "Etapa A — consulta, visibilidad y widget compacto",
+          "first": 1,
+          "last": 6,
+          "story": "US1"
+        },
+        {
+          "legacy": 2,
+          "title": "Etapa B — frontera de observación Durable",
+          "first": 7,
+          "last": 10,
+          "story": "US2"
+        },
+        {
+          "legacy": 3,
+          "title": "Etapa B — actividad en widget y degradación segura",
+          "first": 11,
+          "last": 16,
+          "story": "US2"
+        }
+      ]
+    }
+  ]
+}

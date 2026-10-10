@@ -38,7 +38,7 @@ test('el comando result rechaza un cancelled aunque tenga cuerpo durable', async
   }, BACKGROUND_CONTEXT);
   await session.close(BACKGROUND_CONTEXT);
   const previousStateDir = process.env.PI_AGENTS_STATE_DIR; process.env.PI_AGENTS_STATE_DIR = directory;
-  const pi = fakePi(); const notifications = []; const ctx = { cwd: '/tmp/project', mode: 'tui', hasUI: true, modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true, sessionManager: { getSessionId: () => 'adapter-test' }, ui: { notify: (message) => notifications.push(message), confirm: async () => true } };
+  const pi = fakePi(); const notifications = []; const ctx = { cwd: '/tmp/project', mode: 'tui', hasUI: true, modelRegistry: { getAll: () => [], getProvider: () => undefined }, isProjectTrusted: () => true, sessionManager: { getSessionId: () => 'adapter-test' }, ui: { notify: (message) => notifications.push(message), confirm: async () => true, setWidget() {} } };
   try {
     registerPiAgents(pi, { getAgentDir: () => directory, createModels: async () => createModels(), resolveModel: () => ({}), text: value => value, Type: { Object: fields => ({ fields }), String: () => ({ type: 'string' }) }, version: 'test' });
     await pi.handlers.find(item => item.name === 'session_start').handler({}, ctx);

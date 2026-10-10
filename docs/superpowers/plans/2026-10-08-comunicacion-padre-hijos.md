@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript estricto, Node `26.10.0`, Pi API pública (baseline local inspeccionada: `1.1.0`), Pi Durable/Chord existentes y `node:test`; sin dependencias nuevas.
 
-**Spec:** [`../specs/2026-10-08-comunicacion-padre-hijos-design.md`](../specs/2026-10-08-comunicacion-padre-hijos-design.md), aprobada por el usuario el 2026-10-08. Refina [`01-consulta-listado-espera.md`](../../../specs/01-consulta-listado-espera.md). Los cambios de fase 03 no se vuelven a especificar aquí.
+**Spec:** [`../specs/2026-10-08-comunicacion-padre-hijos-design.md`](../specs/2026-10-08-comunicacion-padre-hijos-design.md), aprobada por el usuario el 2026-10-08. Refina [`001-consulta-listado-espera/spec.md`](../../../specs/001-consulta-listado-espera/spec.md). Los cambios de fase 03 no se vuelven a especificar aquí.
 
 **Estado:** Plan aprobado por el usuario el 2026-10-08. **No ejecutar ninguna tarea hasta que T4 de fase 03 haya sido cerrada y aceptada mediante su gate independiente.** La aprobación de este plan no autoriza implementación, migración real, publicación o promoción.
 

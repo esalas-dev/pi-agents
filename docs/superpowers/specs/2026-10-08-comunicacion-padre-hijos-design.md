@@ -6,7 +6,7 @@
 
 Base inspeccionada: worktree `.worktrees/phase-03`, rama `feat/phase-03`, HEAD `95a424a`. Se conservan el plan, los informes y el ledger de T4. No se acepta T4 por este diseño ni se inicia T5.
 
-Refina la enmienda de [especificación 01](../../../specs/01-consulta-listado-espera.md), especialmente RF-04, RF-05 y RF-06. Mantiene el acceso restringido de [RPC de fase 03](2026-10-07-fase-03-eventos-rpc-design.md). «Resultado completo» significa acceso a todo el texto mediante tramos acotados, no inyección ilimitada en una sola solicitud al modelo.
+Refina la enmienda de [especificación 01](../../../specs/001-consulta-listado-espera/spec.md), especialmente RF-04, RF-05 y RF-06. Mantiene el acceso restringido de [RPC de fase 03](../../../specs/003-eventos-rpc/spec.md). «Resultado completo» significa acceso a todo el texto mediante tramos acotados, no inyección ilimitada en una sola solicitud al modelo.
 
 Evidencia: **[D]** documentación/tipos públicos; **[I]** inspección estática del código instalado o local; **[R]** decisión de diseño. No se ha ejecutado una prueba interactiva de entrega.
 

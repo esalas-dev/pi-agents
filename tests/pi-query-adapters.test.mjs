@@ -8,7 +8,7 @@ function fakePi() {
   return { events: makeEventBus(), tools, commands, handlers, on(name, handler) { handlers.set(name, handler); }, registerTool(tool) { tools.push(tool); }, registerCommand(name, command) { commands.push({ name, ...command }); }, registerEntryRenderer() {}, appendEntry() {} };
 }
 
-const context = sessionId => ({ cwd: '/tmp', mode: 'tui', hasUI: true, isProjectTrusted: () => false, sessionManager: { getSessionId: () => sessionId }, modelRegistry: { getAll: () => [], getProvider: () => undefined }, ui: { confirm: async () => false, notify() {} } });
+const context = sessionId => ({ cwd: '/tmp', mode: 'tui', hasUI: true, isProjectTrusted: () => false, sessionManager: { getSessionId: () => sessionId }, modelRegistry: { getAll: () => [], getProvider: () => undefined }, ui: { confirm: async () => false, notify() {}, setWidget() {} } });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 
 test('no expone el cuerpo completo del resultado en details de una tool', () => {

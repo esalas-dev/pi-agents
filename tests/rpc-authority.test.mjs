@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRpcFixture, observeRpc, rpcRequest } from './helpers/rpc.mjs';
+import { parseRpcResponse } from '../src/public/rpc-contracts.ts';
 
 const call = async (fixture, operation, request) => observeRpc(fixture, operation, request).response;
 const eventCount = async (fixture, type) => (await fixture.store.outbox.pending(100)).filter(event => event.type === type).length;
@@ -55,6 +56,15 @@ test('cancelación activa conserva actor extension y requiere confirmación TUI 
   assert.equal(replay.data.replayed, true);
   assert.deepEqual(confirmations, ['active-job']);
   assert.equal(await eventCount(fixture, 'job.cancel-requested'), 1);
+});
+
+test('control provisioning proyecta previousStatus público y el cliente lo acepta', async t => {
+  const fixture = await makeRpcFixture(); t.after(() => fixture.close());
+  await fixture.seedJob('provisioning-job', { status: 'provisioning', conversationId: 1 });
+  const response = await call(fixture, 'control', rpcRequest('control', { id: 'provisioning-job', action: 'cancel' }));
+  assert.equal(response.success, true);
+  assert.equal(response.data.previousStatus, 'running');
+  assert.doesNotThrow(() => parseRpcResponse('control', response));
 });
 
 test('cancelación activa sin TUI o consentimiento no crea intención', async t => {

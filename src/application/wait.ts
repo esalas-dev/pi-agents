@@ -28,6 +28,10 @@ export function createWaitService(query: Pick<QueryService, 'getJob'>, session: 
       if (options.timeoutSeconds === 0) return failure(new DomainError('WAIT_TIMEOUT'));
       const watch = await session.watchDoc(JobDocFamily, id, context);
       if (!watch) return failure(new DomainError('JOB_NOT_FOUND'));
+      if (options.signal?.aborted) {
+        await watch.stop();
+        return failure(new DomainError('WAIT_ABORTED'));
+      }
       const timeout = (options.timeoutSeconds ?? 300) * 1000;
       let settled = false;
       let timer: ReturnType<typeof setTimeout> | undefined;

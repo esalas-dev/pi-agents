@@ -244,7 +244,7 @@ export function createJobRepository(session: Session, context: Context, clock: C
           return;
         }
         if (request.action === "retry") throw new DomainError("RETRY_NOT_ALLOWED");
-        if (request.action === "cancel" && admission?.requireActiveConfirmation && !admission.activeCancellationConfirmed) throw new DomainError("ACTIVE_CANCEL_CONFIRMATION_REQUIRED");
+        if (request.action === "cancel" && admission?.requireActiveConfirmation && activeStatuses.has(job.status) && !admission.activeCancellationConfirmed) throw new DomainError("ACTIVE_CANCEL_CONFIRMATION_REQUIRED");
         const index = await tx.doc(JobsIndexDoc);
         const previousStatus = job.status;
         let result: JobResult | undefined;

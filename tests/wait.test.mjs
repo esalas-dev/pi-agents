@@ -76,6 +76,35 @@ test('snapshot posterior a adquirir watch cierra la carrera de transición', asy
   } finally { await fixture.close(); }
 });
 
+test('aborto durante adquisición de watch detiene el watch sin dejar la espera pendiente', { timeout: 1000 }, async () => {
+  const fixture = await makeStoreFixture();
+  try {
+    await fixture.seedJob(job('delayed-watch'), undefined);
+    const opened = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const originalWatchDoc = fixture.session.watchDoc.bind(fixture.session);
+    let stops = 0;
+    fixture.session.watchDoc = async (...args) => {
+      opened.resolve();
+      await release.promise;
+      const watch = await originalWatchDoc(...args);
+      const stop = watch.stop.bind(watch);
+      watch.stop = async () => { stops++; return stop(); };
+      return watch;
+    };
+    const controller = new AbortController();
+    const wait = await service(fixture);
+    const pending = wait.waitForJob('delayed-watch', { signal: controller.signal, timeoutSeconds: 1 });
+    await opened.promise;
+    controller.abort();
+    release.resolve();
+    const returned = await pending;
+    assert.equal(returned.success, false);
+    assert.equal(returned.error.code, 'WAIT_ABORTED');
+    assert.equal(stops, 1);
+  } finally { await fixture.close(); }
+});
+
 test('timeout y aborto solo cancelan la espera', async () => {
   const fixture = await makeStoreFixture();
   try {

@@ -6,16 +6,21 @@ import { access, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/prom
 import { watch } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
+import { createModels } from '@earendil-works/pi-ai/models';
+import { fauxAssistantMessage, fauxProvider, fauxText } from '@earendil-works/pi-ai/providers/faux';
 import { createSession } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { createMaintenanceService } from '../src/application/maintenance.ts';
+import { openSessionRuntime } from '../src/runtime/session.ts';
+import { createJobRepository } from '../src/infrastructure/durable/repository.ts';
+import { canonicalStart } from '../src/domain/requests.ts';
 import { inspectStorage } from '../src/infrastructure/storage/inspect.ts';
 import { acquireLease } from '../src/infrastructure/storage/lease.ts';
 import { createBackup } from '../src/infrastructure/storage/backup.ts';
 import { migrateV4ToV5 } from '../src/infrastructure/storage/migrate.ts';
 import { JobDocFamily, JobResultDocFamily, JobReviewDocFamily, JobsIndexDoc, RequestLedgerDocFamily, StorageMetaDoc } from '../src/infrastructure/durable/documents.ts';
 import { OutboxEventDocFamily, OutboxMetaDoc, OutboxPageDocFamily } from '../src/infrastructure/durable/outbox-documents.ts';
-import { createV4Database, ledgerKey, snapshotDocuments } from './helpers/v4.mjs';
+import { createV4Database, createV4RecoveryDatabase, ledgerKey, snapshotDocuments } from './helpers/v4.mjs';
 
 async function publicSnapshot(database) {
   const session = createSession(await openNodeSqliteStorage(database));
@@ -146,6 +151,29 @@ async function approved(service, database, clock = () => 2000) {
   const outcome = await service.migrate({ dbPath: database, clock, confirm: async value => { info = value; return { requestId: 'human:migrate-v4', actor: { kind: 'human', id: 'alice' }, dbPath: value.dbPath, sourceHash: value.sourceHash, approvedAt: 2001 }; } });
   return { outcome, info };
 }
+
+test('fixture v4 válida recupera un running y repite un ledger canónico tras migrar y reabrir', { timeout: 15000 }, async () => {
+  const directory = await mkdtemp('/tmp/pi-agents-migration-v4-recovery-');
+  try {
+    const fixture = await createV4RecoveryDatabase(directory); const service = createMaintenanceService(context);
+    const { outcome } = await approved(service, fixture.database); assert.equal(outcome.success, true);
+    const session = createSession(await openNodeSqliteStorage(fixture.database));
+    try {
+      const repository = createJobRepository(session, context, () => 2000, () => 'replay-id', 'v4-recovery');
+      const replay = await repository.admit(fixture.queuedRequest, fixture.queuedInput);
+      assert.deepEqual(replay, { jobId: 'queued-job', status: 'queued', agent: 'agent-queued-job' });
+      assert.deepEqual(await repository.receipt('request:queued'), { requestId: 'request:queued', operation: 'start', actor: { kind: 'human', id: 'alice' }, canonicalVersion: 1, payloadHash: canonicalStart(fixture.queuedRequest).payloadHash, admittedAt: 1000, response: { jobId: 'queued-job', status: 'queued', agent: 'agent-queued-job' } });
+    } finally { await session.close(context); }
+    const models = createModels(); const faux = fauxProvider(); faux.setResponses([fauxAssistantMessage([fauxText('respuesta recuperada')])]); models.setProvider(faux.provider);
+    const runtime = await openSessionRuntime({ storagePath: fixture.database, models, context, defaultCwd: '/tmp/project', maxConcurrency: 1, sessionId: 'v4-recovery', now: () => 3000 });
+    try {
+      const recovered = await runtime.jobs.waitForJob('running-job', { until: 'completed', timeoutSeconds: 5 });
+      assert.equal(recovered.success, true); assert.equal(recovered.value.status, 'completed');
+      const result = await runtime.jobs.result('running-job');
+      assert.equal(result.success, true); assert.equal(result.value.result?.finalResponse, 'respuesta recuperada');
+    } finally { await runtime.close(); }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('migra v4 a v5 una sola vez, conserva profundamente jobs y ledgers e inicializa outbox vacío', async () => {
   const directory = await mkdtemp('/tmp/pi-agents-migration-v4-');

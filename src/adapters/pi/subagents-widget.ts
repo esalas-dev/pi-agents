@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
-import { stripTerminalSequences, truncateToWidth } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { JobsService } from "../../application/jobs.ts";
 import type { JobListView } from "../../domain/jobs.ts";
 import type { JobActivity } from "../../runtime/session.ts";
@@ -16,7 +16,7 @@ const duration = (startedAt: number | undefined, now: number) => startedAt === u
 
 type Row = Pick<JobListView, "id" | "status" | "startedAt" | "queuePosition"> & { agent: string; activity?: JobActivity; activityUnavailable?: boolean };
 type ActivityWatch = { initial: JobActivity; closed?: Promise<unknown>; close(): Promise<void> };
-type ActivityEntry = { pending: boolean; watch?: ActivityWatch; latest?: JobActivity };
+type ActivityEntry = { pending: boolean; retiring?: boolean; work?: Promise<void>; watch?: ActivityWatch; latest?: JobActivity };
 type Page = { items: readonly JobListView[]; nextCursor?: string };
 type WidgetUi = Pick<ExtensionContext["ui"], "setWidget">;
 type Options = {
@@ -72,6 +72,7 @@ export function createSubagentsWidget(options: Options): { start(): void; close(
   let started = false;
   let closed = false;
   let mounted = false;
+  let hasSnapshot = false;
   let stale = false;
   let more = false;
   let rows: Row[] = [];
@@ -120,13 +121,15 @@ export function createSubagentsWidget(options: Options): { start(): void; close(
     options.ui.setWidget(KEY, (tui, theme) => {
       const instance: Component & { dispose(): void } = {
         render(width) {
-          if (width <= 0 || rows.length === 0) return [];
+          if (width <= 0) return [];
+          if (rows.length === 0) return hasSnapshot ? [] : [truncateToWidth(theme.fg("accent", "Estado no disponible"), width)];
           const ids = shortIds(rows);
-          if (width < 20) {
+          const cramped = rows.some((row, index) => visibleWidth(`${ids[index]} ${statusLabel(row.status)}`) + 2 > width);
+          if (width < 20 || cramped) {
             const first = rows[0];
             const icon = ACTIVE.includes(first.status as typeof ACTIVE[number]) ? FRAMES[frame] : first.status === "paused" ? "Ⅱ" : "○";
-            const summary = more ? `${icon} /subagents list` : `${icon} ${ids[0]} ${statusLabel(first.status)}`;
-            return [truncateToWidth(`${summary}${stale ? " · desactualizados" : ""}`, width)];
+            const summary = more || cramped || rows.length > 1 ? `${icon} /subagents list` : `${icon} ${ids[0]} ${statusLabel(first.status)}`;
+            return [truncateToWidth(theme.fg("accent", `${summary}${stale ? " · desactualizados" : ""}`), width)];
           }
           const heading = `Subagentes · ${rows.length} visibles`;
           const warning = [stale ? "Datos desactualizados" : "", more ? "Hay más trabajos: /subagents list" : ""].filter(Boolean).join(" · ");
@@ -161,49 +164,71 @@ export function createSubagentsWidget(options: Options): { start(): void; close(
   };
   const closeActivity = async () => {
     const watches = [...activityWatches.values()]; activityWatches.clear();
-    await Promise.allSettled(watches.map(entry => entry.watch?.close() ?? Promise.resolve()));
+    await Promise.allSettled(watches.map(async entry => {
+      await entry.work?.catch(() => {});
+      await entry.watch?.close();
+    }));
   };
-  const reconcileActivity = async (selectedRows: Row[]) => {
-    if (!options.watchJobActivity) return;
+  const reconcileActivity = (selectedRows: Row[]) => {
+    const observe = options.watchJobActivity;
+    if (!observe) return;
     const activeIds = new Set(selectedRows.filter(row => ACTIVE.includes(row.status as typeof ACTIVE[number])).map(row => row.id));
     for (const [id, entry] of activityWatches) {
-      if (activeIds.has(id)) continue;
-      activityWatches.delete(id);
-      if (entry.watch) await entry.watch.close().catch(() => {});
+      if (activeIds.has(id) || entry.pending || entry.retiring) continue;
+      const watch = entry.watch;
+      if (!watch) { activityWatches.delete(id); continue; }
+      entry.retiring = true;
+      entry.work = (async () => {
+        await watch.close();
+        entry.watch = undefined;
+        if (activityWatches.get(id) === entry) activityWatches.delete(id);
+      })().catch(() => {});
     }
     for (const id of activeIds) {
       const existing = activityWatches.get(id);
-      if (existing?.watch || existing?.pending) continue;
+      if (existing?.watch || existing?.pending || existing?.retiring) continue;
+      // Las adquisiciones y cierres pendientes también reservan un slot.
+      if (!existing && activityWatches.size >= 4) break;
       const entry: ActivityEntry = { pending: true };
       activityWatches.set(id, entry);
       setActivity(id, undefined);
-      try {
-        const watch = await options.watchJobActivity(id, activity => {
-          if (!closed && activityWatches.get(id) === entry) { entry.latest = activity; setActivity(id, activity); }
-        });
-        if (closed || activityWatches.get(id) !== entry || !activeIds.has(id)) { await watch?.close(); continue; }
-        entry.pending = false;
-        if (!watch) { setActivity(id, undefined, true); continue; }
-        entry.watch = watch;
-        setActivity(id, entry.latest ?? watch.initial);
-        void watch.closed?.then(() => {
-          if (closed || activityWatches.get(id) !== entry || entry.watch !== watch) return;
-          entry.watch = undefined; setActivity(id, undefined, true);
-        }).catch(() => { if (activityWatches.get(id) === entry) { entry.watch = undefined; setActivity(id, undefined, true); } });
-      } catch {
-        if (activityWatches.get(id) === entry) { entry.pending = false; setActivity(id, undefined, true); }
-      }
+      entry.work = (async () => {
+        try {
+          const watch = await observe(id, activity => {
+            if (!closed && !entry.retiring && activityWatches.get(id) === entry) { entry.latest = activity; setActivity(id, activity); }
+          });
+          entry.watch = watch;
+          if (closed || activityWatches.get(id) !== entry || !rows.some(row => row.id === id && ACTIVE.includes(row.status as typeof ACTIVE[number]))) {
+            entry.retiring = true;
+            await watch?.close();
+            entry.watch = undefined;
+            if (activityWatches.get(id) === entry) activityWatches.delete(id);
+            return;
+          }
+          if (!watch) { setActivity(id, undefined, true); return; }
+          setActivity(id, entry.latest ?? watch.initial);
+          void watch.closed?.then(() => {
+            if (closed || entry.retiring || activityWatches.get(id) !== entry || entry.watch !== watch) return;
+            entry.watch = undefined; setActivity(id, undefined, true);
+          }).catch(() => {
+            if (!closed && !entry.retiring && activityWatches.get(id) === entry && entry.watch === watch) { entry.watch = undefined; setActivity(id, undefined, true); }
+          });
+        } catch {
+          if (!entry.retiring && activityWatches.get(id) === entry) setActivity(id, undefined, true);
+        } finally { entry.pending = false; }
+      })();
     }
   };
   const fail = () => {
     if (closed) return;
     stale = rows.length > 0;
+    if (!hasSnapshot) mount();
     syncAnimation(); update();
   };
   const refresh = async () => {
     if (closed || inFlight) return;
     const work = (async () => {
-      staleTimer = schedule(() => { staleTimer = undefined; if (!closed && rows.length) { stale = true; syncAnimation(); update(); } }, 5000);
+      staleTimer = schedule(() => { staleTimer = undefined; fail(); }, 5000);
       try {
         const active = await options.jobs.listJobs({ statuses: [...ACTIVE], limit: 5 });
         if (closed) return;
@@ -211,13 +236,14 @@ export function createSubagentsWidget(options: Options): { start(): void; close(
         const queued = await options.jobs.listJobs({ statuses: [...QUEUED], limit: 5 });
         if (closed) return;
         if (!queued.success) { fail(); return; }
+        hasSnapshot = true;
         const selected = selectRows(active.value, queued.value);
         const previous = new Map(rows.map(row => [row.id, row]));
         rows = selected.rows.map(row => ({ ...row, activity: previous.get(row.id)?.activity, activityUnavailable: previous.get(row.id)?.activityUnavailable }));
         more = selected.more; stale = false;
-        await reconcileActivity(rows);
         if (rows.length) mount(); else unmount();
         syncAnimation(); update();
+        reconcileActivity(rows);
       } catch { fail(); }
       finally {
         if (staleTimer !== undefined) unschedule(staleTimer);
